@@ -3,7 +3,7 @@ import Badge from "../Badge.jsx";
 export default function CrisisScreen({ curEv, wiy, yr, onChoice }) {
   return (
     <div style={{ padding: "1.5rem" }}>
-      <div style={{ fontSize: 11, letterSpacing: 3, color: "#E24B4A", textTransform: "uppercase", marginBottom: 6 }}>Crisis — Wk {wiy}, Yr {yr}</div>
+      <div style={{ fontSize: 11, letterSpacing: 3, color: "#E24B4A", textTransform: "uppercase", marginBottom: 6 }}>Event — Wk {wiy}, Yr {yr}</div>
 
       {curEv.isChainEvent && (
         <div style={{ marginBottom: 8, padding: "6px 10px", borderRadius: "var(--border-radius-md)", background: "rgba(124,58,237,0.10)", border: "0.5px solid #7c3aed", fontSize: 11, color: "#7c3aed" }}>

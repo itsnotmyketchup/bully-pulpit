@@ -9,6 +9,8 @@ const BRIDGE_STATES       = ["PA","OH","WV","MO","WI","MN","LA","TX","NY","MI","
 const WINTER_STORM_STATES = ["NY","PA","OH","MI","WI","MN","IA","NE","KS","MO","IN","IL","NJ","MA","VT","NH","ME"];
 const SOUTHWEST_STATES    = ["TX","AZ","NV","CA","NM","UT","CO"];
 const TORNADO_STATES      = ["KS","MO","NE","IA","IL","IN","OK","AR","TN","MS"];
+const RUST_BELT_STATES    = ["OH","MI","PA","IN","IL","WI","MO"];
+const RARE_EARTH_METALS   = ["lithium","cobalt","neodymium","dysprosium","europium","terbium","lanthanum"];
 
 function pickOne(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -65,7 +67,8 @@ export function generateDynamicEvents(
   stats, stAppr, usedEvents,
   playerParty = "DEM", week = 1,
   passedLegislation = {},
-  executiveOverreach = 20
+  executiveOverreach = 20,
+  countries = []
 ) {
   const pool = [];
   const season = getSeason(week);
@@ -153,6 +156,7 @@ export function generateDynamicEvents(
   const city = pick(), st = pickState(city);
   pool.push({
     id:"shoot_"+Math.random(),
+    repeatable:true,
     name:`Mass shooting in ${city}`,
     desc:`A gunman killed multiple people at a public venue in ${city}. The nation mourns.`,
     affectedStates:st?[st]:[],
@@ -178,7 +182,7 @@ export function generateDynamicEvents(
     {id:"hurricane",season:"summer",
       name:`Category 4 hurricane strikes ${hurricaneState}`,
       desc:`A devastating hurricane makes landfall near the Gulf/Atlantic coast. Catastrophic flooding reported in ${hurricaneState}.`,
-      unique:true,isDisaster:true,affectedStates:[hurricaneState],effects:{gdpGrowth:-0.2,nationalDebt:0.05},choices:[
+      repeatable:true,isDisaster:true,affectedStates:[hurricaneState],effects:{gdpGrowth:-0.2,nationalDebt:0.05},choices:[
         {text:"Declare emergency, full federal resources",effects:{approvalRating:4,nationalDebt:0.1},stateBoost:0.05,result:"Swift response praised."},
         {text:"Measured federal assistance",effects:{approvalRating:0},stateBoost:0.01,result:"Some say insufficient."},
         {text:"Delegate to states",effects:{approvalRating:-5},stateBoost:-0.04,result:"Accused of abandoning the coast."},
@@ -213,27 +217,17 @@ export function generateDynamicEvents(
       {text:"Nominate moderate consensus builder",effects:{approvalRating:2},factionEffects:{mod_dem:0.3,mod_rep:0.2,prog:-0.2,freedom:-0.2},result:"Bipartisan nod."},
       {text:"Nominate young rising star",effects:{approvalRating:0},result:"Strategic long-term play."},
     ]},
-    {id:"shutdown",name:"Government shutdown looms",desc:"Congress failed to pass spending. Shutdown at midnight.",unique:true,effects:{approvalRating:-3},choices:[
-      {text:"Negotiate bipartisan compromise",effects:{approvalRating:3},factionEffects:{mod_dem:0.3,mod_rep:0.3,prog:-0.2,freedom:-0.3},result:"Crisis averted."},
-      {text:"Hold firm on your priorities",effects:{approvalRating:-2,gdpGrowth:-0.1},result:"Shutdown begins."},
-      {text:"Accept opposition demands",effects:{approvalRating:-1},factionEffects:{prog:-0.4,freedom:0.2},result:"Open, but base feels betrayed."},
-    ]},
     {id:"bridge",name:"Major bridge collapse",
       desc:`Interstate bridge collapses during rush hour in ${bridgeState}. Dozens killed.`,
-      unique:true,isDisaster:true,affectedStates:[bridgeState],effects:{approvalRating:-2,infrastructureSpending:5},choices:[
+      repeatable:true,isDisaster:true,affectedStates:[bridgeState],effects:{approvalRating:-2,infrastructureSpending:5},choices:[
         {text:"Push emergency infrastructure bill",effects:{approvalRating:3,nationalDebt:0.1,infrastructureSpending:30},stateBoost:0.04,result:"Galvanizing moment."},
         {text:"Order nationwide inspections",effects:{approvalRating:1},result:"Methodical. Public wants faster."},
         {text:"Blame predecessors' underfunding",effects:{approvalRating:-1},result:"Blame game doesn't help victims."},
     ]},
-    {id:"eu_trade",name:"EU imposes retaliatory tariffs",desc:"EU tariffs hit $50B of American exports.",unique:true,effects:{tradeBalance:-5,gdpGrowth:-0.1,approvalRating:-1},choices:[
-      {text:"Negotiate a trade deal",effects:{tradeBalance:3,approvalRating:1},countryEffects:{france:{relationship:5},germany:{relationship:5}},result:"Talks begin."},
-      {text:"Impose counter-tariffs",effects:{tradeBalance:-3,approvalRating:-1},countryEffects:{france:{relationship:-8},germany:{relationship:-8}},result:"Trade war deepens."},
-      {text:"Appeal to WTO",effects:{approvalRating:0},result:"Slow but avoids escalation."},
-    ]},
     {id:"midwest_tornado",
       name:`Tornado outbreak tears through ${tornadoState}`,
       desc:`A series of EF-4 tornadoes devastates rural communities in ${tornadoState}.`,
-      unique:true,isDisaster:true,affectedStates:[tornadoState],effects:{approvalRating:-1,infrastructureSpending:5},choices:[
+      repeatable:true,isDisaster:true,affectedStates:[tornadoState],effects:{approvalRating:-1,infrastructureSpending:5},choices:[
         {text:"Deploy FEMA and National Guard immediately",effects:{approvalRating:3,nationalDebt:0.06},stateBoost:0.05,result:"Swift federal response wins praise in the region."},
         {text:"Approve disaster declaration, coordinate with governor",effects:{approvalRating:1},stateBoost:0.02,result:"Measured response. Locals appreciate the coordination."},
         {text:"Urge states to handle recovery independently",effects:{approvalRating:-2},stateBoost:-0.02,result:"Farmers and mayors feel abandoned."},
@@ -269,7 +263,7 @@ export function generateDynamicEvents(
     {id:"power_grid",season:"summer",
       name:`Summer heatwave triggers rolling blackouts in ${powerGridState}`,
       desc:`A record heat dome causes cascading grid failures in ${powerGridState}. Millions lose power.`,
-      unique:true,isDisaster:true,affectedStates:[powerGridState],effects:{approvalRating:-2,infrastructureSpending:5},choices:[
+      repeatable:true,isDisaster:true,affectedStates:[powerGridState],effects:{approvalRating:-2,infrastructureSpending:5},choices:[
         {text:"Emergency grid modernization funding",effects:{approvalRating:2,infrastructureSpending:25,nationalDebt:0.07},stateBoost:0.04,result:"Governor thanks you. Long-term fix in motion."},
         {text:"Press utilities to implement demand-response programs",effects:{approvalRating:0},result:"Modest improvement. Critics say it's not enough."},
         {text:"Authorize emergency energy imports from Canada and Mexico",effects:{approvalRating:1},countryEffects:{canada:{relationship:4},mexico:{relationship:3}},result:"Immediate relief. Relations with neighbors improve."},
@@ -282,7 +276,7 @@ export function generateDynamicEvents(
     {id:"wildfire_west",season:"summer",
       name:`Wildfire tears across ${wildfireState}`,
       desc:`Over 2 million acres ablaze in ${wildfireState}. Air quality alerts issued statewide.`,
-      unique:true,isDisaster:true,affectedStates:[wildfireState],effects:{approvalRating:-1,gdpGrowth:-0.05},choices:[
+      repeatable:true,isDisaster:true,affectedStates:[wildfireState],effects:{approvalRating:-1,gdpGrowth:-0.05},choices:[
         {text:"Deploy federal firefighting resources and declare emergency",effects:{approvalRating:3,nationalDebt:0.05},stateBoost:0.04,result:"Rapid federal response praised."},
         {text:"Partner with states on long-term forest management",effects:{approvalRating:1},factionEffects:{mod_rep:0.2,blue_dog:0.2,prog:0.1},result:"Bipartisan approach. Slower to show results."},
         {text:"Link to climate change, push green energy agenda",effects:{approvalRating:0},factionEffects:{prog:0.4,freedom:-0.5},result:"Base energized. Rural communities skeptical."},
@@ -290,7 +284,7 @@ export function generateDynamicEvents(
     {id:"winter_storm",season:"winter",
       name:`Severe winter storm paralyzes ${winterStorm[0]} and neighbors`,
       desc:`A historic blizzard brings record snowfall and ice to ${winterStorm.join(", ")}, knocking out power to millions and closing highways.`,
-      unique:true,isDisaster:true,affectedStates:winterStorm,effects:{approvalRating:-1,gdpGrowth:-0.05,infrastructureSpending:3},choices:[
+      repeatable:true,isDisaster:true,affectedStates:winterStorm,effects:{approvalRating:-1,gdpGrowth:-0.05,infrastructureSpending:3},choices:[
         {text:"Issue emergency declaration, mobilize National Guard",effects:{approvalRating:3,nationalDebt:0.04},stateBoost:0.04,result:"Rapid federal response praised by governors."},
         {text:"Coordinate with state emergency managers",effects:{approvalRating:1},stateBoost:0.02,result:"Steady, methodical response."},
         {text:"Urge residents to shelter in place, minimal federal role",effects:{approvalRating:-2},stateBoost:-0.03,result:"Critics say the federal government was missing in action."},
@@ -370,6 +364,185 @@ export function generateDynamicEvents(
   }
 
   // ── Absence-triggered events ───────────────────────────────────────────
+
+  // ── Country-relation triggered events ─────────────────────────────────────
+
+  // 1. Anti-Israel protests if friendly/allied with Israel (40%/yr ≈ 0.06/tick)
+  const israelRel = (countries.find(c => c.id === "israel") || {}).relationship || 0;
+  if (israelRel >= 60 && !usedEvents.has("anti_israel_protests") && Math.random() < 0.06) {
+    pool.push({
+      id: "anti_israel_protests",
+      name: "Anti-Israel Protests Sweep College Campuses",
+      desc: "Close U.S.-Israel ties have ignited a wave of student demonstrations at dozens of universities. Protesters are demanding the administration condemn Israeli military operations. Encampments are forming.",
+      unique: true,
+      effects: { approvalRating: -1 },
+      choices: [
+        { text: "Reaffirm U.S.-Israel relationship, condemn protests", effects: { approvalRating: 1 }, factionEffects: { prog: -0.5, mod_dem: -0.1, freedom: 0.4, trad_con: 0.3 }, countryEffects: { israel: { relationship: 3 } }, result: "Your base is divided. Pro-Israel donors applaud." },
+        { text: "Call for de-escalation on both sides", effects: { approvalRating: 0 }, factionEffects: { prog: 0.1, mod_dem: 0.2 }, result: "Neither side is fully satisfied, but tensions ease slightly." },
+        { text: "Criticize Israeli policy, distance from recent actions", effects: { approvalRating: 0 }, factionEffects: { prog: 0.4, mod_dem: 0.1, freedom: -0.4, trad_con: -0.3 }, countryEffects: { israel: { relationship: -5 } }, result: "Progressive base energized. Major donor backlash follows." },
+      ],
+    });
+  }
+
+  // 2. Russia imprisons American tourist if hostile relations (20%/yr ≈ 0.03/tick)
+  const russiaRel = (countries.find(c => c.id === "russia") || {}).relationship || 50;
+  if (russiaRel < 30 && !usedEvents.has("russia_hostage") && Math.random() < 0.03) {
+    pool.push({
+      id: "russia_hostage",
+      name: "Russia Detains American Tourist on Espionage Charges",
+      desc: "Russian authorities have arrested a 26-year-old American tourist in Moscow, charging them with espionage in what diplomats widely believe is a retaliatory move amid strained U.S.-Russia relations. The family is pleading for action.",
+      unique: true,
+      effects: { approvalRating: -1 },
+      choices: [
+        { text: "Demand immediate release, impose new sanctions", effects: { approvalRating: 2 }, factionEffects: { trad_con: 0.3, freedom: 0.2, prog: 0.1 }, countryEffects: { russia: { relationship: -8, trust: -5 } }, result: "The public applauds the tough stance. Russia digs in further." },
+        { text: "Pursue quiet diplomatic negotiations", effects: { approvalRating: 0 }, countryEffects: { russia: { relationship: -2 } }, result: "Backchannel talks begin. The family waits anxiously." },
+        { text: "Offer a prisoner exchange", effects: { approvalRating: 1 }, countryEffects: { russia: { relationship: 3 } }, factionEffects: { freedom: -0.2, trad_con: -0.1, prog: 0.2 }, result: "Negotiations begin. Hawks criticize rewarding bad behavior." },
+      ],
+    });
+  }
+
+  // ── Stat-condition triggered events ────────────────────────────────────────
+
+  // 4. Record corporate profits if corporate tax below default (50%/yr ≈ 0.08/tick)
+  if (stats.corporateTaxRate < 21 && !usedEvents.has("corp_profits_surge") && Math.random() < 0.08) {
+    pool.push({
+      id: "corp_profits_surge",
+      name: "Corporate Profits Hit Record Highs Amid Tax Cuts",
+      desc: `With the corporate tax rate at ${stats.corporateTaxRate.toFixed(0)}%, Fortune 500 companies are reporting record quarterly profits. Critics note wages have stagnated while stock buybacks soar. #TaxTheRich trends nationwide.`,
+      unique: true,
+      effects: { approvalRating: -1 },
+      choices: [
+        { text: "Defend the tax cuts as pro-growth policy", effects: { approvalRating: 0 }, factionEffects: { freedom: 0.3, mod_rep: 0.3, prog: -0.4, mod_dem: -0.2 }, result: "Wall Street applauds. Working-class backlash intensifies." },
+        { text: "Propose a windfall profits tax on record earners", effects: { approvalRating: 2 }, factionEffects: { prog: 0.5, mod_dem: 0.2, freedom: -0.5, mod_rep: -0.3 }, result: "Populist surge in approval. Business lobbies mobilize against you." },
+        { text: "Call on corporations to raise worker wages voluntarily", effects: { approvalRating: 1 }, result: "Goodwill messaging. Critics call it toothless." },
+      ],
+    });
+  }
+
+  // 5. Literacy crisis if education spending below default (50%/yr ≈ 0.08/tick)
+  if (stats.educationSpending < 102 && !usedEvents.has("literacy_crisis") && Math.random() < 0.08) {
+    pool.push({
+      id: "literacy_crisis",
+      name: "National Report: Student Literacy Rates at 30-Year Low",
+      desc: `With education spending down to $${Math.round(stats.educationSpending)}B, a new federal assessment finds 4th-grade reading scores have fallen to their lowest level since 1992. The teachers union calls it a "manufactured crisis."`,
+      unique: true,
+      effects: { approvalRating: -2, educationSpending: 5 },
+      choices: [
+        { text: "Announce emergency literacy funding initiative", effects: { approvalRating: 2, educationSpending: 15, nationalDebt: 0.03 }, factionEffects: { prog: 0.3, mod_dem: 0.3, freedom: -0.2 }, result: "Teachers and parents cheer. Fiscal hawks grumble." },
+        { text: "Push phonics-based curriculum reform", effects: { approvalRating: 1 }, factionEffects: { trad_con: 0.2, mod_rep: 0.1 }, result: "Evidence-based approach wins bipartisan nods. Union remains skeptical." },
+        { text: "Blame social media and screen time", effects: { approvalRating: -1 }, result: "Deflection noted. The report's data speaks louder." },
+      ],
+    });
+  }
+
+  // ── Always-available repeatable events ────────────────────────────────────
+
+  // 3. Weed industry boom if marijuana_fed passed (50%/yr ≈ 0.08/tick)
+  if (passedLegislation.marijuana_fed) {
+    const mjelapsed = week - passedLegislation.marijuana_fed;
+    if (mjelapsed >= 4 && mjelapsed <= 52 && !usedEvents.has("weed_industry_boom") && Math.random() < 0.08) {
+      pool.push({
+        id: "weed_industry_boom",
+        name: "Legal Cannabis Industry Surges Following Federal Legalization",
+        desc: "The cannabis industry has exploded since federal legalization — generating $40B in new economic activity, creating 280,000 jobs, and triggering a stock market boom for cannabis companies. Tax revenues are exceeding projections.",
+        triggeredBy: "Federal Marijuana Legalization Act",
+        unique: true,
+        effects: { gdpGrowth: 0.2, unemployment: -0.1, approvalRating: 2 },
+        choices: [
+          { text: "Highlight economic wins, propose cannabis tax reinvestment", effects: { approvalRating: 2, nationalDebt: -0.02 }, factionEffects: { prog: 0.3, mod_dem: 0.2, freedom: 0.1 }, result: "Bipartisan economic good news. Popularity spikes." },
+          { text: "Announce federal research grants on cannabis health effects", effects: { approvalRating: 1, healthcareSpending: 5 }, result: "Science-based approach wins moderate support." },
+          { text: "Warn about youth use and propose marketing restrictions", effects: { approvalRating: 0 }, factionEffects: { trad_con: 0.2, prog: -0.1 }, result: "Measured response. Industry groups push back on restrictions." },
+        ],
+      });
+    }
+  }
+
+  // 6. Car factory closure in rust belt state
+  const rustBeltState = pickOne(RUST_BELT_STATES);
+  pool.push({
+    id: "factory_closure_" + Math.random(),
+    repeatable: true,
+    name: `Major Auto Plant Announces Closure in ${rustBeltState}`,
+    desc: `A major automobile manufacturer has announced the permanent closure of its ${rustBeltState} assembly plant, eliminating 8,500 union jobs. Workers are demanding federal intervention.`,
+    affectedStates: [rustBeltState],
+    effects: { unemployment: 0.1, approvalRating: -2 },
+    choices: [
+      { text: "Negotiate with the company to reverse the closure", effects: { approvalRating: 2 }, stateBoost: 0.03, result: "Talks begin. No guarantee of success, but workers feel heard." },
+      { text: "Announce worker retraining and relocation assistance", effects: { approvalRating: 1, nationalDebt: 0.03, educationSpending: 5 }, stateBoost: 0.02, result: "Workers appreciate the support, though many feel left behind." },
+      { text: "Promise new green energy jobs for the region", effects: { approvalRating: 0 }, factionEffects: { prog: 0.2, freedom: -0.2, trad_con: -0.1 }, stateBoost: 0.01, result: "Skepticism from steelworkers who don't want solar panel jobs." },
+    ],
+  });
+
+  // 7. Rare earth metal deposit in a western state
+  const rareEarthMetal = pickOne(RARE_EARTH_METALS);
+  const rareEarthState = pickOne(WEST_STATES);
+  const rareLabel = rareEarthMetal.charAt(0).toUpperCase() + rareEarthMetal.slice(1);
+  pool.push({
+    id: "rare_earth_" + Math.random(),
+    repeatable: true,
+    name: `Major ${rareLabel} Deposit Discovered in ${rareEarthState}`,
+    desc: `Geological surveys have confirmed one of the largest ${rareEarthMetal} deposits ever found in ${rareEarthState}. The discovery could reshape U.S. strategic mineral independence — but mining would require federal permitting on protected land.`,
+    affectedStates: [rareEarthState],
+    effects: { approvalRating: 1, gdpGrowth: 0.1 },
+    choices: [
+      { text: "Fast-track mining permits for national security", effects: { approvalRating: 1, gdpGrowth: 0.2 }, factionEffects: { freedom: 0.4, mod_rep: 0.3, prog: -0.5, trad_con: 0.2 }, stateBoost: 0.03, result: "Industry cheers. Environmentalists launch legal challenges." },
+      { text: "Require full environmental review before permitting", effects: { approvalRating: 0 }, factionEffects: { prog: 0.3, freedom: -0.2 }, result: "Balanced approach. Mining companies complain of delays." },
+      { text: "Designate deposit as strategic reserve, pause development", effects: { approvalRating: 0 }, factionEffects: { prog: 0.4, freedom: -0.4 }, result: "Environmentalists pleased. Geopolitical strategists divided." },
+    ],
+  });
+
+  // 8. Prominent base faction member arrested for domestic abuse
+  const scandalFactionId = pickOne(allyIds);
+  const FACTION_DISPLAY = { prog: "Progressive Caucus", mod_dem: "New Democrats", blue_dog: "Blue Dog Coalition", freedom: "Freedom Caucus", mod_rep: "Main Street Republicans", trad_con: "Traditional Conservatives" };
+  const scandalFactionName = FACTION_DISPLAY[scandalFactionId] || scandalFactionId;
+  pool.push({
+    id: "faction_scandal_" + Math.random(),
+    repeatable: true,
+    name: `${scandalFactionName} Leader Arrested for Domestic Abuse`,
+    desc: `A prominent ${scandalFactionName} member and vocal administration ally has been arrested for domestic abuse. Graphic evidence has emerged on social media. Party leadership is calling on you to respond.`,
+    effects: { approvalRating: -2 },
+    choices: [
+      { text: "Call for their immediate resignation", effects: { approvalRating: 2 }, factionEffects: Object.fromEntries([[scandalFactionId, -0.5]]), result: "Public approves the swift condemnation. Your ally feels betrayed." },
+      { text: "Express concern, await due process", effects: { approvalRating: -1 }, factionEffects: Object.fromEntries([[scandalFactionId, 0.1]]), result: "Critics say you are covering for an ally. The story lingers." },
+      { text: "Issue a brief statement, pivot to policy agenda", effects: { approvalRating: -2 }, factionEffects: Object.fromEntries([[scandalFactionId, 0.2]]), result: "Perceived as tone-deaf. Victim advocates condemn the non-response." },
+    ],
+  });
+
+  // 10. FDA food recall
+  const FOOD_ITEMS = ["romaine lettuce","ground beef","frozen chicken nuggets","peanut butter","baby spinach","frozen strawberries","deli meat","canned tuna","shredded cheese","raw oysters"];
+  const recalledFood = pickOne(FOOD_ITEMS);
+  const foodLabel = recalledFood.charAt(0).toUpperCase() + recalledFood.slice(1);
+  pool.push({
+    id: "fda_recall_" + Math.random(),
+    repeatable: true,
+    name: `FDA Issues Nationwide Recall of ${foodLabel}`,
+    desc: `The FDA has issued an emergency recall of ${recalledFood} following an E. coli outbreak linked to 340 illnesses and 2 deaths across 18 states. Supermarket shelves are being cleared and consumer panic is spreading.`,
+    effects: { approvalRating: -1 },
+    choices: [
+      { text: "Mobilize FDA and CDC for rapid coordinated response", effects: { approvalRating: 2, healthcareSpending: 3 }, result: "Swift, coordinated response reassures the public." },
+      { text: "Propose expanded food safety inspection funding", effects: { approvalRating: 1, nationalDebt: 0.01, healthcareSpending: 5 }, factionEffects: { prog: 0.2, mod_dem: 0.2, freedom: -0.2 }, result: "Systemic fix applauded. The recall itself lingers in the news." },
+      { text: "Defer to the FDA, issue brief statement", effects: { approvalRating: -1 }, result: "Seen as passive in a public health moment." },
+    ],
+  });
+
+  // ── Absence-triggered events ───────────────────────────────────────────────
+
+  // 9. Detention camp report if neither border nor immigration_exp passed (50%/yr ≈ 0.08/tick)
+  if (!passedLegislation.border && !passedLegislation.immigration_exp && !usedEvents.has("detention_conditions") && Math.random() < 0.08) {
+    pool.push({
+      id: "detention_conditions",
+      name: "Report: Inhumane Overcrowding in Immigration Detention Camps",
+      desc: "A damning DHS Inspector General report reveals immigration detention facilities are operating at 400% capacity. Viral photos of overcrowded conditions draw international condemnation from human rights groups.",
+      triggeredByAbsence: "Border Security Enhancement Act or Immigration & Visa Expansion Act",
+      unique: true,
+      effects: { approvalRating: -3, immigrationRate: 0.05 },
+      choices: [
+        { text: "Declare a humanitarian emergency, increase facility funding", effects: { approvalRating: 2, nationalDebt: 0.04 }, factionEffects: { prog: 0.3, mod_dem: 0.2, freedom: -0.2 }, result: "Conditions improve. Critics say it normalizes mass detention." },
+        { text: "Accelerate case processing, release non-violent detainees", effects: { approvalRating: 1 }, factionEffects: { prog: 0.4, mod_dem: 0.1, freedom: -0.4, trad_con: -0.3 }, result: "Humanitarian groups applaud. Base feels you opened the floodgates." },
+        { text: "Dismiss the report as partisan", effects: { approvalRating: -3 }, factionEffects: { freedom: 0.2, prog: -0.5 }, result: "The photos keep circulating. The story grows worse." },
+      ],
+    });
+  }
 
   // Amtrak cuts if Infrastructure Investment Package never passed (20% chance per check)
   if (!passedLegislation.infra_boost && !usedEvents.has("amtrak_cuts") && Math.random() < 0.90) {

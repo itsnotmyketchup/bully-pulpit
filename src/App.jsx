@@ -570,7 +570,7 @@ export default function Game() {
     }
 
     if (nw % 4 === 0 && Math.random() > 0.35) {
-      const pool = generateDynamicEvents(ns, sA, usedEv, pp, nw, passedLegislation, executiveOverreach);
+      const pool = generateDynamicEvents(ns, sA, usedEv, pp, nw, passedLegislation, executiveOverreach, countries);
       if (pool.length > 0) {
         const ev = pool[Math.floor(Math.random() * pool.length)];
         if (ev.unique) setUsedEv(p => new Set([...p, ev.id]));
