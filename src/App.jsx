@@ -262,6 +262,15 @@ export default function Game() {
     setPrev({ ...stats });
     const ns = { ...stats };
     ns.gdpGrowth = Math.max(-2, Math.min(6, ns.gdpGrowth + (Math.random() - 0.5) * 0.04));
+    ns.nominalGdp = (ns.nominalGdp || 28.0) * (1 + ns.gdpGrowth / 100 / 52);
+    // Birth rate declines 1.5%/year (secular trend), 52 weeks/year
+    ns.birthRate = Math.max(6, ns.birthRate * (1 - 0.015 / 52));
+    // Death rate modulated by healthcare spending (baseline $1520B → 9.0/1k)
+    ns.deathRate = Math.max(7, Math.min(12, 9.0 + (1520 - ns.healthcareSpending) / 1520 * 0.6));
+    // Population: natural growth + net immigration each week
+    const naturalGrowthPerWeek = (ns.birthRate - ns.deathRate) / 1000 * ns.population / 52;
+    const immigrationPerWeek = ns.immigrationRate * 1e6 / 52;
+    ns.population = Math.round(ns.population + naturalGrowthPerWeek + immigrationPerWeek);
     ns.unemployment = Math.max(2.5, Math.min(12, ns.unemployment + (Math.random() - 0.5) * 0.02));
     ns.inflation = Math.max(0.5, Math.min(8, ns.inflation + (Math.random() - 0.5) * 0.015));
     ns.gasPrice = Math.max(2, Math.min(7, ns.gasPrice + (Math.random() - 0.5) * 0.02));

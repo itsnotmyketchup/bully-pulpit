@@ -1,10 +1,14 @@
 export const INITIAL_STATS = {
   gdpGrowth: 2.2,
+  nominalGdp: 28.0,         // nominal GDP in $T
   unemployment: 4.4,
   inflation: 2.9,
   nationalDebt: 36.2,
   nationalDeficit: 1820,    // annual deficit in $B (~$1.8T realistic)
   approvalRating: 52,
+  population: 345426571,    // total US population
+  birthRate: 10.8,          // births per 1,000 people per year
+  deathRate: 9.2,           // deaths per 1,000 people per year
   crimeRate: 4.8,
   gasPrice: 3.45,
   immigrationRate: 1.1,
@@ -22,11 +26,15 @@ export const INITIAL_STATS = {
 
 export const SM = {
   gdpGrowth:          { l: "GDP growth",         g: "up",      f: v => v.toFixed(1) + "%" },
+  nominalGdp:         { l: "Nominal GDP",        g: "up",      f: v => "$" + v.toFixed(2) + "T" },
   unemployment:       { l: "Unemployment",       g: "down",    f: v => v.toFixed(1) + "%" },
   inflation:          { l: "Inflation",           g: "down",    f: v => v.toFixed(1) + "%" },
   nationalDebt:       { l: "National debt",      g: "down",    f: v => "$" + v.toFixed(1) + "T" },
   nationalDeficit:    { l: "Annual deficit",     g: "down",    f: v => v >= 0 ? "$" + Math.round(v) + "B deficit" : "$" + Math.abs(Math.round(v)) + "B surplus" },
   approvalRating:     { l: "Approval",           g: "up",      f: v => Math.round(v) + "%" },
+  population:         { l: "Population",          g: "up",      f: v => (v / 1e6).toFixed(2) + "M" },
+  birthRate:          { l: "Birth rate",          g: "neutral", f: v => v.toFixed(1) + "/1k" },
+  deathRate:          { l: "Death rate",          g: "down",    f: v => v.toFixed(1) + "/1k" },
   crimeRate:          { l: "Crime rate",          g: "down",    f: v => v.toFixed(1) + "/100k" },
   gasPrice:           { l: "Gas price",           g: "down",    f: v => "$" + v.toFixed(2) },
   immigrationRate:    { l: "Immigration",        g: "neutral", f: v => v.toFixed(2) + "M/yr" },

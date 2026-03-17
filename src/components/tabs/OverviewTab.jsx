@@ -78,14 +78,44 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
       <div style={{ flex: "1 1 240px", minWidth: 0 }}>
         <SectionHeader label="Economy" />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(80px,1fr))", gap: 5 }}>
-          {["gdpGrowth", "unemployment", "inflation", "gasPrice", "tradeBalance"].map(k => (
+          {["gdpGrowth", "nominalGdp", "unemployment", "inflation", "gasPrice", "tradeBalance"].map(k => (
             <StatCard key={k} statKey={k} value={stats[k]} history={hist[k]} prevValue={prev[k]} />
           ))}
+          {(() => {
+            const gpc = stats.nominalGdp * 1e12 / stats.population;
+            const pgpc = prev.nominalGdp * 1e12 / prev.population;
+            const d = gpc - pgpc;
+            const chg = Math.abs(d) > 50;
+            return (
+              <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "8px 10px", minWidth: 0 }}>
+                <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>GDP per capita</div>
+                <div style={{ fontSize: 17, fontWeight: 500, color: "var(--color-text-primary)" }}>${Math.round(gpc).toLocaleString()}</div>
+                {chg && <div style={{ fontSize: 9, color: d > 0 ? "#1D9E75" : "#E24B4A" }}>{d > 0 ? "+" : ""}{Math.round(d).toLocaleString()}</div>}
+              </div>
+            );
+          })()}
         </div>
 
         <SectionHeader label="Society" />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
-          {["crimeRate", "immigrationRate"].map(k => (
+        {/* Population hero */}
+        {(() => {
+          const popDelta = stats.population - prev.population;
+          const chg = Math.abs(popDelta) > 100;
+          return (
+            <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "8px 12px", marginBottom: 5, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 2 }}>Total Population</div>
+                <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: "var(--color-text-primary)" }}>{stats.population.toLocaleString()}</div>
+                {chg && <div style={{ fontSize: 9, marginTop: 3, color: "#1D9E75" }}>▲ +{popDelta.toLocaleString()} this period</div>}
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>({(stats.population / 1e6).toFixed(2)}M)</div>
+              </div>
+            </div>
+          );
+        })()}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 5, marginBottom: 5 }}>
+          {["birthRate", "deathRate", "crimeRate", "immigrationRate"].map(k => (
             <StatCard key={k} statKey={k} value={stats[k]} history={hist[k]} prevValue={prev[k]} />
           ))}
         </div>
@@ -105,17 +135,48 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
         </div>
 
         <SectionHeader label="Tax Rates" />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(105px,1fr))", gap: 5 }}>
-          {["corporateTaxRate", "incomeTaxLow", "incomeTaxMid", "incomeTaxHigh", "payrollTaxRate"].map(k => (
-            <StatCard key={k} statKey={k} value={stats[k]} history={hist[k]} prevValue={prev[k]} />
-          ))}
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "6px 10px" }}>
+          {[
+            ["Corporate",       stats.corporateTaxRate, prev.corporateTaxRate],
+            ["Income <$50k",    stats.incomeTaxLow,     prev.incomeTaxLow],
+            ["Income <$200k",   stats.incomeTaxMid,     prev.incomeTaxMid],
+            ["Income >$200k",   stats.incomeTaxHigh,    prev.incomeTaxHigh],
+            ["Payroll",         stats.payrollTaxRate,   prev.payrollTaxRate],
+          ].map(([label, val, pval]) => {
+            const d = val - pval;
+            const chg = Math.abs(d) > 0.01;
+            return (
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0", borderBottom: "0.5px solid var(--color-border-secondary)" }}>
+                <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{label}</span>
+                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)" }}>
+                  {val.toFixed(val % 1 === 0 ? 0 : 2)}%
+                  {chg && <span style={{ fontSize: 9, marginLeft: 4, color: d > 0 ? "#E24B4A" : "#1D9E75" }}>{d > 0 ? "▲" : "▼"}</span>}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         <SectionHeader label="Budget" />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(90px,1fr))", gap: 5 }}>
-          {["militarySpending", "educationSpending", "healthcareSpending", "infrastructureSpending"].map(k => (
-            <StatCard key={k} statKey={k} value={stats[k]} history={hist[k]} prevValue={prev[k]} />
-          ))}
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "6px 10px" }}>
+          {[
+            ["Defense",        stats.militarySpending,       prev.militarySpending],
+            ["Education",      stats.educationSpending,      prev.educationSpending],
+            ["Healthcare",     stats.healthcareSpending,     prev.healthcareSpending],
+            ["Infrastructure", stats.infrastructureSpending, prev.infrastructureSpending],
+          ].map(([label, val, pval]) => {
+            const d = val - pval;
+            const chg = Math.abs(d) > 1;
+            return (
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0", borderBottom: "0.5px solid var(--color-border-secondary)" }}>
+                <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{label}</span>
+                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)" }}>
+                  ${Math.round(val)}B
+                  {chg && <span style={{ fontSize: 9, marginLeft: 4, color: d > 0 ? "#1D9E75" : "#E24B4A" }}>{d > 0 ? "▲" : "▼"} {Math.abs(Math.round(d))}B</span>}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
