@@ -52,8 +52,8 @@ body {
 }
 
 #root {
-  width: 680px;
-  max-width: 100%;
+  width: 100%;
+  max-width: 1200px;
   margin: 0 auto;
   background: var(--color-background-primary);
   min-height: 100svh;
