@@ -195,6 +195,8 @@ export default function Game() {
     ns.inflation = Math.max(0.5, Math.min(8, ns.inflation + (Math.random() - 0.5) * 0.015));
     ns.gasPrice = Math.max(2, Math.min(7, ns.gasPrice + (Math.random() - 0.5) * 0.02));
     ns.crimeRate = Math.max(2, Math.min(10, ns.crimeRate + (Math.random() - 0.5) * 0.01));
+    const immEconDrift = (ns.gdpGrowth - 2.5) * 0.003 - (ns.unemployment - 5) * 0.002;
+    ns.immigrationRate = Math.max(0.1, Math.min(3.5, ns.immigrationRate + immEconDrift + (Math.random() - 0.5) * 0.01));
 
     pFx.filter(p => p.week <= week + 1).forEach(p => {
       Object.entries(p.effects).forEach(([k, v]) => { if (ns[k] !== undefined) ns[k] += v; });
