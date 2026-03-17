@@ -15,12 +15,55 @@ const ISO_TO_ID = {
   "818": "egypt", "156": "china", "643": "russia", "364": "iran", "408": "north_korea",
 };
 
+// UN Security Council P5 permanent members
+const UNSC_PERMANENT = new Set(["826", "250", "156", "643", "840"]); // UK, France, China, Russia, USA
 
-function WorldMap({ countries }) {
+// NATO member ISO numeric codes (as of 2025)
+const NATO_ISO = new Set([
+  "008", "056", "100", "124", "191", "203", "208", "233", "246",
+  "250", "276", "300", "348", "352", "380", "428", "440", "442",
+  "499", "528", "578", "616", "620", "642", "703", "705", "724",
+  "752", "792", "826", "840",
+]);
+// NATO countries that exist as interactable game countries
+const NATO_INTERACTABLE = new Set(["uk", "france", "germany", "canada"]);
+
+const MAP_MODES = [
+  { id: "relations", label: "Relations" },
+  { id: "unsc", label: "UN Security Council" },
+  { id: "nato", label: "NATO Allies" },
+];
+
+function WorldMap({ countries, mode }) {
   const [hovId, setHovId] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const countryMap = Object.fromEntries(countries.map(c => [c.id, c]));
   const hovCountry = hovId ? countryMap[hovId] : null;
+
+  const getFill = (isoId, cid) => {
+    if (mode === "unsc") {
+      if (UNSC_PERMANENT.has(isoId)) return "#1565C0";
+      return "var(--color-background-tertiary)";
+    }
+    if (mode === "nato") {
+      if (!NATO_ISO.has(isoId)) return "var(--color-background-tertiary)";
+      if (cid && NATO_INTERACTABLE.has(cid)) return "#1A237E";
+      return "#5C8AE8";
+    }
+    const country = cid ? countryMap[cid] : null;
+    return country ? STCOL[country.status] : "var(--color-background-tertiary)";
+  };
+
+  const getLegend = () => {
+    if (mode === "unsc") return [
+      { color: "#1565C0", label: "P5 Permanent" },
+    ];
+    if (mode === "nato") return [
+      { color: "#1A237E", label: "NATO (interactable)" },
+      { color: "#5C8AE8", label: "NATO (observer)" },
+    ];
+    return Object.entries(STCOL).map(([s, c]) => ({ color: c, label: s.charAt(0) + s.slice(1).toLowerCase() }));
+  };
 
   const handleMouseMove = e => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -39,9 +82,7 @@ function WorldMap({ countries }) {
           {({ geographies }) => geographies.map(geo => {
             const isoId = String(geo.id).padStart(3, "0");
             const cid = ISO_TO_ID[isoId];
-            const country = cid ? countryMap[cid] : null;
-            const fill = country ? STCOL[country.status] : "var(--color-background-tertiary)";
-            const isHov = cid && hovId === cid;
+            const fill = getFill(isoId, cid);
             return (
               <Geography
                 key={geo.rsmKey}
@@ -87,10 +128,10 @@ function WorldMap({ countries }) {
       )}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6, justifyContent: "center" }}>
-        {Object.entries(STCOL).map(([s, c]) => (
-          <div key={s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <div style={{ width: 10, height: 7, background: c, borderRadius: 2 }} />
-            <span style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>{s.charAt(0) + s.slice(1).toLowerCase()}</span>
+        {getLegend().map(({ color, label }) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 10, height: 7, background: color, borderRadius: 2 }} />
+            <span style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>{label}</span>
           </div>
         ))}
       </div>
@@ -99,12 +140,29 @@ function WorldMap({ countries }) {
 }
 
 export default function DiplomacyTab({ countries, visitedCountries, act, week, factions, onForeignVisit }) {
+  const [mapMode, setMapMode] = useState("relations");
+
   return <>
     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
 
     {/* Left: World map */}
     <div style={{ flex: "1 1 320px", minWidth: 0 }}>
-      <WorldMap countries={countries} />
+      <div style={{ display: "flex", gap: 5, marginBottom: 8 }}>
+        {MAP_MODES.map(m => (
+          <button
+            key={m.id}
+            onClick={() => setMapMode(m.id)}
+            style={{
+              fontSize: 10, padding: "3px 10px", borderRadius: 4,
+              border: mapMode === m.id ? "1px solid var(--color-text-primary)" : "1px solid var(--color-border-tertiary)",
+              background: mapMode === m.id ? "var(--color-text-primary)" : "var(--color-background-secondary)",
+              color: mapMode === m.id ? "var(--color-background-primary)" : "var(--color-text-secondary)",
+              cursor: "pointer",
+            }}
+          >{m.label}</button>
+        ))}
+      </div>
+      <WorldMap countries={countries} mode={mapMode} />
     </div>
 
     {/* Right: Country list */}
@@ -113,6 +171,7 @@ export default function DiplomacyTab({ countries, visitedCountries, act, week, f
     {["Europe", "Americas", "Asia-Pacific", "Middle East", "Africa"].map(region => {
       const rc = countries.filter(c => c.region === region);
       if (rc.length === 0) return null;
+      const actionCost = region === "Americas" ? 2 : 3;
       return (
         <div key={region} style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", marginBottom: 4 }}>{region}</div>
@@ -142,7 +201,7 @@ export default function DiplomacyTab({ countries, visitedCountries, act, week, f
                   {!isHostile && (() => {
                     const onCooldown = visitedCountries[c.id] && week < visitedCountries[c.id];
                     const cooldownWeeks = onCooldown ? Math.max(0, visitedCountries[c.id] - week) : 0;
-                    const visitDisabled = act + 2 > 4 || onCooldown;
+                    const visitDisabled = act + actionCost > 4 || onCooldown;
                     return (
                       <div style={{ display: "flex", gap: 3, marginTop: 5, flexWrap: "wrap" }}>
                         <button onClick={() => onForeignVisit(c.id)} disabled={visitDisabled} style={{
@@ -150,7 +209,7 @@ export default function DiplomacyTab({ countries, visitedCountries, act, week, f
                           cursor: visitDisabled ? "not-allowed" : "pointer",
                           background: visitDisabled ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
                           color: visitDisabled ? "var(--color-text-secondary)" : "var(--color-background-primary)",
-                        }}>Visit (2 actions)</button>
+                        }}>Visit ({actionCost} actions)</button>
                         {onCooldown && <span style={{ fontSize: 9, color: "#EF9F27", alignSelf: "center" }}>CD: {cooldownWeeks}w</span>}
                       </div>
                     );

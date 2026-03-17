@@ -745,9 +745,10 @@ export default function Game() {
 
   const doForeignVisit = (countryId, isSurrogate = false, surrogateId = null) => {
     if (visitedCountries[countryId] && week < visitedCountries[countryId]) return;
-    const actionCost = isSurrogate ? 1 : 2;
-    if (act + actionCost > 4) return;
     const country = countries.find(c => c.id === countryId);
+    const presidentialCost = country?.region === "Americas" ? 2 : 3;
+    const actionCost = isSurrogate ? 1 : presidentialCost;
+    if (act + actionCost > 4) return;
     if (!country || country.status === "HOSTILE") return;
 
     if (isSurrogate && surrogateId) {
@@ -787,7 +788,7 @@ export default function Game() {
     }
 
     setStats(ns);
-    setAct(n => n + 2);
+    setAct(n => n + actionCost);
     setVisitedCountries(p => ({ ...p, [countryId]: week + 52 }));
 
     const fxLines = Object.entries(factionFx).map(([fid, v]) => {
