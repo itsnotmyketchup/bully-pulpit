@@ -100,7 +100,15 @@ function WorldMap({ countries }) {
 
 export default function DiplomacyTab({ countries, visitedCountries, act, week, factions, onForeignVisit }) {
   return <>
-    <WorldMap countries={countries} />
+    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
+
+    {/* Left: World map */}
+    <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+      <WorldMap countries={countries} />
+    </div>
+
+    {/* Right: Country list */}
+    <div style={{ flex: "1 1 260px", minWidth: 0 }}>
     <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>Foreign relations</div>
     {["Europe", "Americas", "Asia-Pacific", "Middle East", "Africa"].map(region => {
       const rc = countries.filter(c => c.region === region);
@@ -154,5 +162,8 @@ export default function DiplomacyTab({ countries, visitedCountries, act, week, f
         </div>
       );
     })}
+    </div>
+
+    </div>
   </>;
 }

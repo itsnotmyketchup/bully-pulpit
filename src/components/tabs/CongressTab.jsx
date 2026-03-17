@@ -75,18 +75,7 @@ function FactionCard({ f, pf, isOpposition }) {
           </div>
         </div>
       )}
-      {f.unity !== undefined && (
-        <div style={{ marginBottom: 4 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-            <span style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>Unity</span>
-            <span style={{ fontSize: 9, fontWeight: 500, color: f.unity > 60 ? "#1D9E75" : f.unity > 40 ? "#EF9F27" : "#E24B4A" }}>{Math.round(f.unity)}</span>
-          </div>
-          <div style={{ height: 4, borderRadius: 2, background: "var(--color-background-tertiary)", overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${f.unity}%`, background: f.unity > 60 ? "#1D9E75" : f.unity > 40 ? "#EF9F27" : "#E24B4A", borderRadius: 2, transition: "width 0.3s" }} />
-          </div>
-        </div>
-      )}
-      <DualMeter trust={f.trust} relationship={f.relationship} color={f.color} />
+      <DualMeter trust={f.trust} relationship={f.relationship} color={f.color} unity={f.unity} />
     </div>
   );
 }
