@@ -15,10 +15,8 @@ const ISO_TO_ID = {
   "818": "egypt", "156": "china", "643": "russia", "364": "iran", "408": "north_korea",
 };
 
-// UN Security Council: P5 permanent + current non-permanent (2025–2026)
+// UN Security Council P5 permanent members
 const UNSC_PERMANENT = new Set(["826", "250", "156", "643", "840"]); // UK, France, China, Russia, USA
-const UNSC_NONPERMANENT = new Set(["012", "328", "410", "694", "705", "208", "300", "586", "591", "706"]);
-// Algeria, Guyana, South Korea, Sierra Leone, Slovenia, Denmark, Greece, Pakistan, Panama, Somalia
 
 // NATO member ISO numeric codes (as of 2025)
 const NATO_ISO = new Set([
@@ -45,7 +43,6 @@ function WorldMap({ countries, mode }) {
   const getFill = (isoId, cid) => {
     if (mode === "unsc") {
       if (UNSC_PERMANENT.has(isoId)) return "#1565C0";
-      if (UNSC_NONPERMANENT.has(isoId)) return "#64B5F6";
       return "var(--color-background-tertiary)";
     }
     if (mode === "nato") {
@@ -60,7 +57,6 @@ function WorldMap({ countries, mode }) {
   const getLegend = () => {
     if (mode === "unsc") return [
       { color: "#1565C0", label: "P5 Permanent" },
-      { color: "#64B5F6", label: "Non-permanent" },
     ];
     if (mode === "nato") return [
       { color: "#1A237E", label: "NATO (interactable)" },
