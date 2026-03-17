@@ -510,16 +510,16 @@ export default function Game() {
 
     // Minor diplomatic metric faction effects (every tick)
     if (engagement > 30) ['prog','mod_dem','blue_dog','mod_rep'].forEach(fid => {
-      if (nf[fid]) nf[fid] = { ...nf[fid], relationship: Math.max(5, Math.min(95, nf[fid].relationship + 0.3)) };
+      if (nf[fid]) nf[fid] = { ...nf[fid], relationship: Math.max(5, Math.min(95, nf[fid].relationship + 0.15)) };
     });
     if (engagement < 20) {
-      if (nf['freedom']) nf['freedom'] = { ...nf['freedom'], relationship: Math.max(5, Math.min(95, nf['freedom'].relationship + 0.3)) };
+      if (nf['freedom']) nf['freedom'] = { ...nf['freedom'], relationship: Math.max(5, Math.min(95, nf['freedom'].relationship + 0.15)) };
     }
     if (powerProjection > 38) ['mod_rep','trad_con','blue_dog'].forEach(fid => {
-      if (nf[fid]) nf[fid] = { ...nf[fid], relationship: Math.max(5, Math.min(95, nf[fid].relationship + 0.3)) };
+      if (nf[fid]) nf[fid] = { ...nf[fid], relationship: Math.max(5, Math.min(95, nf[fid].relationship + 0.15)) };
     });
     if (powerProjection < 32) {
-      if (nf['prog']) nf['prog'] = { ...nf['prog'], relationship: Math.max(5, Math.min(95, nf['prog'].relationship + 0.3)) };
+      if (nf['prog']) nf['prog'] = { ...nf['prog'], relationship: Math.max(5, Math.min(95, nf['prog'].relationship + 0.15)) };
     }
     if (globalTension > 35) {
       if (nf['prog']) nf['prog'] = { ...nf['prog'], relationship: Math.max(5, Math.min(95, nf['prog'].relationship - 0.5)) };
@@ -576,11 +576,11 @@ export default function Game() {
       return h;
     });
 
-    // Decay all state bonuses by 8% per week to prevent runaway approval
+    // Decay all state bonuses by 6% per week to prevent runaway approval
     setStBon(prev => {
       const d = {};
       Object.entries(prev).forEach(([k, v]) => {
-        const decayed = v * 0.92;
+        const decayed = v * 0.94;
         if (Math.abs(decayed) > 0.0001) d[k] = decayed;
       });
       return d;

@@ -14,7 +14,7 @@ export const VISIT_TYPES = [
   },
   {
     id:"military",name:"Visit military base",icon:"Military",effects:{},
-    factionEffects:{trad_con:0.3,mod_rep:0.2,freedom:0.2,prog:-0.1},
+    factionEffects:{trad_con:0.3,mod_rep:0.2,freedom:0.2,prog:-0.2},
   },
   {
     id:"university",name:"Speak at university",icon:"University",effects:{tech:0.02},demo:"college-educated",
@@ -30,8 +30,9 @@ export const VISIT_TYPES = [
     factionEffects:{prog:-0.2,freedom:0.4,mod_rep:0.2,blue_dog:0.2},
   },
   {
-    id:"disaster",name:"Visit disaster relief zone",icon:"Relief",effects:{},approvalBoost:2,
+    id:"disaster",name:"Visit disaster relief zone",icon:"Relief",effects:{},approvalBoost:5,
     stateRestriction:"disaster",
+    factionEffects:{prog:0.5,freedom:0.5,mod_rep:0.5,blue_dog:0.5,mod_dem:0.5,trad_con:0.5}
   },
   {
     id:"wallstreet",name:"Ring stock exchange bell",icon:"Finance",effects:{},
