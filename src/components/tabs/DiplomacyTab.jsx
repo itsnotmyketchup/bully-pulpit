@@ -1,0 +1,158 @@
+import { useState } from "react";
+import { ComposableMap, Geographies, Geography } from "react-simple-maps";
+import { STCOL } from "../../data/countries.js";
+import { COUNTRY_FACTION_EFFECTS } from "../../data/constants.js";
+import Badge from "../Badge.jsx";
+import DualMeter from "../DualMeter.jsx";
+
+const WORLD_GEO = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
+
+// ISO numeric → game country id
+const ISO_TO_ID = {
+  "826": "uk", "250": "france", "276": "germany", "124": "canada",
+  "392": "japan", "036": "australia", "410": "south_korea", "376": "israel",
+  "356": "india", "076": "brazil", "484": "mexico", "682": "saudi",
+  "818": "egypt", "156": "china", "643": "russia", "364": "iran", "408": "north_korea",
+};
+
+
+function WorldMap({ countries }) {
+  const [hovId, setHovId] = useState(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const countryMap = Object.fromEntries(countries.map(c => [c.id, c]));
+  const hovCountry = hovId ? countryMap[hovId] : null;
+
+  const handleMouseMove = e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+
+  return (
+    <div style={{ position: "relative", marginBottom: 16 }} onMouseMove={handleMouseMove}>
+      <ComposableMap
+        projection="geoMercator"
+        projectionConfig={{ scale: 100, center: [15, 20] }}
+        width={800} height={380}
+        style={{ width: "100%", height: "auto", display: "block", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-lg)" }}
+      >
+        <Geographies geography={WORLD_GEO}>
+          {({ geographies }) => geographies.map(geo => {
+            const isoId = String(geo.id).padStart(3, "0");
+            const cid = ISO_TO_ID[isoId];
+            const country = cid ? countryMap[cid] : null;
+            const fill = country ? STCOL[country.status] : "var(--color-background-tertiary)";
+            const isHov = cid && hovId === cid;
+            return (
+              <Geography
+                key={geo.rsmKey}
+                geography={geo}
+                onMouseEnter={() => cid && setHovId(cid)}
+                onMouseLeave={() => setHovId(null)}
+                style={{
+                  default: { fill, stroke: "rgba(255,255,255,0.15)", strokeWidth: 0.3, outline: "none" },
+                  hover: { fill, stroke: cid ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.15)", strokeWidth: cid ? 1 : 0.3, outline: "none", cursor: cid ? "pointer" : "default" },
+                  pressed: { fill, outline: "none" },
+                }}
+              />
+            );
+          })}
+        </Geographies>
+      </ComposableMap>
+
+      {hovCountry && (
+        <div style={{
+          position: "absolute",
+          left: Math.min(tooltipPos.x + 12, 500),
+          top: Math.max(4, tooltipPos.y - 60),
+          background: "var(--color-background-primary)",
+          border: `1px solid ${STCOL[hovCountry.status]}`,
+          borderRadius: "var(--border-radius-lg)",
+          padding: "10px 14px",
+          zIndex: 20,
+          minWidth: 160,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
+          pointerEvents: "none",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{hovCountry.name}</span>
+            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: `${STCOL[hovCountry.status]}22`, color: STCOL[hovCountry.status], fontWeight: 600 }}>{hovCountry.status}</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 12px", fontSize: 11, color: "var(--color-text-secondary)" }}>
+            <span>Relationship</span>
+            <span style={{ textAlign: "right", fontWeight: 500, color: hovCountry.relationship >= 60 ? "#1D9E75" : hovCountry.relationship < 30 ? "#E24B4A" : "var(--color-text-primary)" }}>{hovCountry.relationship}</span>
+            <span>Trust</span>
+            <span style={{ textAlign: "right", fontWeight: 500, color: hovCountry.trust >= 60 ? "#1D9E75" : hovCountry.trust < 30 ? "#E24B4A" : "var(--color-text-primary)" }}>{hovCountry.trust}</span>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6, justifyContent: "center" }}>
+        {Object.entries(STCOL).map(([s, c]) => (
+          <div key={s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 10, height: 7, background: c, borderRadius: 2 }} />
+            <span style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>{s.charAt(0) + s.slice(1).toLowerCase()}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function DiplomacyTab({ countries, visitedCountries, act, week, factions, onForeignVisit }) {
+  return <>
+    <WorldMap countries={countries} />
+    <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>Foreign relations</div>
+    {["Europe", "Americas", "Asia-Pacific", "Middle East", "Africa"].map(region => {
+      const rc = countries.filter(c => c.region === region);
+      if (rc.length === 0) return null;
+      return (
+        <div key={region} style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", marginBottom: 4 }}>{region}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 5 }}>
+            {rc.map(c => {
+              const isHostile = c.status === "HOSTILE";
+              const fxHints = COUNTRY_FACTION_EFFECTS[c.id];
+              return (
+                <div key={c.id} style={{ padding: "8px 10px", borderRadius: "var(--border-radius-lg)", border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-primary)" }}>{c.name}</span>
+                    <Badge color={STCOL[c.status]}>{c.status}</Badge>
+                  </div>
+                  <DualMeter trust={c.trust} relationship={c.relationship} color={STCOL[c.status]} />
+                  {fxHints && (
+                    <div style={{ fontSize: 8, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                      {Object.entries(fxHints).map(([fid, v]) => {
+                        const f = factions[fid];
+                        return f ? (
+                          <span key={fid} style={{ marginRight: 4, color: v > 0 ? "#1D9E75" : "#E24B4A" }}>
+                            {f.name.split(" ")[0]}: {v > 0 ? "+" : ""}{Math.round(v * 8)}
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+                  {!isHostile && (() => {
+                    const onCooldown = visitedCountries[c.id] && week < visitedCountries[c.id];
+                    const cooldownWeeks = onCooldown ? Math.max(0, visitedCountries[c.id] - week) : 0;
+                    const visitDisabled = act + 2 > 4 || onCooldown;
+                    return (
+                      <div style={{ display: "flex", gap: 3, marginTop: 5, flexWrap: "wrap" }}>
+                        <button onClick={() => onForeignVisit(c.id)} disabled={visitDisabled} style={{
+                          fontSize: 9, padding: "2px 7px", borderRadius: 4, border: "none",
+                          cursor: visitDisabled ? "not-allowed" : "pointer",
+                          background: visitDisabled ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
+                          color: visitDisabled ? "var(--color-text-secondary)" : "var(--color-background-primary)",
+                        }}>Visit (2 actions)</button>
+                        {onCooldown && <span style={{ fontSize: 9, color: "#EF9F27", alignSelf: "center" }}>CD: {cooldownWeeks}w</span>}
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    })}
+  </>;
+}
