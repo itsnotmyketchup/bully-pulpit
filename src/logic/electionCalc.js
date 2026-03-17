@@ -62,7 +62,7 @@ export function computeEnthusiasms(cg, pp, natA, executiveOverreach, passedLegis
 
 // ─── Seat Change Calculation ──────────────────────────────────────────────────
 
-export function computeSeatChanges(cg, pp, natA, partyEnthusiasm, oppEnthusiasm, isPresidentialYear = false) {
+export function computeSeatChanges(cg, pp, natA, partyEnthusiasm, oppEnthusiasm, isPresidentialYear = false, activityScore = 0) {
   const allyIds = ALLIED_FACTIONS[pp] || [];
   const oppoIds = OPPOSITION_FACTIONS[pp] || [];
   const allyFactions = allyIds.map(id => cg.factions[id]).filter(Boolean);
@@ -76,22 +76,30 @@ export function computeSeatChanges(cg, pp, natA, partyEnthusiasm, oppEnthusiasm,
   const enthDiff = (partyEnthusiasm - oppEnthusiasm) / 100;
   const netScore = approvalFactor * 0.70 + enthDiff * 0.30;
 
-  // Structural midterm penalty of -8 seats; no penalty in presidential election years
-  const structuralPenalty = isPresidentialYear ? 0 : -8;
+  // Structural midterm penalty; no penalty in presidential election years
+  const structuralPenalty = isPresidentialYear ? 0 : -12;
+
+  // Direct inactivity penalty: low campaign activity suppresses turnout and costs seats
+  let directActivityPenalty = 0;
+  if (activityScore === 0) directActivityPenalty = 35;
+  else if (activityScore <= 2) directActivityPenalty = 22;
+  else if (activityScore <= 4) directActivityPenalty = 12;
+  else if (activityScore <= 5) directActivityPenalty = 4;
+
   const jitterH = Math.round((Math.random() - 0.5) * 8);
-  const rawHouseChange = Math.round(structuralPenalty + netScore * 62);
+  const rawHouseChange = Math.round(structuralPenalty - directActivityPenalty + netScore * 70);
   const houseNetChange = clamp(
     rawHouseChange + jitterH,
     Math.max(-allyHouseTotal + 3, -90),
-    40
+    45
   );
 
   const jitterS = Math.round((Math.random() - 0.5) * 2);
-  const rawSenateChange = Math.round(rawHouseChange * 0.07);
+  const rawSenateChange = Math.round(rawHouseChange * 0.10);
   const senateNetChange = clamp(
     rawSenateChange + jitterS,
-    Math.max(-allySenateTotal + 1, -8),
-    6
+    Math.max(-allySenateTotal + 1, -10),
+    7
   );
 
   // Distribute changes among factions
@@ -272,14 +280,20 @@ export function buildHistorySnapshot(cg, yr, houseNetChange, senateNetChange, pa
 
 // ─── Campaign season metrics (for live widget display) ───────────────────────
 
-export function computePollingProjection(partyEnthusiasm, oppEnthusiasm, natA, pollingNoise, isPresidentialYear = false) {
+export function computePollingProjection(partyEnthusiasm, oppEnthusiasm, natA, pollingNoise, isPresidentialYear = false, activityScore = 0) {
   const approvalFactor = (natA - 50) / 50;
   const enthDiff = (partyEnthusiasm - oppEnthusiasm) / 100;
   const netScore = approvalFactor * 0.70 + enthDiff * 0.30;
-  const structuralPenalty = isPresidentialYear ? 0 : -8;
+  const structuralPenalty = isPresidentialYear ? 0 : -12;
 
-  const projectedHouseChange = Math.round(structuralPenalty + (netScore + pollingNoise) * 62);
-  const projectedSenateChange = Math.round(projectedHouseChange * 0.07);
+  let directActivityPenalty = 0;
+  if (activityScore === 0) directActivityPenalty = 35;
+  else if (activityScore <= 2) directActivityPenalty = 22;
+  else if (activityScore <= 4) directActivityPenalty = 12;
+  else if (activityScore <= 5) directActivityPenalty = 4;
+
+  const projectedHouseChange = Math.round(structuralPenalty - directActivityPenalty + (netScore + pollingNoise) * 70);
+  const projectedSenateChange = Math.round(projectedHouseChange * 0.10);
 
   let advice;
   if (projectedHouseChange < -40) {

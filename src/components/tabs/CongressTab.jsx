@@ -4,13 +4,32 @@ import DualMeter from "../DualMeter.jsx";
 import CongressBar from "../CongressBar.jsx";
 import LegislationRecord from "../LegislationRecord.jsx";
 
-const PARTY_COLORS = { dem: "#3b7dd8", rep: "#c0392b" };
-const PARTY_NAMES = { dem: "Democrats", rep: "Republicans" };
+const PARTY_COLORS = { DEM: "#3b7dd8", REP: "#c0392b" };
+const PARTY_NAMES = { DEM: "Democrats", REP: "Republicans" };
 
 export default function CongressTab({ allF, allyF, oppoF, pf, congressTab, setCongressTab, hovFaction, setHovFaction, billRecord, executiveOverreach, congressHistory }) {
   const or = Math.round(executiveOverreach ?? 20);
   const orLevel = or > 60 ? "High" : or > 30 ? "Medium" : "Low";
   const orColor = or > 60 ? "#E24B4A" : or > 30 ? "#EF9F27" : "#1D9E75";
+  const [overviewBarMode, setOverviewBarMode] = useState("faction");
+
+  // Build party-aggregated list for overview bar toggle
+  const pp = allyF[0]?.party;
+  const overviewPartyMap = {};
+  allF.forEach(f => {
+    if (!overviewPartyMap[f.party]) overviewPartyMap[f.party] = {
+      id: f.party, name: PARTY_NAMES[f.party] || f.party,
+      color: PARTY_COLORS[f.party] || "#888",
+      houseSeats: 0, senateSeats: 0,
+    };
+    overviewPartyMap[f.party].houseSeats += f.houseSeats || 0;
+    overviewPartyMap[f.party].senateSeats += f.senateSeats || 0;
+  });
+  const overviewPartyList = [
+    ...Object.values(overviewPartyMap).filter(p => p.id === pp),
+    ...Object.values(overviewPartyMap).filter(p => p.id !== pp),
+  ];
+  const overviewDisplayFactions = overviewBarMode === "party" ? overviewPartyList : allF;
 
   return <>
     {/* Congress sub-tabs */}
@@ -27,9 +46,22 @@ export default function CongressTab({ allF, allyF, oppoF, pf, congressTab, setCo
     </div>
 
     {congressTab === "overview" && <>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+        <div style={{ display: "flex", gap: 2, background: "var(--color-background-tertiary)", borderRadius: "var(--border-radius-md)", padding: 2 }}>
+          {["faction", "party"].map(v => (
+            <button key={v} onClick={() => setOverviewBarMode(v)} style={{
+              padding: "3px 9px", fontSize: 10, fontWeight: overviewBarMode === v ? 500 : 400,
+              background: overviewBarMode === v ? "var(--color-background-secondary)" : "transparent",
+              color: overviewBarMode === v ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+              border: "none", borderRadius: "var(--border-radius-md)", cursor: "pointer",
+              textTransform: "capitalize",
+            }}>{v}</button>
+          ))}
+        </div>
+      </div>
       <div style={{ marginBottom: 6 }}>
-        <CongressBar factions={allF} chamber="Senate" hoveredFaction={hovFaction} setHoveredFaction={setHovFaction} />
-        <CongressBar factions={allF} chamber="House" hoveredFaction={hovFaction} setHoveredFaction={setHovFaction} />
+        <CongressBar factions={overviewDisplayFactions} chamber="Senate" hoveredFaction={overviewBarMode === "faction" ? hovFaction : null} setHoveredFaction={overviewBarMode === "faction" ? setHovFaction : () => {}} />
+        <CongressBar factions={overviewDisplayFactions} chamber="House" hoveredFaction={overviewBarMode === "faction" ? hovFaction : null} setHoveredFaction={overviewBarMode === "faction" ? setHovFaction : () => {}} />
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
         <span style={{ fontSize: 9, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>Exec. overreach:</span>
@@ -39,9 +71,9 @@ export default function CongressTab({ allF, allyF, oppoF, pf, congressTab, setCo
         <span style={{ fontSize: 9, color: orColor, fontWeight: 600, whiteSpace: "nowrap" }}>{or} · {orLevel}</span>
       </div>
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "center", marginBottom: 10 }}>
-        {allF.map(f => (
-          <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 3, opacity: hovFaction && hovFaction !== f.id ? 0.4 : 1, transition: "opacity 0.15s", cursor: "pointer" }}
-            onMouseEnter={() => setHovFaction(f.id)} onMouseLeave={() => setHovFaction(null)}>
+        {overviewDisplayFactions.map(f => (
+          <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 3, opacity: overviewBarMode === "faction" && hovFaction && hovFaction !== f.id ? 0.4 : 1, transition: "opacity 0.15s", cursor: overviewBarMode === "faction" ? "pointer" : "default" }}
+            onMouseEnter={() => overviewBarMode === "faction" && setHovFaction(f.id)} onMouseLeave={() => overviewBarMode === "faction" && setHovFaction(null)}>
             <div style={{ width: 7, height: 7, borderRadius: "50%", background: f.color }} />
             <span style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>{f.name}</span>
           </div>

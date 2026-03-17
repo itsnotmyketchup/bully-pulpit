@@ -156,7 +156,7 @@ export default function Game() {
     const isElectionYear = yr >= 2 && yr % 2 === 0;
     if (!isElectionYear || wiy < 28) return null;
     const { partyEnthusiasm, oppEnthusiasm } = computeEnthusiasms(cg, pp, natA, executiveOverreach, passedLegislation, promises, campaignActivity);
-    const { projectedHouseChange, projectedSenateChange, advice } = computePollingProjection(partyEnthusiasm, oppEnthusiasm, natA, pollingNoise, isPresidentialElection);
+    const { projectedHouseChange, projectedSenateChange, advice } = computePollingProjection(partyEnthusiasm, oppEnthusiasm, natA, pollingNoise, isPresidentialElection, campaignActivity);
     const weeksUntilElection = Math.max(0, 44 - wiy);
     return { partyEnthusiasm, oppEnthusiasm, projectedHouseChange, projectedSenateChange, advice, weeksUntilElection };
   }, [cg, pp, natA, executiveOverreach, passedLegislation, promises, campaignActivity, pollingNoise, isPresidentialElection, wiy, yr]);
@@ -667,7 +667,7 @@ export default function Game() {
     const isPresidentialYearB = yrB >= 4 && yrB % 4 === 0;
     if (wiyB === 44 && isElectionYearB && !pendingCongressUpdate) {
       const { partyEnthusiasm, oppEnthusiasm } = computeEnthusiasms(cg, pp, natA, executiveOverreach, passedLegislation, promises, campaignActivity);
-      const { houseNetChange, senateNetChange, factionHouseChanges, factionSenateChanges } = computeSeatChanges(cg, pp, natA, partyEnthusiasm, oppEnthusiasm, isPresidentialYearB);
+      const { houseNetChange, senateNetChange, factionHouseChanges, factionSenateChanges } = computeSeatChanges(cg, pp, natA, partyEnthusiasm, oppEnthusiasm, isPresidentialYearB, campaignActivity);
       const newFactions = applyElectionSeats(cg.factions, factionHouseChanges, factionSenateChanges);
       const newFactionsWithRelEffects = applyPostElectionRelEffects(newFactions, houseNetChange, pp);
       const results = buildMidtermResults(cg, pp, yrB, natA, partyEnthusiasm, oppEnthusiasm, houseNetChange, senateNetChange, factionHouseChanges, factionSenateChanges, isPresidentialYearB);
