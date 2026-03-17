@@ -70,11 +70,12 @@ Key functions in `App.jsx`:
 
 ```
 src/
-├── App.jsx                  # Root component, all state orchestration (~1,350 lines)
+├── App.jsx                  # Root component, all state orchestration (~1,620 lines)
+├── assets/                  # Static assets (images, etc.)
 ├── components/
 │   ├── tabs/                # 7 main tabs (Overview, Congress, Party, Policy, Actions, Diplomacy, Log)
 │   ├── screens/             # Full-screen states (Landing, Setup, Crisis)
-│   ├── modals/              # Dialog overlays (Budget, SignBill, EoResult, ForeignVisit, Promise, etc.)
+│   ├── modals/              # Dialog overlays (Budget, SignBill, EoResult, ForeignVisit, Promise, BrokenPromise, Inauguration, Midterm, SurrogateDone)
 │   └── *.jsx                # Shared sub-components (TileMap, VisitMap, CongressBar, Hemicycle, etc.)
 ├── data/
 │   ├── constants.js         # Tab names, faction alliances, surrogate names, country faction effects
@@ -87,16 +88,17 @@ src/
 │   ├── states.js            # 50 state data with demographics and regional tags
 │   ├── stats.js             # 15 game metrics (GDP, unemployment, etc.) + metadata
 │   ├── usMapPaths.js        # SVG path data for US tile map
-│   └── visits.js            # 12 visit types with effects and restrictions
+│   └── visits.js            # 12+ visit types with effects and restrictions
 ├── logic/
 │   ├── billProgression.js   # calcStageAdvance(): vote calculation, filibuster rules, faction logic
 │   ├── calcStateApproval.js # Per-state approval from stats and demographics
+│   ├── electionCalc.js      # Election mechanics: enthusiasm, seat changes, polling projection, midterm results
 │   ├── generateCongress.js  # Generate Congress factions, seats, leaders
 │   └── willPassCongress.js  # Simple pass likelihood prediction
 ├── systems/
 │   └── budgetCalc.js        # computeBudgetReactions(): faction reactions to budget changes
 └── utils/
-    ├── clamp.js             # clamp(val, min, max)
+    ├── clamp.js             # clamp(), clampRel(), clampUni()
     ├── countryStatus.js     # Derive diplomatic status string from relationship score
     └── makeSurrogates.js    # Generate two named surrogate aides
 ```
@@ -119,7 +121,9 @@ src/
 
 **Visits** — 12 domestic visit types with regional/state restrictions and faction reactions. Presidential state visits via `doVisit()`.
 
-**Diplomacy** — 17 countries with `relationship` (0–100), `trust`, and `status` (ally/neutral/rival/hostile). Visits boost relationship; some EOs affect bilateral relations. `COUNTRY_FACTION_EFFECTS` maps country interactions to domestic faction reactions.
+**Diplomacy** — 17 countries with `relationship` (0–100), `trust`, and `status` (ally/neutral/rival/hostile). Visits boost relationship; some EOs affect bilateral relations. `COUNTRY_FACTION_EFFECTS` maps country interactions to domestic faction reactions. Three global metrics tracked: `engagement` (international cooperation, 0–50), `powerProjection` (military/diplomatic influence, 0–50), `globalTension` (crisis/conflict level, 0–50). `diplomacyThresholds` fires warnings when these cross key thresholds.
+
+**Elections** — `electionCalc.js` handles midterm and presidential election logic: `computeEnthusiasms()` (base + modifier per faction), `computeSeatChanges()` (seat deltas based on approval/enthusiasm), `computePollingProjection()` (polling with noise), `buildMidtermResults()` (full midterm summary). Results shown via `MidtermModal`. Congress is updated via `pendingCongressUpdate`.
 
 **Budget** — `budgetDraft` holds tax rate and spending allocations. `computeBudgetReactions()` previews faction responses. `submitBudget()` converts draft into a reconciliation bill (one per `reconciliationCooldown` period).
 

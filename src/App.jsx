@@ -111,6 +111,7 @@ export default function Game() {
   const [powerProjection, setPowerProjection] = useState(40); // 0-50
   const [globalTension, setGlobalTension] = useState(25); // 0-50
   const [lastForeignTripWeek, setLastForeignTripWeek] = useState(0);
+  const [lastMilitarySpending, setLastMilitarySpending] = useState(886);
   const [countryStatusSnapshot, setCountryStatusSnapshot] = useState(
     () => Object.fromEntries(COUNTRIES_INIT.map(c => [c.id, c.status]))
   );
@@ -726,11 +727,12 @@ export default function Game() {
     const newEngagement = willDecayEng ? Math.max(0, engagement - 1) : engagement;
     if (willDecayEng) setEngagement(() => newEngagement);
 
-    // 2. Power projection (GDP + defense spending drift each tick)
-    const gdpDelta = Math.max(-0.5, Math.min(0.5, (ns.gdpGrowth - 2.2) * 0.25));
-    const defDelta = Math.max(-2.0, Math.min(2.0, (ns.militarySpending - 886) / 200));
-    const newPowerProjection = Math.max(0, Math.min(50, powerProjection + gdpDelta + defDelta));
+    // 2. Power projection (one-time adjustment per spending change, capped ±6)
+    const spendingChange = ns.militarySpending - lastMilitarySpending;
+    const defDelta = spendingChange === 0 ? 0 : Math.max(-6, Math.min(6, spendingChange / 50));
+    const newPowerProjection = Math.max(0, Math.min(50, powerProjection + defDelta));
     setPowerProjection(() => newPowerProjection);
+    setLastMilitarySpending(ns.militarySpending);
 
     // 3. Global tension (detect country status degradations + random drift)
     const GREAT_POWERS_T = new Set(['india', 'uk', 'france', 'russia', 'china']);
