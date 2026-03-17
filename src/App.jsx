@@ -34,7 +34,7 @@ import LogTab from "./components/tabs/LogTab.jsx";
 import BudgetModal from "./components/modals/BudgetModal.jsx";
 import EoResultModal from "./components/modals/EoResultModal.jsx";
 import SignBillModal from "./components/modals/SignBillModal.jsx";
-import SurrogateDoneModal from "./components/modals/SurrogateDoneModal.jsx";
+import NotificationBar from "./components/NotificationBar.jsx";
 import BrokenPromiseModal from "./components/modals/BrokenPromiseModal.jsx";
 import ForeignVisitModal from "./components/modals/ForeignVisitModal.jsx";
 import PromiseModal from "./components/modals/PromiseModal.jsx";
@@ -88,7 +88,7 @@ export default function Game() {
   const [budgetDraft, setBudgetDraft] = useState(null);
   const [pendingPromise, setPendingPromise] = useState(null); // {factionId, billId, relBoost} — awaiting confirm
   const [brokenPromises, setBrokenPromises] = useState([]); // [{factionName, billName}] notification queue
-  const [surrogateDoneResult, setSurrogateDoneResult] = useState(null); // surrogate task completion popup
+  const [notifications, setNotifications] = useState([]); // non-intrusive notification banners
   const [coachCooldown, setCoachCooldown] = useState(0); // week when coaching is available again
   const [recentDisasters, setRecentDisasters] = useState({}); // {[stateAbbr]: weekOccurred}
   const [activeOrders, setActiveOrders] = useState([]); // [{id, issuedWeek, active, choiceData}]
@@ -108,6 +108,13 @@ export default function Game() {
 
   const yr = Math.ceil(week / 52), wiy = ((week - 1) % 52) + 1;
   const season = getSeasonLabel(week);
+
+  const addNotification = useCallback((n) => {
+    setNotifications(prev => [...prev, { id: Date.now() + Math.random(), ...n }]);
+  }, []);
+  const dismissNotification = useCallback((id) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }, []);
 
   const sA = useMemo(() => {
     const r = {};
@@ -158,7 +165,7 @@ export default function Game() {
     setBudgetDraft(null);
     setPendingPromise(null);
     setBrokenPromises([]);
-    setSurrogateDoneResult(null);
+    setNotifications([]);
     setCoachCooldown(0);
     setRecentDisasters({});
     setActiveOrders([]);
@@ -461,6 +468,20 @@ export default function Game() {
       return d;
     });
 
+    // Warn player 12 weeks before promise deadline if bill not yet passed
+    const nwCheck = week + 1;
+    promises.forEach(p => {
+      if (p.deadline - nwCheck === 12 && !usedPol.has(p.billId)) {
+        const bill = POLICY_ACTIONS.find(a => a.id === p.billId);
+        const faction = nf[p.factionId];
+        addNotification({
+          type: "promise_warning",
+          message: `Promise deadline in 12 weeks: pass "${bill?.name}" for ${faction?.name || p.factionId}.`,
+          tab: "party",
+        });
+      }
+    });
+
     // Process promise deadlines (year-end = multiple of 52)
     const yearEnd = Math.ceil(week / 52) * 52;
     if (week === yearEnd || week + 1 > yearEnd) {
@@ -503,6 +524,7 @@ export default function Game() {
             return { ...prev2, factions: nf2 };
           });
           addLog(`${s.name} completed: improved relations with ${s.busy.factionName} (+${s.busy.relBonus} relationship).`);
+          addNotification({ type: "surrogate_done", message: `${s.name} improved relations with ${s.busy.factionName} (+${s.busy.relBonus} relationship).` });
         } else if (s.busy.type === "foreign_visit") {
           const relGain = Math.floor(Math.random() * 13) - 4; // -4 to +8
           const trustGain = Math.max(0, relGain > 0 ? Math.floor(relGain * 0.6 + Math.random() * 3) : Math.floor(Math.random() * 4) - 2);
@@ -521,7 +543,8 @@ export default function Game() {
             ns.approvalRating = (ns.approvalRating || 50) + 1;
             setStats({ ...ns });
           }
-          setSurrogateDoneResult({ type: "foreign_visit", surrogateName: s.name, countryName: s.busy.countryName, relGain, trustGain, approvalGain: relGain >= 5 ? 1 : 0 });
+          const relStr = `${relGain >= 0 ? "+" : ""}${relGain} relationship, +${trustGain} trust${relGain >= 5 ? ", +1 approval" : ""}`;
+          addNotification({ type: "surrogate_done", message: `${s.name} returned from ${s.busy.countryName}: ${relStr}.` });
         } else if (s.busy.type === "coach") {
           const success = Math.random() < 0.66;
           if (success) {
@@ -539,7 +562,12 @@ export default function Game() {
             addLog(`${s.name}'s coaching of ${s.busy.factionName} leader did not produce results.`);
           }
           setCoachCooldown(week + 8);
-          setSurrogateDoneResult({ type: "coach", surrogateName: s.name, factionName: s.busy.factionName, skill: s.busy.skill, success });
+          addNotification({
+            type: success ? "surrogate_done" : "surrogate_fail",
+            message: success
+              ? `${s.name}: ${s.busy.factionName} leader's ${s.busy.skill} improved (+1). Coaching available again in 8 weeks.`
+              : `${s.name}: ${s.busy.factionName} leader was resistant to coaching. No improvement. Cooldown: 8 weeks.`,
+          });
         }
         return { ...s, busy: null };
       }
@@ -1233,6 +1261,27 @@ export default function Game() {
       </div>
 
 
+      {/* Notification bar */}
+      {(() => {
+        const derived = [];
+        if (pendingNegotiation && activeBill && tab !== "policy") {
+          derived.push({
+            id: "negotiation",
+            type: "negotiation",
+            message: `Negotiation opportunity: amendments available for ${activeBill.act.name}.`,
+            tab: "policy",
+          });
+        }
+        const all = [...derived, ...notifications];
+        return all.length > 0 ? (
+          <NotificationBar
+            notifications={all}
+            onDismiss={dismissNotification}
+            onTabSwitch={setTab}
+          />
+        ) : null;
+      })()}
+
       {tab === "overview" && (
         <OverviewTab
           stats={stats} prev={prev} hist={hist}
@@ -1335,7 +1384,6 @@ export default function Game() {
         pn={pn} week={week}
         onSign={signBill} onVeto={vetoBill}
       />
-      <SurrogateDoneModal result={surrogateDoneResult} onDismiss={() => setSurrogateDoneResult(null)} />
       <BrokenPromiseModal brokenPromises={brokenPromises} onDismiss={() => setBrokenPromises(q => q.slice(1))} />
       <ForeignVisitModal result={foreignVisitResult} onDismiss={() => setForeignVisitResult(null)} />
       <PromiseModal
