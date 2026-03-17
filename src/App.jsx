@@ -386,25 +386,31 @@ export default function Game() {
       addLog(`Walked away from negotiations — trust with ${nf[negWalkAwayFid].name} decreased.`);
     }
 
-    // Executive overreach faction penalties — applied every 4 weeks
+    // Executive overreach faction penalties — applied every 2 weeks, scaled continuously
     const nwForOverreach = week + 1;
-    if (nwForOverreach % 6 === 0 && executiveOverreach > 30) {
+    if (nwForOverreach % 2 === 0 && executiveOverreach > 31) {
       const allyList = ALLIED_FACTIONS[pp] || [];
       const oppList  = OPPOSITION_FACTIONS[pp] || [];
-      const isHigh   = executiveOverreach > 60;
+      // t: 0 at overreach=31, 1 at overreach=100 — drives both penalty size and log threshold
+      const t = Math.max(0, (executiveOverreach - 31)) / 69;
       allyList.forEach(fid => {
         if (!nf[fid]) return;
-        const penalty = isHigh ? (fid === pf ? 12 : 18) : (fid === pf ? 5 : 7);
-        nf[fid] = { ...nf[fid], relationship: Math.max(5, nf[fid].relationship - penalty) };
+        const isBase   = fid === pf;
+        const maxPen   = isBase ? 2 : 4;   // base faction barely affected; other allies more so
+        const floor    = isBase ? 45 : 25; // base faction protected; other allies can fall further
+        const penalty  = t * maxPen;
+        nf[fid] = { ...nf[fid], relationship: Math.max(floor, nf[fid].relationship - penalty) };
       });
       oppList.forEach(fid => {
         if (!nf[fid]) return;
-        const penalty = isHigh ? 24 : 12;
-        nf[fid] = { ...nf[fid], relationship: Math.max(5, nf[fid].relationship - penalty) };
+        const penalty = t * 6; // opposition takes the hardest hit
+        nf[fid] = { ...nf[fid], relationship: Math.max(10, nf[fid].relationship - penalty) };
       });
-      addLog(isHigh
-        ? "HIGH executive overreach is seriously damaging all faction relationships."
-        : "Elevated executive overreach is straining faction relationships.");
+      if (t > 0.42) { // overreach > ~60
+        addLog("HIGH executive overreach is seriously damaging all faction relationships.");
+      } else if (t > 0.14) { // overreach > ~41
+        addLog("Elevated executive overreach is straining faction relationships.");
+      }
     }
 
     // Log leader replacements and commit faction changes
