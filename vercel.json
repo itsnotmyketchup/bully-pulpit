@@ -2,6 +2,5 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "installCommand": "npm install",
-  "engines": { "node": "22.x" }
+  "installCommand": "npm install"
 }
