@@ -297,9 +297,9 @@ export function generateDynamicEvents(
   ];
 
   base.forEach(e => {
-    if (usedEvents.has(e.id)) return;
-    if (e.season && e.season !== season) return;
-    pool.push(e);
+    if (!e.repeatable && usedEvents.has(e.id)) return;
+   if (e.season && e.season !== season) return;
+   pool.push(e);
   });
 
   // ── Post-legislation triggered events ─────────────────────────────────
