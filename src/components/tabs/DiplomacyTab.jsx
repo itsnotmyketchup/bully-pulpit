@@ -226,11 +226,11 @@ export default function DiplomacyTab({ countries, visitedCountries, act, week, f
         {(() => {
           const effects = {};
           const add = (fids, delta) => fids.forEach(fid => { effects[fid] = (effects[fid] || 0) + delta; });
-          if (engagement > 30) add(['prog', 'mod_dem', 'blue_dog', 'mod_rep'], 0.3);
-          if (engagement < 20) add(['freedom'], 0.3);
-          if (powerProjection > 38) add(['mod_rep', 'trad_con', 'blue_dog'], 0.3);
-          if (powerProjection < 32) add(['prog'], 0.3);
-          if (globalTension > 35) add(['prog'], -0.5);
+          if (engagement > 30) add(['prog', 'mod_dem', 'blue_dog', 'mod_rep'], 0.05);
+          if (engagement < 20) add(['freedom'], 0.1);
+          if (powerProjection > 38) add(['mod_rep', 'trad_con', 'blue_dog'], 0.05);
+          if (powerProjection < 32) add(['prog'], 0.1);
+          if (globalTension > 35) add(['prog'], -0.2);
           const active = Object.entries(effects).filter(([, v]) => v !== 0);
           if (active.length === 0) return null;
           return (
