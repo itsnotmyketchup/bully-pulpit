@@ -114,6 +114,7 @@ export default function Game() {
   const [countryStatusSnapshot, setCountryStatusSnapshot] = useState(
     () => Object.fromEntries(COUNTRIES_INIT.map(c => [c.id, c.status]))
   );
+  const [diplomacyThresholds, setDiplomacyThresholds] = useState({ tensionHigh: false, engagementLow: false, projectionWeak: false });
   const [overreachLastIncreasedWeek, setOverreachLastIncreasedWeek] = useState(0);
   const [pendingChainEvents, setPendingChainEvents] = useState([]); // [{triggerAtWeek, event}]
   const [actionsSubTab, setActionsSubTab] = useState("orders"); // "orders"|"visits"|"speeches"
@@ -720,20 +721,22 @@ export default function Game() {
 
     // ── Diplomatic Metrics Update ────────────────────────────────────────────
 
-    // 1. Engagement decay (no trip in 4+ weeks)
-    if (lastForeignTripWeek === 0 || nw - lastForeignTripWeek > 4) {
-      setEngagement(e => Math.max(0, e - 2));
-    }
+    // 1. Engagement decay (1/week, only after first 4 weeks, only if no trip in 4+ weeks)
+    const willDecayEng = nw > 4 && (lastForeignTripWeek === 0 || nw - lastForeignTripWeek > 4);
+    const newEngagement = willDecayEng ? Math.max(0, engagement - 1) : engagement;
+    if (willDecayEng) setEngagement(() => newEngagement);
 
     // 2. Power projection (GDP + defense spending drift each tick)
     const gdpDelta = Math.max(-0.5, Math.min(0.5, (ns.gdpGrowth - 2.2) * 0.25));
     const defDelta = Math.max(-2.0, Math.min(2.0, (ns.militarySpending - 886) / 200));
-    setPowerProjection(p => Math.max(0, Math.min(50, p + gdpDelta + defDelta)));
+    const newPowerProjection = Math.max(0, Math.min(50, powerProjection + gdpDelta + defDelta));
+    setPowerProjection(() => newPowerProjection);
 
-    // 3. Global tension (detect country status degradations + random drift)
+    // 3. Global tension (detect country status degradations + random drift + decay after wk 4)
     const GREAT_POWERS_T = new Set(['india', 'uk', 'france', 'russia', 'china']);
     const STATUS_RANK_T = { ALLIED: 4, FRIENDLY: 3, NEUTRAL: 2, UNFRIENDLY: 1, HOSTILE: 0 };
     let tensionDelta = (Math.random() - 0.5) * 1.5; // ±0.75 random drift
+    if (nw > 4) tensionDelta -= 1; // natural decay 1/week after first 4 weeks
     countries.forEach(c => {
       const prevSt = countryStatusSnapshot[c.id];
       if (!prevSt || prevSt === c.status) return;
@@ -749,8 +752,32 @@ export default function Game() {
         }
       }
     });
-    setGlobalTension(t => Math.max(0, Math.min(50, t + tensionDelta)));
+    const newGlobalTension = Math.max(0, Math.min(50, globalTension + tensionDelta));
+    setGlobalTension(() => newGlobalTension);
     setCountryStatusSnapshot(Object.fromEntries(countries.map(c => [c.id, c.status])));
+
+    // 4. Diplomatic threshold notifications (crossing into bad territory)
+    if (newEngagement < 20 && engagement >= 20 && !diplomacyThresholds.engagementLow) {
+      addLog("International engagement has fallen to a low level.");
+      addNotification({ type: "surrogate_fail", message: "International engagement is now low — foreign partners are losing interest." });
+      setDiplomacyThresholds(t => ({ ...t, engagementLow: true }));
+    } else if (newEngagement >= 20 && diplomacyThresholds.engagementLow) {
+      setDiplomacyThresholds(t => ({ ...t, engagementLow: false }));
+    }
+    if (newPowerProjection < 32 && powerProjection >= 32 && !diplomacyThresholds.projectionWeak) {
+      addLog("U.S. power projection has weakened below a major power threshold.");
+      addNotification({ type: "surrogate_fail", message: "Power projection has weakened — the U.S. is no longer perceived as a major power." });
+      setDiplomacyThresholds(t => ({ ...t, projectionWeak: true }));
+    } else if (newPowerProjection >= 32 && diplomacyThresholds.projectionWeak) {
+      setDiplomacyThresholds(t => ({ ...t, projectionWeak: false }));
+    }
+    if (newGlobalTension > 35 && globalTension <= 35 && !diplomacyThresholds.tensionHigh) {
+      addLog("Global tension has risen to a high level. Progressives are alarmed.");
+      addNotification({ type: "surrogate_fail", message: "Global tension is now high — this is straining the Progressive Caucus." });
+      setDiplomacyThresholds(t => ({ ...t, tensionHigh: true }));
+    } else if (newGlobalTension <= 35 && diplomacyThresholds.tensionHigh) {
+      setDiplomacyThresholds(t => ({ ...t, tensionHigh: false }));
+    }
 
     // Fire pending chain events (priority over regular events)
     const readyChain = pendingChainEvents.find(c => nw >= c.triggerAtWeek);
@@ -1482,6 +1509,7 @@ export default function Game() {
           billRecord={billRecord}
           executiveOverreach={executiveOverreach}
           congressHistory={congressHistory}
+          factionHist={factionHist}
         />
       )}
 

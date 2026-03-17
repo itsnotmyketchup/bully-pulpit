@@ -2,11 +2,12 @@ import { useState } from "react";
 import Badge from "../Badge.jsx";
 import CongressBar from "../CongressBar.jsx";
 import LegislationRecord from "../LegislationRecord.jsx";
+import MiniChart from "../MiniChart.jsx";
 
 const PARTY_COLORS = { DEM: "#3b7dd8", REP: "#c0392b" };
 const PARTY_NAMES = { DEM: "Democrats", REP: "Republicans" };
 
-export default function CongressTab({ allF, allyF, oppoF, pf, congressTab, setCongressTab, hovFaction, setHovFaction, billRecord, executiveOverreach, congressHistory }) {
+export default function CongressTab({ allF, allyF, oppoF, pf, congressTab, setCongressTab, hovFaction, setHovFaction, billRecord, executiveOverreach, congressHistory, factionHist }) {
   const or = Math.round(executiveOverreach ?? 20);
   const orLevel = or > 60 ? "High" : or > 30 ? "Medium" : "Low";
   const orColor = or > 60 ? "#E24B4A" : or > 30 ? "#EF9F27" : "#1D9E75";
@@ -79,9 +80,9 @@ export default function CongressTab({ allF, allyF, oppoF, pf, congressTab, setCo
         ))}
       </div>
       <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 5 }}>Your coalition</div>
-      {allyF.map(f => <FactionCard key={f.id} f={f} pf={pf} isOpposition={false} />)}
+      {allyF.map(f => <FactionCard key={f.id} f={f} pf={pf} isOpposition={false} hist={factionHist?.[f.id]} />)}
       <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 5, marginTop: 8 }}>Opposition</div>
-      {oppoF.map(f => <FactionCard key={f.id} f={f} pf={pf} isOpposition={true} />)}
+      {oppoF.map(f => <FactionCard key={f.id} f={f} pf={pf} isOpposition={true} hist={factionHist?.[f.id]} />)}
     </>}
 
     {congressTab === "legislation" && <LegislationRecord billRecord={billRecord} />}
@@ -193,9 +194,9 @@ function StatBar({ label, value, color }) {
   );
 }
 
-function FactionCard({ f, pf, isOpposition }) {
-  const relColor = f.relationship >= 60 ? "#1D9E75" : f.relationship < 35 ? "#E24B4A" : "var(--color-text-primary)";
-  const trustColor = f.trust >= 60 ? "#1D9E75" : f.trust < 35 ? "#E24B4A" : "var(--color-text-secondary)";
+function FactionCard({ f, pf, isOpposition, hist }) {
+  const relColor = f.relationship >= 60 ? "#1D9E75" : f.relationship < 35 ? "#E24B4A" : "#EF9F27";
+  const trustColor = f.trust >= 60 ? "#1D9E75" : f.trust < 35 ? "#E24B4A" : "#EF9F27";
   const unityColor = (f.unity || 50) >= 60 ? "#1D9E75" : (f.unity || 50) < 40 ? "#E24B4A" : "#EF9F27";
 
   return (
@@ -219,11 +220,18 @@ function FactionCard({ f, pf, isOpposition }) {
           </div>
         </div>
       )}
-      <div style={{ display: "flex", gap: 16 }}>
+      <div style={{ display: "flex", gap: 16, marginBottom: hist?.rel?.length > 1 ? 8 : 0 }}>
         <StatBar label="Relationship" value={f.relationship} color={relColor} />
         <StatBar label="Trust" value={f.trust} color={trustColor} />
         <StatBar label="Unity" value={f.unity ?? 50} color={unityColor} />
       </div>
+      {hist?.rel?.length > 1 && (
+        <div style={{ display: "flex", gap: 8 }}>
+          <div><div style={{ fontSize: 8, color: "var(--color-text-secondary)", marginBottom: 1 }}>Rel</div><MiniChart data={hist.rel} color="#378ADD" h={24} w={72} /></div>
+          <div><div style={{ fontSize: 8, color: "var(--color-text-secondary)", marginBottom: 1 }}>Trust</div><MiniChart data={hist.trust} color="#1D9E75" h={24} w={72} /></div>
+          <div><div style={{ fontSize: 8, color: "var(--color-text-secondary)", marginBottom: 1 }}>Unity</div><MiniChart data={hist.unity} color="#EF9F27" h={24} w={72} /></div>
+        </div>
+      )}
     </div>
   );
 }

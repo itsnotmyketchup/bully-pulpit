@@ -148,7 +148,7 @@ function MetricBar({ value, color, label, sentence }) {
     <div style={{ marginBottom: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 3 }}>
         <span style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: 1 }}>{label}</span>
-        <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{value}/50</span>
+        <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{Math.round(value)}/50</span>
       </div>
       <div style={{ height: 6, background: "var(--color-background-tertiary)", borderRadius: 3, overflow: "hidden", marginBottom: 5 }}>
         <div style={{ height: "100%", width: `${(value / 50) * 100}%`, background: color, borderRadius: 3, transition: "width 0.3s" }} />
