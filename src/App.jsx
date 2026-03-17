@@ -733,9 +733,9 @@ export default function Game() {
 
     // ── Diplomatic Metrics Update ────────────────────────────────────────────
 
-    // 1. Engagement decay (1/week, only after first 4 weeks, only if no trip in 4+ weeks)
-    const willDecayEng = nw > 4 && (lastForeignTripWeek === 0 || nw - lastForeignTripWeek > 4);
-    const newEngagement = willDecayEng ? Math.max(0, engagement - 1) : engagement;
+    // 1. Engagement decay (0.5/week, only after first 8 weeks, only if no trip in 6+ weeks)
+    const willDecayEng = nw > 8 && (lastForeignTripWeek === 0 || nw - lastForeignTripWeek > 6);
+    const newEngagement = willDecayEng ? Math.max(0, engagement - 0.5) : engagement;
     if (willDecayEng) setEngagement(() => newEngagement);
 
     // 2. Power projection (one-time adjustment per spending change, capped ±6)
