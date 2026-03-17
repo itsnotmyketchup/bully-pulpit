@@ -25,7 +25,7 @@ No test suite exists. Verify changes visually via the dev server.
 
 ### State Management
 
-All game state lives in `App.jsx` (~1,350 lines). Props flow down; callbacks flow up. Key state variables:
+All game state lives in `App.jsx` (~1,620 lines). Props flow down; callbacks flow up. Key state variables:
 
 | Variable | Purpose |
 |---|---|
@@ -43,6 +43,10 @@ All game state lives in `App.jsx` (~1,350 lines). Props flow down; callbacks flo
 | `promises` | `[{ billId, factionId, madeWeek, deadline }]` faction promises |
 | `pendingNegotiation` | Active amendment negotiation state |
 | `reconciliationCooldown` | Week when budget reconciliation is available again |
+| `engagement` | International engagement metric (0–50, starts at 25) |
+| `powerProjection` | Military/diplomatic power projection metric (0–50, starts at 40) |
+| `globalTension` | Global crisis/conflict tension metric (0–50, starts at 25) |
+| `diplomacyThresholds` | Tracks `tensionHigh`, `engagementLow`, `projectionWeak` boolean thresholds |
 
 Key functions in `App.jsx`:
 - `advance()` — 4-week tick: decays overreach, checks promises, applies faction penalties, processes chains, generates event
