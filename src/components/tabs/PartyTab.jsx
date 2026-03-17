@@ -10,6 +10,7 @@ export default function PartyTab({
   surrogates, surrogateUI, setSurrogateUI,
   coachCooldown, countries, visitedCountries, act,
   onMakePromise, onAssignSurrogate,
+  campaignMetrics,
 }) {
   const partyApproval = allyF.length > 0 ? Math.round(allyF.reduce((s, f) => s + f.relationship, 0) / allyF.length) : 50;
   const partyUnity = allyF.length > 0 ? Math.round(allyF.reduce((s, f) => s + (f.unity || 50), 0) / allyF.length) : 50;
@@ -28,6 +29,8 @@ export default function PartyTab({
         <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>avg faction unity</div>
       </div>
     </div>
+
+    {campaignMetrics && <CampaignWidget metrics={campaignMetrics} />}
 
     <SectionHeader label="Coalition Factions" />
     {allyF.map(f => {
@@ -225,4 +228,66 @@ export default function PartyTab({
       })}
     </>}
   </>;
+}
+
+function EnthBar({ label, value, color }) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+        <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{label}</span>
+        <span style={{ fontSize: 10, fontWeight: 600, color }}>{Math.round(value)}</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 3, background: "var(--color-background-tertiary)", overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${Math.min(100, value)}%`, background: color, borderRadius: 3, transition: "width 0.4s" }} />
+      </div>
+    </div>
+  );
+}
+
+function CampaignWidget({ metrics }) {
+  const { partyEnthusiasm, oppEnthusiasm, projectedHouseChange, projectedSenateChange, advice, weeksUntilElection } = metrics;
+  const houseGain = projectedHouseChange >= 0;
+  const senateGain = projectedSenateChange >= 0;
+
+  return (
+    <div style={{
+      marginBottom: 10,
+      padding: "10px 12px",
+      borderRadius: "var(--border-radius-lg)",
+      border: "1px solid #1a274444",
+      background: "#1a274408",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-primary)" }}>
+          ★ Campaign Season
+        </span>
+        <span style={{ fontSize: 10, color: "#1a2744", fontWeight: 500 }}>
+          {weeksUntilElection === 0 ? "Election this week!" : `${weeksUntilElection} week${weeksUntilElection !== 1 ? "s" : ""} to election`}
+        </span>
+      </div>
+
+      <EnthBar label="Your Party Enthusiasm" value={partyEnthusiasm} color="#378ADD" />
+      <EnthBar label="Opposition Enthusiasm" value={oppEnthusiasm} color="#E24B4A" />
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8, marginTop: 4 }}>
+        <div style={{ padding: "5px 8px", borderRadius: 4, background: houseGain ? "#1D9E7514" : "#E24B4A14", border: `0.5px solid ${houseGain ? "#1D9E7544" : "#E24B4A44"}`, textAlign: "center" }}>
+          <div style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 2 }}>House (projected)</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: houseGain ? "#1D9E75" : "#E24B4A" }}>
+            {houseGain ? "+" : ""}{projectedHouseChange}
+          </div>
+        </div>
+        <div style={{ padding: "5px 8px", borderRadius: 4, background: senateGain ? "#1D9E7514" : "#E24B4A14", border: `0.5px solid ${senateGain ? "#1D9E7544" : "#E24B4A44"}`, textAlign: "center" }}>
+          <div style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 2 }}>Senate (projected)</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: senateGain ? "#1D9E75" : "#E24B4A" }}>
+            {senateGain ? "+" : ""}{projectedSenateChange}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 9, color: "var(--color-text-secondary)", marginBottom: 5, fontStyle: "italic" }}>{advice}</div>
+      <div style={{ fontSize: 9, color: "var(--color-text-secondary)", borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 5 }}>
+        Boost enthusiasm via surrogate lobbying, state visits, and fulfilling faction promises.
+      </div>
+    </div>
+  );
 }

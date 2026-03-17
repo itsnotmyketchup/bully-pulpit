@@ -5,6 +5,7 @@ const TYPE_STYLES = {
   promise_warning: { bg: "#EF9F2722", border: "#EF9F2766", accent: "#EF9F27", icon: "⏳" },
   surrogate_done: { bg: "#1D9E7522", border: "#1D9E7566", accent: "#1D9E75", icon: "✓" },
   surrogate_fail: { bg: "#E24B4A22", border: "#E24B4A66", accent: "#E24B4A", icon: "✗" },
+  election_warning: { bg: "#1a274422", border: "#1a274466", accent: "#1a2744", icon: "★" },
 };
 
 export default function NotificationBar({ notifications, onDismiss, onTabSwitch }) {

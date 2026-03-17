@@ -38,6 +38,18 @@ import NotificationBar from "./components/NotificationBar.jsx";
 import BrokenPromiseModal from "./components/modals/BrokenPromiseModal.jsx";
 import ForeignVisitModal from "./components/modals/ForeignVisitModal.jsx";
 import PromiseModal from "./components/modals/PromiseModal.jsx";
+import MidtermModal from "./components/modals/MidtermModal.jsx";
+import InaugurationModal from "./components/modals/InaugurationModal.jsx";
+
+import {
+  computeEnthusiasms,
+  computeSeatChanges,
+  applyElectionSeats,
+  applyPostElectionRelEffects,
+  buildMidtermResults,
+  buildHistorySnapshot,
+  computePollingProjection,
+} from "./logic/electionCalc.js";
 
 export default function Game() {
   const [screen, setScreen] = useState(0);
@@ -106,6 +118,17 @@ export default function Game() {
   const [billFactionVotes, setBillFactionVotes] = useState(null); // factionVotes array from last calcStageAdvance
   const [pendingSignature, setPendingSignature] = useState(null); // { act, votes, factionVotes, isBudget, budgetDraft } — awaiting sign/veto
 
+  // ── Election state ──────────────────────────────────────────────────────────
+  const [congressHistory, setCongressHistory] = useState([]);
+  const [midtermResults, setMidtermResults] = useState(null);
+  const [showMidtermModal, setShowMidtermModal] = useState(false);
+  const [pendingCongressUpdate, setPendingCongressUpdate] = useState(null); // {newFactions, houseNetChange, senateNetChange, factionBreakdown} — applied at Year N+1 Week 1
+  const [showInaugurationModal, setShowInaugurationModal] = useState(false);
+  const [campaignSeasonStarted, setCampaignSeasonStarted] = useState(false);
+  const [campaignActivity, setCampaignActivity] = useState(0); // speeches + visits + surrogate actions during campaign
+  const [pollingNoise, setPollingNoise] = useState(0);
+  const [isPresidentialElection, setIsPresidentialElection] = useState(false);
+
   const yr = Math.ceil(week / 52), wiy = ((week - 1) % 52) + 1;
   const season = getSeasonLabel(week);
 
@@ -127,6 +150,16 @@ export default function Game() {
     STATE_DATA.forEach(s => { t += s.pop; w += s.pop * (sA[s.abbr] || 50); });
     return t > 0 ? w / t : 50;
   }, [sA]);
+
+  const campaignMetrics = useMemo(() => {
+    if (!cg || !pp) return null;
+    const isElectionYear = yr >= 2 && yr % 2 === 0;
+    if (!isElectionYear || wiy < 28) return null;
+    const { partyEnthusiasm, oppEnthusiasm } = computeEnthusiasms(cg, pp, natA, executiveOverreach, passedLegislation, promises, campaignActivity);
+    const { projectedHouseChange, projectedSenateChange, advice } = computePollingProjection(partyEnthusiasm, oppEnthusiasm, natA, pollingNoise, isPresidentialElection);
+    const weeksUntilElection = Math.max(0, 44 - wiy);
+    return { partyEnthusiasm, oppEnthusiasm, projectedHouseChange, projectedSenateChange, advice, weeksUntilElection };
+  }, [cg, pp, natA, executiveOverreach, passedLegislation, promises, campaignActivity, pollingNoise, isPresidentialElection, wiy, yr]);
 
   const addLog = useCallback(msg => setLog(p => [{ week, text: msg }, ...p].slice(0, 100)), [week]);
 
@@ -182,6 +215,15 @@ export default function Game() {
     setAppliedAmendments({});
     setBillFactionVotes(null);
     setPendingSignature(null);
+    setCongressHistory([]);
+    setMidtermResults(null);
+    setShowMidtermModal(false);
+    setPendingCongressUpdate(null);
+    setShowInaugurationModal(false);
+    setCampaignSeasonStarted(false);
+    setCampaignActivity(0);
+    setPollingNoise(0);
+    setIsPresidentialElection(false);
     setLog([{ week: 1, text: `President ${pn.trim()} inaugurated. ${PARTIES[pp]} hold both chambers. Base: ${FACTION_DATA[pp].find(f => f.id === pf)?.name}.` }]);
     setScreen(2);
   };
@@ -195,6 +237,18 @@ export default function Game() {
   };
 
   const advance = () => {
+    // ── Block D: Inauguration — apply pending congress update at start of new year ──
+    const nwPre = week + 1;
+    const wiyPre = ((nwPre - 1) % 52) + 1;
+    if (wiyPre === 1 && pendingCongressUpdate) {
+      setCG(prev => ({ ...prev, factions: pendingCongressUpdate.newFactions }));
+      setShowInaugurationModal(true);
+      setPendingCongressUpdate(null);
+      const netH = pendingCongressUpdate.houseNetChange;
+      const netS = pendingCongressUpdate.senateNetChange;
+      addLog(`New Congress sworn in. Party ${netH >= 0 ? "gained" : "lost"} ${Math.abs(netH)} House seat${Math.abs(netH) !== 1 ? "s" : ""} and ${netS >= 0 ? "gained" : "lost"} ${Math.abs(netS)} Senate seat${Math.abs(netS) !== 1 ? "s" : ""}.`);
+    }
+
     setPrev({ ...stats });
     const ns = { ...stats };
     ns.gdpGrowth = Math.max(-2, Math.min(6, ns.gdpGrowth + (Math.random() - 0.5) * 0.04));
@@ -210,6 +264,24 @@ export default function Game() {
       addLog(`Policy effect: ${p.name}`);
     });
     setPFx(p => p.filter(x => x.week > week + 1));
+
+    // ── Block A: Campaign season kickoff ─────────────────────────────────────
+    const nwA = week + 1;
+    const yrA = Math.ceil(nwA / 52);
+    const wiyA = ((nwA - 1) % 52) + 1;
+    const isElectionYearA = yrA >= 2 && yrA % 2 === 0;
+    const isPresidentialYearA = yrA >= 4 && yrA % 4 === 0;
+    if (wiyA === 28 && isElectionYearA && !campaignSeasonStarted) {
+      setCampaignSeasonStarted(true);
+      setCampaignActivity(0);
+      setPollingNoise((Math.random() - 0.5) * 0.30);
+      setIsPresidentialElection(isPresidentialYearA);
+      const msg = isPresidentialYearA
+        ? `Year ${yrA} election campaign begins — elections in 16 weeks. Presidential race not simulated; Congressional seats will be updated.`
+        : `Year ${yrA} midterm campaign season begins — elections in 16 weeks. Use surrogates and visits to boost party enthusiasm.`;
+      addNotification({ type: "election_warning", message: msg, tab: "party" });
+      addLog(`Year ${yrA} ${isPresidentialYearA ? "election" : "midterm"} campaign season begins.`);
+    }
 
     // Bill progression + unity updates
     const nf = { ...cg.factions };
@@ -588,6 +660,29 @@ export default function Game() {
     setRecentDisasters(rd => Object.fromEntries(Object.entries(rd).filter(([, w]) => week - w < 4)));
     setAct(0);
 
+    // ── Block B: Election trigger ─────────────────────────────────────────────
+    const yrB = Math.ceil(nw / 52);
+    const wiyB = ((nw - 1) % 52) + 1;
+    const isElectionYearB = yrB >= 2 && yrB % 2 === 0;
+    const isPresidentialYearB = yrB >= 4 && yrB % 4 === 0;
+    if (wiyB === 44 && isElectionYearB && !pendingCongressUpdate) {
+      const { partyEnthusiasm, oppEnthusiasm } = computeEnthusiasms(cg, pp, natA, executiveOverreach, passedLegislation, promises, campaignActivity);
+      const { houseNetChange, senateNetChange, factionHouseChanges, factionSenateChanges } = computeSeatChanges(cg, pp, natA, partyEnthusiasm, oppEnthusiasm, isPresidentialYearB);
+      const newFactions = applyElectionSeats(cg.factions, factionHouseChanges, factionSenateChanges);
+      const newFactionsWithRelEffects = applyPostElectionRelEffects(newFactions, houseNetChange, pp);
+      const results = buildMidtermResults(cg, pp, yrB, natA, partyEnthusiasm, oppEnthusiasm, houseNetChange, senateNetChange, factionHouseChanges, factionSenateChanges, isPresidentialYearB);
+      const snapshot = buildHistorySnapshot(cg, yrB, houseNetChange, senateNetChange, partyEnthusiasm, oppEnthusiasm, natA, isPresidentialYearB);
+      setPendingCongressUpdate({ newFactions: newFactionsWithRelEffects, houseNetChange, senateNetChange, factionBreakdown: results.factionBreakdown });
+      setMidtermResults(results);
+      setShowMidtermModal(true);
+      setCongressHistory(prev => [...prev, snapshot]);
+      setCampaignSeasonStarted(false);
+      setPollingNoise(0);
+      const netH = houseNetChange;
+      const netS = senateNetChange;
+      addLog(`ELECTION RESULTS — Year ${yrB}: Party ${netH >= 0 ? "GAINED" : "LOST"} ${Math.abs(netH)} House seat${Math.abs(netH) !== 1 ? "s" : ""} and ${netS >= 0 ? "gained" : "lost"} ${Math.abs(netS)} Senate seat${Math.abs(netS) !== 1 ? "s" : ""}. Approval: ${Math.round(natA)}%. Party enthusiasm: ${Math.round(partyEnthusiasm)}, Opposition: ${Math.round(oppEnthusiasm)}.`);
+    }
+
     // Overreach decay: if above 31 and hasn't increased in 2+ weeks, decay by 1/week
     setExecutiveOverreach(prev => {
       if (prev <= 31) return prev;
@@ -751,6 +846,7 @@ export default function Game() {
       }
       setStBon(b);
       setAct(n => n + 1);
+      if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
       setSurrogateUI(p => { const n = { ...p }; delete n[surrogateId]; return n; });
       addLog(`${surrogateName} visited ${randState.name}: ${chosenVisit.name} (50% effect).`);
       return;
@@ -760,6 +856,7 @@ export default function Game() {
       setSurrogates(prev => prev.map(s => s.id === surrogateId ? { ...s, busy: task } : s));
       setSurrogateUI(p => { const n = { ...p }; delete n[surrogateId]; return n; });
       setAct(n => n + 1);
+      if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
       addLog(`${surrogateName} assigned to improve relations with ${task.factionName}.`);
       return;
     }
@@ -769,6 +866,7 @@ export default function Game() {
       setVisitedCountries(p => ({ ...p, [task.countryId]: week + 12 }));
       setSurrogateUI(p => { const n = { ...p }; delete n[surrogateId]; return n; });
       setAct(n => n + 1);
+      if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
       addLog(`${surrogateName} dispatched to ${task.countryName}.`);
       return;
     }
@@ -777,6 +875,7 @@ export default function Game() {
       setSurrogates(prev => prev.map(s => s.id === surrogateId ? { ...s, busy: task } : s));
       setSurrogateUI(p => { const n = { ...p }; delete n[surrogateId]; return n; });
       setAct(n => n + 1);
+      if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
       addLog(`${surrogateName} assigned to coach ${task.factionName} leader (${task.skill}).`);
       return;
     }
@@ -828,6 +927,7 @@ export default function Game() {
 
     setStats(ns);
     setAct(n => n + actionCost);
+    if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
     setVisitedCountries(p => ({ ...p, [countryId]: week + 52 }));
 
     const fxLines = Object.entries(factionFx).map(([fid, v]) => {
@@ -901,6 +1001,7 @@ export default function Game() {
     setStBon(b);
     setStats(ns);
     setAct(n => n + 1);
+    if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
     addLog(`Visited ${st.name}: ${vt.name}`);
     setVisitState("");
     setVisitType("");
@@ -1192,6 +1293,7 @@ export default function Game() {
     setCG({ ...cg, factions: nf });
     setStats(ns);
     setAct(n => n + 1);
+    if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
     const topicName = SPEECH_TOPICS.find(t => t.id === speechTopic)?.name ?? speechTopic;
     addLog(`Speech on ${topicName}: "${pos.label}"`);
     setSpeechTopic(null);
@@ -1308,6 +1410,7 @@ export default function Game() {
           hovFaction={hovFaction} setHovFaction={setHovFaction}
           billRecord={billRecord}
           executiveOverreach={executiveOverreach}
+          congressHistory={congressHistory}
         />
       )}
 
@@ -1321,6 +1424,7 @@ export default function Game() {
           countries={countries} visitedCountries={visitedCountries}
           act={act}
           onMakePromise={makePromise} onAssignSurrogate={assignSurrogate}
+          campaignMetrics={campaignMetrics}
         />
       )}
 
@@ -1401,6 +1505,14 @@ export default function Game() {
         week={week}
         onConfirm={confirmPromise}
         onCancel={() => setPendingPromise(null)}
+      />
+      <MidtermModal
+        results={showMidtermModal ? midtermResults : null}
+        onDismiss={() => setShowMidtermModal(false)}
+      />
+      <InaugurationModal
+        results={showInaugurationModal ? midtermResults : null}
+        onDismiss={() => setShowInaugurationModal(false)}
       />
     </div>
   );
