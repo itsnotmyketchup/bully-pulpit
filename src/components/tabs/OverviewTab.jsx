@@ -105,7 +105,7 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
         </div>
 
         <SectionHeader label="Tax Rates" />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(72px,1fr))", gap: 5 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(105px,1fr))", gap: 5 }}>
           {["corporateTaxRate", "incomeTaxLow", "incomeTaxMid", "incomeTaxHigh", "payrollTaxRate"].map(k => (
             <StatCard key={k} statKey={k} value={stats[k]} history={hist[k]} prevValue={prev[k]} />
           ))}
