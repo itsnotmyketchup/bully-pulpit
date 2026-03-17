@@ -110,8 +110,8 @@ export default function Game() {
   const season = getSeasonLabel(week);
 
   const addNotification = useCallback((n) => {
-    setNotifications(prev => [...prev, { id: Date.now() + Math.random(), ...n }]);
-  }, []);
+    setNotifications(prev => [...prev, { id: Date.now() + Math.random(), addedWeek: week, ...n }]);
+  }, [week]);
   const dismissNotification = useCallback((id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
@@ -509,73 +509,76 @@ export default function Game() {
       if (newBrokenPromises.length > 0) setBrokenPromises(q => [...q, ...newBrokenPromises]);
     }
 
-    // Process surrogate tasks
-    setSurrogates(prev => prev.map(s => {
+    // Process surrogate tasks — compute completions first to avoid side effects inside updater
+    const completedSurrogates = [];
+    const updatedSurrogates = surrogates.map(s => {
       if (!s.busy) return s;
       const weeksLeft = s.busy.weeksLeft - 1;
-      if (weeksLeft <= 0) {
-        // Task complete
-        if (s.busy.type === "faction_rel") {
+      if (weeksLeft <= 0) { completedSurrogates.push(s); return { ...s, busy: null }; }
+      return { ...s, busy: { ...s.busy, weeksLeft } };
+    });
+    setSurrogates(updatedSurrogates);
+
+    completedSurrogates.forEach(s => {
+      if (s.busy.type === "faction_rel") {
+        setCG(prev2 => {
+          const nf2 = { ...prev2.factions };
+          if (nf2[s.busy.factionId]) nf2[s.busy.factionId] = { ...nf2[s.busy.factionId],
+            relationship: Math.min(95, nf2[s.busy.factionId].relationship + s.busy.relBonus),
+          };
+          return { ...prev2, factions: nf2 };
+        });
+        addLog(`${s.name} completed: improved relations with ${s.busy.factionName} (+${s.busy.relBonus} relationship).`);
+        addNotification({ type: "surrogate_done", message: `${s.name} improved relations with ${s.busy.factionName} (+${s.busy.relBonus} relationship).` });
+      } else if (s.busy.type === "foreign_visit") {
+        const relGain = Math.floor(Math.random() * 13) - 4; // -4 to +8
+        const trustGain = Math.max(0, relGain > 0 ? Math.floor(relGain * 0.6 + Math.random() * 3) : Math.floor(Math.random() * 4) - 2);
+        setCountries(p => p.map(c => {
+          if (c.id !== s.busy.countryId) return c;
+          const nc = { ...c,
+            relationship: Math.max(0, Math.min(100, c.relationship + relGain)),
+            trust: Math.max(0, Math.min(100, c.trust + trustGain)),
+          };
+          nc.status = nc.relationship >= 70 ? "ALLIED" : nc.relationship >= 50 ? "FRIENDLY" : nc.relationship >= 30 ? "NEUTRAL" : nc.relationship >= 15 ? "UNFRIENDLY" : "HOSTILE";
+          return nc;
+        }));
+        const fxText = relGain >= 2 ? "Successful visit" : relGain < 0 ? "Visit caused friction" : "Uneventful visit";
+        addLog(`${s.name} foreign visit to ${s.busy.countryName}: ${fxText} (rel ${relGain >= 0 ? "+" : ""}${relGain}).`);
+        if (relGain >= 5) {
+          ns.approvalRating = (ns.approvalRating || 50) + 1;
+          setStats({ ...ns });
+        }
+        const relStr = `${relGain >= 0 ? "+" : ""}${relGain} relationship, +${trustGain} trust${relGain >= 5 ? ", +1 approval" : ""}`;
+        addNotification({ type: "surrogate_done", message: `${s.name} returned from ${s.busy.countryName}: ${relStr}.` });
+      } else if (s.busy.type === "coach") {
+        const success = Math.random() < 0.66;
+        if (success) {
           setCG(prev2 => {
             const nf2 = { ...prev2.factions };
-            if (nf2[s.busy.factionId]) nf2[s.busy.factionId] = { ...nf2[s.busy.factionId],
-              relationship: Math.min(95, nf2[s.busy.factionId].relationship + s.busy.relBonus),
-            };
+            if (nf2[s.busy.factionId] && nf2[s.busy.factionId].leader) {
+              const leader = { ...nf2[s.busy.factionId].leader };
+              leader[s.busy.skill] = Math.min(10, (leader[s.busy.skill] || 1) + 1);
+              nf2[s.busy.factionId] = { ...nf2[s.busy.factionId], leader };
+            }
             return { ...prev2, factions: nf2 };
           });
-          addLog(`${s.name} completed: improved relations with ${s.busy.factionName} (+${s.busy.relBonus} relationship).`);
-          addNotification({ type: "surrogate_done", message: `${s.name} improved relations with ${s.busy.factionName} (+${s.busy.relBonus} relationship).` });
-        } else if (s.busy.type === "foreign_visit") {
-          const relGain = Math.floor(Math.random() * 13) - 4; // -4 to +8
-          const trustGain = Math.max(0, relGain > 0 ? Math.floor(relGain * 0.6 + Math.random() * 3) : Math.floor(Math.random() * 4) - 2);
-          setCountries(p => p.map(c => {
-            if (c.id !== s.busy.countryId) return c;
-            const nc = { ...c,
-              relationship: Math.max(0, Math.min(100, c.relationship + relGain)),
-              trust: Math.max(0, Math.min(100, c.trust + trustGain)),
-            };
-            nc.status = nc.relationship >= 70 ? "ALLIED" : nc.relationship >= 50 ? "FRIENDLY" : nc.relationship >= 30 ? "NEUTRAL" : nc.relationship >= 15 ? "UNFRIENDLY" : "HOSTILE";
-            return nc;
-          }));
-          const fxText = relGain >= 2 ? "Successful visit" : relGain < 0 ? "Visit caused friction" : "Uneventful visit";
-          addLog(`${s.name} foreign visit to ${s.busy.countryName}: ${fxText} (rel ${relGain >= 0 ? "+" : ""}${relGain}).`);
-          if (relGain >= 5) {
-            ns.approvalRating = (ns.approvalRating || 50) + 1;
-            setStats({ ...ns });
-          }
-          const relStr = `${relGain >= 0 ? "+" : ""}${relGain} relationship, +${trustGain} trust${relGain >= 5 ? ", +1 approval" : ""}`;
-          addNotification({ type: "surrogate_done", message: `${s.name} returned from ${s.busy.countryName}: ${relStr}.` });
-        } else if (s.busy.type === "coach") {
-          const success = Math.random() < 0.66;
-          if (success) {
-            setCG(prev2 => {
-              const nf2 = { ...prev2.factions };
-              if (nf2[s.busy.factionId] && nf2[s.busy.factionId].leader) {
-                const leader = { ...nf2[s.busy.factionId].leader };
-                leader[s.busy.skill] = Math.min(10, (leader[s.busy.skill] || 1) + 1);
-                nf2[s.busy.factionId] = { ...nf2[s.busy.factionId], leader };
-              }
-              return { ...prev2, factions: nf2 };
-            });
-            addLog(`${s.name} successfully coached ${s.busy.factionName} leader — ${s.busy.skill} +1.`);
-          } else {
-            addLog(`${s.name}'s coaching of ${s.busy.factionName} leader did not produce results.`);
-          }
-          setCoachCooldown(week + 8);
-          addNotification({
-            type: success ? "surrogate_done" : "surrogate_fail",
-            message: success
-              ? `${s.name}: ${s.busy.factionName} leader's ${s.busy.skill} improved (+1). Coaching available again in 8 weeks.`
-              : `${s.name}: ${s.busy.factionName} leader was resistant to coaching. No improvement. Cooldown: 8 weeks.`,
-          });
+          addLog(`${s.name} successfully coached ${s.busy.factionName} leader — ${s.busy.skill} +1.`);
+        } else {
+          addLog(`${s.name}'s coaching of ${s.busy.factionName} leader did not produce results.`);
         }
-        return { ...s, busy: null };
+        setCoachCooldown(week + 8);
+        addNotification({
+          type: success ? "surrogate_done" : "surrogate_fail",
+          message: success
+            ? `${s.name}: ${s.busy.factionName} leader's ${s.busy.skill} improved (+1). Coaching available again in 8 weeks.`
+            : `${s.name}: ${s.busy.factionName} leader was resistant to coaching. No improvement. Cooldown: 8 weeks.`,
+        });
       }
-      return { ...s, busy: { ...s.busy, weeksLeft } };
-    }));
+    });
 
     const nw = week + 1;
     setWeek(nw);
+    setNotifications(prev => prev.filter(n => nw - n.addedWeek < 2));
     setRecentDisasters(rd => Object.fromEntries(Object.entries(rd).filter(([, w]) => week - w < 4)));
     setAct(0);
 
