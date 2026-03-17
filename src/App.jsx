@@ -80,6 +80,7 @@ export default function Game() {
   const [hovFaction, setHovFaction] = useState(null);
   const [visitState, setVisitState] = useState("");
   const [visitType, setVisitType] = useState("");
+  const [visitTypeCounts, setVisitTypeCounts] = useState({}); // { [visitId]: useCount } — resets each 4-week advance
   const [speechTopic, setSpeechTopic] = useState(null);
   const [speechPreview, setSpeechPreview] = useState(null);
   const [billRecord, setBillRecord] = useState([]);
@@ -259,6 +260,7 @@ export default function Game() {
       addLog(`New Congress sworn in. Party ${netH >= 0 ? "gained" : "lost"} ${Math.abs(netH)} House seat${Math.abs(netH) !== 1 ? "s" : ""} and ${netS >= 0 ? "gained" : "lost"} ${Math.abs(netS)} Senate seat${Math.abs(netS) !== 1 ? "s" : ""}.`);
     }
 
+    setVisitTypeCounts({});
     setPrev({ ...stats });
     const ns = { ...stats };
     ns.gdpGrowth = Math.max(-2, Math.min(6, ns.gdpGrowth + (Math.random() - 0.5) * 0.04));
@@ -932,10 +934,19 @@ export default function Game() {
     const surrogateName = surrogates.find(s => s.id === surrogateId)?.name;
 
     if (task.type === "visit") {
-      // Pick random state and activity
+      // Pick random state and activity, respecting the same stateRestriction rules as the player
       const randState = STATE_DATA[Math.floor(Math.random() * STATE_DATA.length)];
-      const validVisits = VISIT_TYPES.filter(v => v.id !== "border");
-      const chosenVisit = validVisits[Math.floor(Math.random() * validVisits.length)];
+      const validVisits = VISIT_TYPES.filter(v => {
+        if (!v.stateRestriction) return true;
+        if (v.stateRestriction === "border") return !!randState.border;
+        if (v.stateRestriction === "wallstreet") return randState.abbr === "NY";
+        if (v.stateRestriction === "disaster") return !!recentDisasters[randState.abbr];
+        if (v.stateRestriction === "tribal") return !!randState.tribal;
+        return false;
+      });
+      // Fall back to unrestricted visits if the chosen state has none that qualify
+      const pool = validVisits.length > 0 ? validVisits : VISIT_TYPES.filter(v => !v.stateRestriction);
+      const chosenVisit = pool[Math.floor(Math.random() * pool.length)];
       const b = { ...stBon };
       b[randState.abbr] = Math.min(0.10, (b[randState.abbr] || 0) + 0.008);
       if (chosenVisit.factionEffects) {
@@ -1053,60 +1064,63 @@ export default function Game() {
     const vt = VISIT_TYPES.find(v => v.id === visitType);
     const st = STATE_DATA.find(s => s.abbr === visitState);
     if (!vt || !st) return;
+    const count = visitTypeCounts[visitType] || 0;
+    const mult = 1 / (count + 1); // 1st use=full, 2nd=½, 3rd=⅓, etc.
     const ns = { ...stats };
     const b = { ...stBon };
-    b[visitState] = Math.min(0.10, (b[visitState] || 0) + 0.015);
-    if (vt.approvalBoost) ns.approvalRating += vt.approvalBoost;
+    b[visitState] = Math.min(0.10, (b[visitState] || 0) + 0.015 * mult);
+    if (vt.approvalBoost) ns.approvalRating += vt.approvalBoost * mult;
     const visitNF = { ...cg.factions };
     if (vt.factionEffects) {
       Object.entries(vt.factionEffects).forEach(([fid, v]) => {
-        if (visitNF[fid]) visitNF[fid] = { ...visitNF[fid], relationship: Math.max(5, Math.min(95, visitNF[fid].relationship + v * 6)) };
+        if (visitNF[fid]) visitNF[fid] = { ...visitNF[fid], relationship: Math.max(5, Math.min(95, visitNF[fid].relationship + v * 6 * mult)) };
       });
     }
     if (vt.partyUnityBoost) {
       const allyIds = ALLIED_FACTIONS[pp] || [];
       const clampU = v => Math.max(20, Math.min(95, v));
-      allyIds.forEach(fid => { if (visitNF[fid]) visitNF[fid] = { ...visitNF[fid], unity: clampU(visitNF[fid].unity + vt.partyUnityBoost) }; });
+      allyIds.forEach(fid => { if (visitNF[fid]) visitNF[fid] = { ...visitNF[fid], unity: clampU(visitNF[fid].unity + vt.partyUnityBoost * mult) }; });
     }
     setCG({ ...cg, factions: visitNF });
     if (vt.effects) {
       Object.entries(vt.effects).forEach(([type, w]) => {
-        STATE_DATA.forEach(s => { if (s[type] && s[type] > 0.1) b[s.abbr] = (b[s.abbr] || 0) + w * 0.3; });
+        STATE_DATA.forEach(s => { if (s[type] && s[type] > 0.1) b[s.abbr] = (b[s.abbr] || 0) + w * 0.3 * mult; });
       });
     }
     if (vt.educationEffect) {
       STATE_DATA.forEach(s => {
-        b[s.abbr] = (b[s.abbr] || 0) + s.education * vt.educationEffect.nationwide;
-        if (s.abbr === visitState) b[s.abbr] += s.education * vt.educationEffect.local;
+        b[s.abbr] = (b[s.abbr] || 0) + s.education * vt.educationEffect.nationwide * mult;
+        if (s.abbr === visitState) b[s.abbr] += s.education * vt.educationEffect.local * mult;
       });
     }
     if (vt.urbanEffect) {
       STATE_DATA.forEach(s => {
-        b[s.abbr] = (b[s.abbr] || 0) + s.urbanization * vt.urbanEffect.nationwide;
-        if (s.abbr === visitState) b[s.abbr] += s.urbanization * vt.urbanEffect.local;
+        b[s.abbr] = (b[s.abbr] || 0) + s.urbanization * vt.urbanEffect.nationwide * mult;
+        if (s.abbr === visitState) b[s.abbr] += s.urbanization * vt.urbanEffect.local * mult;
       });
     }
     if (vt.ruralEffect) {
       STATE_DATA.forEach(s => {
         const rural = 1 - (s.urbanization || 0.7);
-        b[s.abbr] = (b[s.abbr] || 0) + rural * vt.ruralEffect.nationwide;
-        if (s.abbr === visitState) b[s.abbr] += rural * vt.ruralEffect.local;
+        b[s.abbr] = (b[s.abbr] || 0) + rural * vt.ruralEffect.nationwide * mult;
+        if (s.abbr === visitState) b[s.abbr] += rural * vt.ruralEffect.local * mult;
       });
     }
     if (vt.religiosityEffect) {
       STATE_DATA.forEach(s => {
         const rel = s.religiosity || 0.5;
-        b[s.abbr] = (b[s.abbr] || 0) + rel * vt.religiosityEffect.nationwide;
-        if (s.abbr === visitState) b[s.abbr] += rel * vt.religiosityEffect.local;
-        if (vt.religiosityEffect.antiNationwide) b[s.abbr] += (1 - rel) * vt.religiosityEffect.antiNationwide;
-        if (s.abbr === visitState && vt.religiosityEffect.antiLocal) b[s.abbr] += (1 - rel) * vt.religiosityEffect.antiLocal;
+        b[s.abbr] = (b[s.abbr] || 0) + rel * vt.religiosityEffect.nationwide * mult;
+        if (s.abbr === visitState) b[s.abbr] += rel * vt.religiosityEffect.local * mult;
+        if (vt.religiosityEffect.antiNationwide) b[s.abbr] += (1 - rel) * vt.religiosityEffect.antiNationwide * mult;
+        if (s.abbr === visitState && vt.religiosityEffect.antiLocal) b[s.abbr] += (1 - rel) * vt.religiosityEffect.antiLocal * mult;
       });
     }
     setStBon(b);
     setStats(ns);
     setAct(n => n + 1);
+    setVisitTypeCounts(prev => ({ ...prev, [visitType]: (prev[visitType] || 0) + 1 }));
     if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
-    addLog(`Visited ${st.name}: ${vt.name}`);
+    addLog(`Visited ${st.name}: ${vt.name}${count > 0 ? ` (${Math.round(mult * 100)}% effectiveness)` : ""}`);
     setVisitState("");
     setVisitType("");
   };
@@ -1571,6 +1585,7 @@ export default function Game() {
           recentDisasters={recentDisasters}
           visitState={visitState} setVisitState={setVisitState}
           visitType={visitType} setVisitType={setVisitType}
+          visitTypeCounts={visitTypeCounts}
           speechTopic={speechTopic} setSpeechTopic={setSpeechTopic}
           speechPreview={speechPreview} setSpeechPreview={setSpeechPreview}
           sA={sA}

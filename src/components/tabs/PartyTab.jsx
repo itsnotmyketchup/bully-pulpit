@@ -142,11 +142,16 @@ export default function PartyTab({
                 </div>
               )}
               {ui.tab === "faction_rel" && (
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-                  <select value={ui.factionId || ""} onChange={e => setSurrogateUI(p => ({ ...p, [s.id]: { ...p[s.id], factionId: e.target.value } }))} style={{ fontSize: 10, padding: "2px 4px", borderRadius: 4 }}>
-                    <option value="">Faction…</option>
-                    {allF.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                  </select>
+                <div>
+                  <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 5 }}>
+                    {allF.map(f => (
+                      <button key={f.id} onClick={() => setSurrogateUI(p => ({ ...p, [s.id]: { ...p[s.id], factionId: f.id } }))} style={{
+                        fontSize: 9, padding: "2px 7px", borderRadius: 4, cursor: "pointer", border: `1px solid ${ui.factionId === f.id ? f.color : "transparent"}`,
+                        background: ui.factionId === f.id ? f.color + "33" : "var(--color-background-secondary)",
+                        color: ui.factionId === f.id ? f.color : "var(--color-text-secondary)",
+                      }}>{f.name}</button>
+                    ))}
+                  </div>
                   <button onClick={() => {
                     if (!ui.factionId || act >= 4) return;
                     const f = cg.factions[ui.factionId];
@@ -159,11 +164,16 @@ export default function PartyTab({
                 </div>
               )}
               {ui.tab === "foreign_visit" && (
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-                  <select value={ui.countryId || ""} onChange={e => setSurrogateUI(p => ({ ...p, [s.id]: { ...p[s.id], countryId: e.target.value } }))} style={{ fontSize: 10, padding: "2px 4px", borderRadius: 4 }}>
-                    <option value="">Country…</option>
-                    {countries.filter(c => c.status !== "HOSTILE" && !(visitedCountries[c.id] && week < visitedCountries[c.id])).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                <div>
+                  <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 5 }}>
+                    {countries.filter(c => c.status !== "HOSTILE" && !(visitedCountries[c.id] && week < visitedCountries[c.id])).map(c => (
+                      <button key={c.id} onClick={() => setSurrogateUI(p => ({ ...p, [s.id]: { ...p[s.id], countryId: c.id } }))} style={{
+                        fontSize: 9, padding: "2px 7px", borderRadius: 4, cursor: "pointer", border: `1px solid ${ui.countryId === c.id ? "#378ADD" : "transparent"}`,
+                        background: ui.countryId === c.id ? "#378ADD33" : "var(--color-background-secondary)",
+                        color: ui.countryId === c.id ? "#378ADD" : "var(--color-text-secondary)",
+                      }}>{c.name}</button>
+                    ))}
+                  </div>
                   <button onClick={() => {
                     if (!ui.countryId || act >= 4) return;
                     const c = countries.find(ct => ct.id === ui.countryId);
@@ -179,16 +189,25 @@ export default function PartyTab({
                   {!coachAvailable ? (
                     <div style={{ fontSize: 10, color: "#EF9F27" }}>Available in {coachWeeksLeft} wk{coachWeeksLeft !== 1 ? "s" : ""}</div>
                   ) : (
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-                      <select value={ui.coachFactionId || ""} onChange={e => setSurrogateUI(p => ({ ...p, [s.id]: { ...p[s.id], coachFactionId: e.target.value } }))} style={{ fontSize: 10, padding: "2px 4px", borderRadius: 4 }}>
-                        <option value="">Faction…</option>
-                        {allyF.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                      </select>
-                      <select value={ui.coachSkill || ""} onChange={e => setSurrogateUI(p => ({ ...p, [s.id]: { ...p[s.id], coachSkill: e.target.value } }))} style={{ fontSize: 10, padding: "2px 4px", borderRadius: 4 }}>
-                        <option value="">Skill…</option>
-                        <option value="charisma">Charisma</option>
-                        <option value="authority">Authority</option>
-                      </select>
+                    <div>
+                      <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 4 }}>
+                        {allyF.map(f => (
+                          <button key={f.id} onClick={() => setSurrogateUI(p => ({ ...p, [s.id]: { ...p[s.id], coachFactionId: f.id } }))} style={{
+                            fontSize: 9, padding: "2px 7px", borderRadius: 4, cursor: "pointer", border: `1px solid ${ui.coachFactionId === f.id ? f.color : "transparent"}`,
+                            background: ui.coachFactionId === f.id ? f.color + "33" : "var(--color-background-secondary)",
+                            color: ui.coachFactionId === f.id ? f.color : "var(--color-text-secondary)",
+                          }}>{f.name}</button>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", gap: 3, marginBottom: 5 }}>
+                        {["charisma", "authority"].map(skill => (
+                          <button key={skill} onClick={() => setSurrogateUI(p => ({ ...p, [s.id]: { ...p[s.id], coachSkill: skill } }))} style={{
+                            fontSize: 9, padding: "2px 7px", borderRadius: 4, cursor: "pointer", border: `1px solid ${ui.coachSkill === skill ? "#7c3aed" : "transparent"}`,
+                            background: ui.coachSkill === skill ? "#8b5cf633" : "var(--color-background-secondary)",
+                            color: ui.coachSkill === skill ? "#7c3aed" : "var(--color-text-secondary)",
+                          }}>{skill.charAt(0).toUpperCase() + skill.slice(1)}</button>
+                        ))}
+                      </div>
                       <button onClick={() => {
                         if (!ui.coachFactionId || !ui.coachSkill || act >= 4) return;
                         const f = cg.factions[ui.coachFactionId];

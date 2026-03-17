@@ -24,6 +24,7 @@ export default function ActionsTab({
   countries, visitedCountries, recentDisasters,
   visitState, setVisitState,
   visitType, setVisitType,
+  visitTypeCounts,
   speechTopic, setSpeechTopic,
   speechPreview, setSpeechPreview,
   sA,
@@ -267,15 +268,88 @@ export default function ActionsTab({
 
     {/* ── State Visits ── */}
     {actionsSubTab === "visits" && <>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
 
-        {/* Left: visit type controls */}
+      {/* Quick action */}
+      <div style={{ marginBottom: 7 }}>
+        <button onClick={() => {
+          const s = STATE_DATA[Math.floor(Math.random() * STATE_DATA.length)];
+          setVisitType("rally"); setVisitState(s.abbr);
+        }} style={{
+          padding: "4px 11px", fontSize: 10, fontWeight: 500,
+          background: "transparent", color: "var(--color-text-secondary)",
+          border: "0.5px solid var(--color-border-tertiary)",
+          borderRadius: "var(--border-radius-md)", cursor: "pointer",
+        }}>⚡ Rally in a random state</button>
+      </div>
+
+      {/* Top: action bar */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+        padding: "9px 12px", marginBottom: 10, borderRadius: "var(--border-radius-lg)",
+        background: "var(--color-background-secondary)", border: "0.5px solid var(--color-border-tertiary)",
+      }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          {visitType && visitState ? (() => {
+            const vt = VISIT_TYPES.find(v => v.id === visitType);
+            const usedCount = visitTypeCounts?.[visitType] || 0;
+            const mult = 1 / (usedCount + 1);
+            const pct = Math.round(mult * 100);
+            return <>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                  {vt?.name}
+                  <span style={{ fontWeight: 400, color: "var(--color-text-secondary)" }}> · {STATE_DATA.find(s => s.abbr === visitState)?.name}</span>
+                </div>
+                {usedCount > 0 && (
+                  <span style={{ fontSize: 8, padding: "1px 6px", borderRadius: 4, background: "#EF9F2722", color: "#EF9F27", fontWeight: 600, whiteSpace: "nowrap" }}>
+                    {pct}% effectiveness — used {usedCount}× this period
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 4 }}>
+                {vt?.approvalBoost && <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4, background: "#1D9E7522", color: "#1D9E75" }}>+{(vt.approvalBoost * mult).toFixed(2).replace(/\.?0+$/, "")} approval</span>}
+                {vt?.partyUnityBoost && <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4, background: "#2563eb22", color: "#2563eb" }}>+{Math.round(vt.partyUnityBoost * mult)} unity</span>}
+                {vt?.factionEffects && Object.entries(vt.factionEffects).map(([fid, fv]) => {
+                  const f = cg?.factions[fid]; if (!f) return null;
+                  const rel = Math.round(fv * 8 * mult);
+                  return <span key={fid} style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4, background: rel > 0 ? "#1D9E7522" : "#E24B4A22", color: rel > 0 ? "#1D9E75" : "#E24B4A" }}>{f.name.split(" ")[0]}: {rel > 0 ? "+" : ""}{rel} rel</span>;
+                })}
+                {vt?.educationEffect && <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4, background: "#2563eb22", color: "#2563eb" }}>Edu bonus</span>}
+                {vt?.urbanEffect && <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4, background: "#7c3aed22", color: "#7c3aed" }}>Urban bonus</span>}
+                {vt?.ruralEffect && <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4, background: "#D85A3022", color: "#D85A30" }}>Rural bonus</span>}
+                {vt?.religiosityEffect && <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4, background: "#EF9F2722", color: "#EF9F27" }}>Religious bonus</span>}
+              </div>
+            </>;
+          })() : (
+            <div style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>
+              {!visitType
+                ? "Step 1: pick a visit type below"
+                : `Step 2: click a state on the map  ·  ${VISIT_TYPES.find(v => v.id === visitType)?.name} selected`}
+            </div>
+          )}
+        </div>
+        <button onClick={onDoVisit} disabled={!visitType || !visitState || act >= 4} style={{
+          padding: "6px 16px", fontSize: 11, fontWeight: 500, whiteSpace: "nowrap", flexShrink: 0,
+          background: visitType && visitState && act < 4 ? "var(--color-text-primary)" : "var(--color-background-tertiary)",
+          color: visitType && visitState && act < 4 ? "var(--color-background-primary)" : "var(--color-text-secondary)",
+          border: "none", borderRadius: "var(--border-radius-md)",
+          cursor: visitType && visitState && act < 4 ? "pointer" : "not-allowed",
+        }}>Go visit</button>
+      </div>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+
+        {/* Left: visit type grid */}
         <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 4 }}>Presidential visit</div>
-          <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>Select an activity, then click a state.</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <div style={{ fontSize: 10, fontWeight: 500, color: "var(--color-text-secondary)", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Visit type</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
             {VISIT_TYPES.map(v => {
               const isSelected = visitType === v.id;
+              const restriction = v.stateRestriction === "border" ? "Border states"
+                : v.stateRestriction === "wallstreet" ? "NY only"
+                : v.stateRestriction === "disaster" ? "Disaster zones"
+                : v.stateRestriction === "tribal" ? "Tribal states"
+                : null;
               return (
                 <button key={v.id} onClick={() => {
                   const newType = isSelected ? "" : v.id;
@@ -292,40 +366,23 @@ export default function ActionsTab({
                     }
                   }
                 }} style={{
-                  textAlign: "left", padding: "8px 10px", borderRadius: "var(--border-radius-lg)",
+                  textAlign: "left", padding: "7px 9px", borderRadius: "var(--border-radius-lg)",
                   border: isSelected ? "2px solid var(--color-border-info)" : "0.5px solid var(--color-border-tertiary)",
                   background: isSelected ? "var(--color-background-secondary)" : "var(--color-background-primary)",
                   cursor: "pointer",
                 }}>
-                  <div style={{ fontSize: 11, fontWeight: isSelected ? 600 : 500, color: "var(--color-text-primary)", marginBottom: 2 }}>{v.name}</div>
-                  {v.approvalBoost && <div style={{ fontSize: 9, color: "#1D9E75" }}>+{v.approvalBoost} national approval</div>}
-                  {v.factionEffects && <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>Affects faction relations</div>}
-                  {v.educationEffect && <div style={{ fontSize: 9, color: "#2563eb" }}>Bonus in educated states</div>}
-                  {v.urbanEffect && <div style={{ fontSize: 9, color: "#7c3aed" }}>Bonus in urban states</div>}
-                  {v.ruralEffect && <div style={{ fontSize: 9, color: "#D85A30" }}>Bonus in rural states</div>}
-                  {v.religiosityEffect && <div style={{ fontSize: 9, color: "#EF9F27" }}>Bonus in religious states</div>}
-                  {v.partyUnityBoost && <div style={{ fontSize: 9, color: "#1D9E75" }}>+{v.partyUnityBoost} party unity</div>}
-                  {v.stateRestriction === "border" && <div style={{ fontSize: 9, color: "#EF9F27" }}>Border states only</div>}
-                  {v.stateRestriction === "wallstreet" && <div style={{ fontSize: 9, color: "#EF9F27" }}>New York only</div>}
-                  {v.stateRestriction === "disaster" && <div style={{ fontSize: 9, color: "#EF9F27" }}>Recent disaster states only</div>}
-                  {v.stateRestriction === "tribal" && <div style={{ fontSize: 9, color: "#EF9F27" }}>States with large tribal populations</div>}
+                  <div style={{ fontSize: 10, fontWeight: isSelected ? 600 : 500, color: "var(--color-text-primary)", lineHeight: 1.3 }}>{v.name}</div>
+                  {restriction && <div style={{ fontSize: 8, color: "#EF9F27", marginTop: 2 }}>{restriction}</div>}
+                  {(() => {
+                    const uc = visitTypeCounts?.[v.id] || 0;
+                    if (uc === 0) return null;
+                    const nextPct = Math.round(100 / (uc + 1));
+                    return <div style={{ fontSize: 8, color: "#EF9F27", marginTop: 2 }}>{nextPct}% eff next use</div>;
+                  })()}
                 </button>
               );
             })}
           </div>
-          {visitType && visitState && (
-            <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: "var(--border-radius-md)", background: "var(--color-background-secondary)" }}>
-              <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 6 }}>
-                <b style={{ color: "var(--color-text-primary)" }}>{VISIT_TYPES.find(v => v.id === visitType)?.name}</b> in <b style={{ color: "var(--color-text-primary)" }}>{STATE_DATA.find(s => s.abbr === visitState)?.name}</b>
-              </div>
-              <button onClick={onDoVisit} disabled={act >= 4} style={{
-                padding: "6px 16px", fontSize: 11, fontWeight: 500,
-                background: act >= 4 ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
-                color: act >= 4 ? "var(--color-text-secondary)" : "var(--color-background-primary)",
-                border: "none", borderRadius: "var(--border-radius-md)", cursor: act >= 4 ? "not-allowed" : "pointer", width: "100%",
-              }}>Go visit</button>
-            </div>
-          )}
         </div>
 
         {/* Right: map */}
