@@ -732,11 +732,10 @@ export default function Game() {
     const newPowerProjection = Math.max(0, Math.min(50, powerProjection + gdpDelta + defDelta));
     setPowerProjection(() => newPowerProjection);
 
-    // 3. Global tension (detect country status degradations + random drift + decay after wk 4)
+    // 3. Global tension (detect country status degradations + random drift)
     const GREAT_POWERS_T = new Set(['india', 'uk', 'france', 'russia', 'china']);
     const STATUS_RANK_T = { ALLIED: 4, FRIENDLY: 3, NEUTRAL: 2, UNFRIENDLY: 1, HOSTILE: 0 };
     let tensionDelta = (Math.random() - 0.5) * 1.5; // ±0.75 random drift
-    if (nw > 4) tensionDelta -= 1; // natural decay 1/week after first 4 weeks
     countries.forEach(c => {
       const prevSt = countryStatusSnapshot[c.id];
       if (!prevSt || prevSt === c.status) return;
