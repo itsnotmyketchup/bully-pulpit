@@ -107,6 +107,13 @@ export default function Game() {
   const [eoIssuedCount, setEoIssuedCount] = useState({}); // {[eoId]: count}
   const [passedLegislation, setPassedLegislation] = useState({}); // {[billOrEoId]: weekPassed}
   const [executiveOverreach, setExecutiveOverreach] = useState(20); // 0-100
+  const [engagement, setEngagement] = useState(25); // 0-50
+  const [powerProjection, setPowerProjection] = useState(40); // 0-50
+  const [globalTension, setGlobalTension] = useState(25); // 0-50
+  const [lastForeignTripWeek, setLastForeignTripWeek] = useState(0);
+  const [countryStatusSnapshot, setCountryStatusSnapshot] = useState(
+    () => Object.fromEntries(COUNTRIES_INIT.map(c => [c.id, c.status]))
+  );
   const [overreachLastIncreasedWeek, setOverreachLastIncreasedWeek] = useState(0);
   const [pendingChainEvents, setPendingChainEvents] = useState([]); // [{triggerAtWeek, event}]
   const [actionsSubTab, setActionsSubTab] = useState("orders"); // "orders"|"visits"|"speeches"
@@ -488,6 +495,23 @@ export default function Game() {
       }
     }
 
+    // Minor diplomatic metric faction effects (every tick)
+    if (engagement > 30) ['prog','mod_dem','blue_dog','mod_rep'].forEach(fid => {
+      if (nf[fid]) nf[fid] = { ...nf[fid], relationship: Math.max(5, Math.min(95, nf[fid].relationship + 0.3)) };
+    });
+    if (engagement < 20) {
+      if (nf['freedom']) nf['freedom'] = { ...nf['freedom'], relationship: Math.max(5, Math.min(95, nf['freedom'].relationship + 0.3)) };
+    }
+    if (powerProjection > 38) ['mod_rep','trad_con','blue_dog'].forEach(fid => {
+      if (nf[fid]) nf[fid] = { ...nf[fid], relationship: Math.max(5, Math.min(95, nf[fid].relationship + 0.3)) };
+    });
+    if (powerProjection < 32) {
+      if (nf['prog']) nf['prog'] = { ...nf['prog'], relationship: Math.max(5, Math.min(95, nf['prog'].relationship + 0.3)) };
+    }
+    if (globalTension > 35) {
+      if (nf['prog']) nf['prog'] = { ...nf['prog'], relationship: Math.max(5, Math.min(95, nf['prog'].relationship - 0.5)) };
+    }
+
     // Log leader replacements and commit faction changes
     setCG(prev => ({ ...prev, factions: nf }));
     // Track faction history
@@ -625,6 +649,7 @@ export default function Game() {
         }));
         const fxText = relGain >= 2 ? "Successful visit" : relGain < 0 ? "Visit caused friction" : "Uneventful visit";
         addLog(`${s.name} foreign visit to ${s.busy.countryName}: ${fxText} (rel ${relGain >= 0 ? "+" : ""}${relGain}).`);
+        setEngagement(e => Math.min(50, e + 2));
         if (relGain >= 5) {
           ns.approvalRating = (ns.approvalRating || 50) + 1;
           setStats({ ...ns });
@@ -693,6 +718,40 @@ export default function Game() {
       return prev;
     });
 
+    // ── Diplomatic Metrics Update ────────────────────────────────────────────
+
+    // 1. Engagement decay (no trip in 4+ weeks)
+    if (lastForeignTripWeek === 0 || nw - lastForeignTripWeek > 4) {
+      setEngagement(e => Math.max(0, e - 2));
+    }
+
+    // 2. Power projection (GDP + defense spending drift each tick)
+    const gdpDelta = Math.max(-0.5, Math.min(0.5, (ns.gdpGrowth - 2.2) * 0.25));
+    const defDelta = Math.max(-2.0, Math.min(2.0, (ns.militarySpending - 886) / 200));
+    setPowerProjection(p => Math.max(0, Math.min(50, p + gdpDelta + defDelta)));
+
+    // 3. Global tension (detect country status degradations + random drift)
+    const GREAT_POWERS_T = new Set(['india', 'uk', 'france', 'russia', 'china']);
+    const STATUS_RANK_T = { ALLIED: 4, FRIENDLY: 3, NEUTRAL: 2, UNFRIENDLY: 1, HOSTILE: 0 };
+    let tensionDelta = (Math.random() - 0.5) * 1.5; // ±0.75 random drift
+    countries.forEach(c => {
+      const prevSt = countryStatusSnapshot[c.id];
+      if (!prevSt || prevSt === c.status) return;
+      const prevRank = STATUS_RANK_T[prevSt] ?? -1;
+      const currRank = STATUS_RANK_T[c.status] ?? -1;
+      if (currRank >= prevRank) return;
+      const levels = prevRank - currRank;
+      if (GREAT_POWERS_T.has(c.id)) {
+        tensionDelta += levels * 5;
+      } else {
+        for (let l = 0; l < levels; l++) {
+          tensionDelta += (prevRank - l) === 1 ? 3 : 2; // UNFRIENDLY→HOSTILE = +3, others = +2
+        }
+      }
+    });
+    setGlobalTension(t => Math.max(0, Math.min(50, t + tensionDelta)));
+    setCountryStatusSnapshot(Object.fromEntries(countries.map(c => [c.id, c.status])));
+
     // Fire pending chain events (priority over regular events)
     const readyChain = pendingChainEvents.find(c => nw >= c.triggerAtWeek);
     if (readyChain) {
@@ -740,6 +799,8 @@ export default function Game() {
       });
       setCG({ ...cg, factions: nf });
     }
+    if (curEv.engagementEffect) setEngagement(e => Math.max(0, Math.min(50, e + curEv.engagementEffect)));
+    if (choice.tensionEffect) setGlobalTension(t => Math.max(0, Math.min(50, t + choice.tensionEffect)));
     if (choice.countryEffects) {
       setCountries(p => p.map(c => {
         const e = choice.countryEffects[c.id];
@@ -899,6 +960,7 @@ export default function Game() {
       setVisitedCountries(p => ({ ...p, [countryId]: week + 12 }));
       setSurrogateUI(p => { const n = { ...p }; delete n[surrogateId]; return n; });
       setAct(n => n + 1);
+      setLastForeignTripWeek(week);
       addLog(`${surrogates.find(s => s.id === surrogateId)?.name} dispatched to ${country.name}.`);
       return;
     }
@@ -932,6 +994,8 @@ export default function Game() {
     setAct(n => n + actionCost);
     if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
     setVisitedCountries(p => ({ ...p, [countryId]: week + 52 }));
+    setEngagement(e => Math.min(50, e + 4));
+    setLastForeignTripWeek(week);
 
     const fxLines = Object.entries(factionFx).map(([fid, v]) => {
       const f = cg.factions[fid];
@@ -1065,6 +1129,9 @@ export default function Game() {
         return nc;
       }));
     }
+    // Tariffs hurt international engagement
+    if (eo.id === 'tariffs') setEngagement(e => Math.max(0, e - 10));
+
     // Sanctions: hit targeted country hard
     if (eo.choiceType === "country" && extraData.targetCountryId) {
       setCountries(p => p.map(c => {
@@ -1174,6 +1241,7 @@ export default function Game() {
     }]);
     setPassedLegislation(prev => ({ ...prev, [act.id]: week }));
     setExecutiveOverreach(prev => Math.max(0, prev - 3));
+    if (act.id === 'defense_mod') setPowerProjection(p => Math.min(50, p + 5));
     addLog(`${act.name} SIGNED INTO LAW by President ${pn}`);
     setPendingSignature(null);
   };
@@ -1479,6 +1547,9 @@ export default function Game() {
           act={act} week={week}
           factions={cg.factions}
           onForeignVisit={doForeignVisit}
+          engagement={engagement}
+          powerProjection={powerProjection}
+          globalTension={globalTension}
         />
       )}
 

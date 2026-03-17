@@ -139,13 +139,42 @@ function WorldMap({ countries, mode }) {
   );
 }
 
-export default function DiplomacyTab({ countries, visitedCountries, act, week, factions, onForeignVisit }) {
+const engLabel  = v => v <= 10 ? "isolated" : v <= 20 ? "disengaged" : v <= 30 ? "moderately engaged" : v <= 40 ? "actively engaged" : "highly engaged";
+const projLabel = v => v <= 10 ? "marginalized" : v <= 20 ? "a regional power" : v <= 30 ? "a significant power" : v <= 40 ? "a major power" : "globally dominant";
+const tensLabel = v => v <= 10 ? "stable" : v <= 20 ? "low" : v <= 30 ? "moderate" : v <= 40 ? "high" : "critical";
+
+function MetricBar({ value, color, label, sentence }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 3 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: 1 }}>{label}</span>
+        <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{value}/50</span>
+      </div>
+      <div style={{ height: 6, background: "var(--color-background-tertiary)", borderRadius: 3, overflow: "hidden", marginBottom: 5 }}>
+        <div style={{ height: "100%", width: `${(value / 50) * 100}%`, background: color, borderRadius: 3, transition: "width 0.3s" }} />
+      </div>
+      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", fontStyle: "italic" }}>{sentence}</div>
+    </div>
+  );
+}
+
+export default function DiplomacyTab({ countries, visitedCountries, act, week, factions, onForeignVisit, engagement, powerProjection, globalTension }) {
   const [mapMode, setMapMode] = useState("relations");
+
+  const alliedCountries = countries.filter(c => c.status === "ALLIED");
+  const avgAlliedRel = alliedCountries.length
+    ? Math.round(alliedCountries.reduce((s, c) => s + c.relationship, 0) / alliedCountries.length)
+    : 0;
+  const avgIntlRel = countries.length
+    ? Math.round(countries.reduce((s, c) => s + c.relationship, 0) / countries.length)
+    : 0;
+
+  const tensionColor = globalTension > 35 ? "#E24B4A" : globalTension > 20 ? "#EF9F27" : "#1D9E75";
 
   return <>
     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
 
-    {/* Left: World map */}
+    {/* Left: World map + perception metrics */}
     <div style={{ flex: "1 1 320px", minWidth: 0 }}>
       <div style={{ display: "flex", gap: 5, marginBottom: 8 }}>
         {MAP_MODES.map(m => (
@@ -163,6 +192,66 @@ export default function DiplomacyTab({ countries, visitedCountries, act, week, f
         ))}
       </div>
       <WorldMap countries={countries} mode={mapMode} />
+
+      {/* International Perception Metrics */}
+      <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: "var(--border-radius-lg)", border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 12 }}>International Perception</div>
+
+        <MetricBar
+          value={engagement} color="#378ADD" label="Engagement"
+          sentence={<>The United States is perceived as being <span style={{ color: "#378ADD", fontStyle: "normal", fontWeight: 600 }}>{engLabel(engagement)}</span>.</>}
+        />
+        <MetricBar
+          value={powerProjection} color="#EF9F27" label="Power Projection"
+          sentence={<>The United States is perceived as being <span style={{ color: "#EF9F27", fontStyle: "normal", fontWeight: 600 }}>{projLabel(powerProjection)}</span>.</>}
+        />
+        <MetricBar
+          value={globalTension} color={tensionColor} label="Global Tension"
+          sentence={<>Global tension is currently <span style={{ color: tensionColor, fontStyle: "normal", fontWeight: 600 }}>{tensLabel(globalTension)}</span>.</>}
+        />
+
+        {/* Avg relationship stats */}
+        <div style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 10, marginTop: 4, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px" }}>
+          <div>
+            <div style={{ fontSize: 9, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Allied Relations</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: avgAlliedRel >= 70 ? "#1D9E75" : avgAlliedRel >= 50 ? "#378ADD" : "#EF9F27" }}>{avgAlliedRel}<span style={{ fontSize: 9, color: "var(--color-text-secondary)", fontWeight: 400 }}>/100</span></div>
+          </div>
+          <div>
+            <div style={{ fontSize: 9, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>International Avg</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: avgIntlRel >= 60 ? "#1D9E75" : avgIntlRel >= 40 ? "#378ADD" : "#EF9F27" }}>{avgIntlRel}<span style={{ fontSize: 9, color: "var(--color-text-secondary)", fontWeight: 400 }}>/100</span></div>
+          </div>
+        </div>
+
+        {/* Faction effect hints — dynamic based on current metric values */}
+        {(() => {
+          const effects = {};
+          const add = (fids, delta) => fids.forEach(fid => { effects[fid] = (effects[fid] || 0) + delta; });
+          if (engagement > 30) add(['prog', 'mod_dem', 'blue_dog', 'mod_rep'], 0.3);
+          if (engagement < 20) add(['freedom'], 0.3);
+          if (powerProjection > 38) add(['mod_rep', 'trad_con', 'blue_dog'], 0.3);
+          if (powerProjection < 32) add(['prog'], 0.3);
+          if (globalTension > 35) add(['prog'], -0.5);
+          const active = Object.entries(effects).filter(([, v]) => v !== 0);
+          if (active.length === 0) return null;
+          return (
+            <div style={{ borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 8, marginTop: 8 }}>
+              <div style={{ fontSize: 9, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>Faction effects</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 8px" }}>
+                {active.map(([fid, v]) => {
+                  const f = factions[fid];
+                  if (!f) return null;
+                  const color = v > 0 ? "#1D9E75" : "#E24B4A";
+                  return (
+                    <span key={fid} style={{ fontSize: 9, color }}>
+                      {v > 0 ? "+" : ""}{v.toFixed(1)}/wk {f.name.split(" ")[0]}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
     </div>
 
     {/* Right: Country list */}

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import Badge from "../Badge.jsx";
-import DualMeter from "../DualMeter.jsx";
 import CongressBar from "../CongressBar.jsx";
 import LegislationRecord from "../LegislationRecord.jsx";
 
@@ -180,20 +179,38 @@ function CongressHistoryPane({ congressHistory, allF }) {
   );
 }
 
-function FactionCard({ f, pf, isOpposition }) {
+function StatBar({ label, value, color }) {
   return (
-    <div style={{ marginBottom: 6, padding: "8px 10px", borderRadius: "var(--border-radius-lg)", border: f.id === pf ? `2px solid ${f.color}` : "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+    <div style={{ flex: 1 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 3 }}>
+        <span style={{ fontSize: 9, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: 0.8 }}>{label}</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color, lineHeight: 1 }}>{Math.round(value)}</span>
+      </div>
+      <div style={{ height: 3, borderRadius: 2, background: "var(--color-background-tertiary)", overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${Math.max(0, Math.min(100, value))}%`, background: color, borderRadius: 2, transition: "width 0.3s" }} />
+      </div>
+    </div>
+  );
+}
+
+function FactionCard({ f, pf, isOpposition }) {
+  const relColor = f.relationship >= 60 ? "#1D9E75" : f.relationship < 35 ? "#E24B4A" : "var(--color-text-primary)";
+  const trustColor = f.trust >= 60 ? "#1D9E75" : f.trust < 35 ? "#E24B4A" : "var(--color-text-secondary)";
+  const unityColor = (f.unity || 50) >= 60 ? "#1D9E75" : (f.unity || 50) < 40 ? "#E24B4A" : "#EF9F27";
+
+  return (
+    <div style={{ marginBottom: 6, padding: "10px 12px", borderRadius: "var(--border-radius-lg)", border: f.id === pf ? `2px solid ${f.color}` : "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: f.color }} />
-          <span style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-primary)" }}>{f.name}</span>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: f.color }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{f.name}</span>
           {f.id === pf && <Badge color={f.color}>Base</Badge>}
           {isOpposition && <Badge color="#E24B4A">Opp</Badge>}
         </div>
         <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{f.senateSeats}S {f.houseSeats}H</span>
       </div>
       {f.leader && (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>Leader: <span style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{f.leader.name}</span></span>
           <div style={{ display: "flex", gap: 4 }}>
             <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "#3b82f611", color: "#2563eb" }}>Chr {f.leader.charisma}</span>
@@ -202,7 +219,11 @@ function FactionCard({ f, pf, isOpposition }) {
           </div>
         </div>
       )}
-      <DualMeter trust={f.trust} relationship={f.relationship} color={f.color} unity={f.unity} />
+      <div style={{ display: "flex", gap: 16 }}>
+        <StatBar label="Relationship" value={f.relationship} color={relColor} />
+        <StatBar label="Trust" value={f.trust} color={trustColor} />
+        <StatBar label="Unity" value={f.unity ?? 50} color={unityColor} />
+      </div>
     </div>
   );
 }

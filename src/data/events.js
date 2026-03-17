@@ -289,7 +289,7 @@ export function generateDynamicEvents(
         {text:"Coordinate with state emergency managers",effects:{approvalRating:1},stateBoost:0.02,result:"Steady, methodical response."},
         {text:"Urge residents to shelter in place, minimal federal role",effects:{approvalRating:-2},stateBoost:-0.03,result:"Critics say the federal government was missing in action."},
     ]},
-    {id:"trade_deal",name:"Historic trade deal with Pacific partners",desc:"A new multilateral trade agreement with 10 Pacific nations is ready for congressional approval.",unique:true,effects:{tradeBalance:8,gdpGrowth:0.15,approvalRating:1},choices:[
+    {id:"trade_deal",name:"Historic trade deal with Pacific partners",desc:"A new multilateral trade agreement with 10 Pacific nations is ready for congressional approval.",unique:true,engagementEffect:3,effects:{tradeBalance:8,gdpGrowth:0.15,approvalRating:1},choices:[
       {text:"Sign and push Congress hard for ratification",effects:{approvalRating:2,tradeBalance:5},factionEffects:{mod_dem:0.3,mod_rep:0.4,prog:-0.3,blue_dog:0.2},result:"Business community celebrates."},
       {text:"Sign with stronger labor protections",effects:{approvalRating:1},factionEffects:{prog:0.2,blue_dog:0.3,mod_rep:0.1,freedom:-0.2},result:"Labor unions back it. Some partners grumble."},
       {text:"Renegotiate key terms before signing",effects:{approvalRating:-1,tradeBalance:-2},result:"Caution noted but partners grow impatient."},
@@ -394,7 +394,7 @@ export function generateDynamicEvents(
       unique: true,
       effects: { approvalRating: -1 },
       choices: [
-        { text: "Demand immediate release, impose new sanctions", effects: { approvalRating: 2 }, factionEffects: { trad_con: 0.3, freedom: 0.2, prog: 0.1 }, countryEffects: { russia: { relationship: -8, trust: -5 } }, result: "The public applauds the tough stance. Russia digs in further." },
+        { text: "Demand immediate release, impose new sanctions", effects: { approvalRating: 2 }, factionEffects: { trad_con: 0.3, freedom: 0.2, prog: 0.1 }, countryEffects: { russia: { relationship: -8, trust: -5 } }, tensionEffect: 5, result: "The public applauds the tough stance. Russia digs in further." },
         { text: "Pursue quiet diplomatic negotiations", effects: { approvalRating: 0 }, countryEffects: { russia: { relationship: -2 } }, result: "Backchannel talks begin. The family waits anxiously." },
         { text: "Offer a prisoner exchange", effects: { approvalRating: 1 }, countryEffects: { russia: { relationship: 3 } }, factionEffects: { freedom: -0.2, trad_con: -0.1, prog: 0.2 }, result: "Negotiations begin. Hawks criticize rewarding bad behavior." },
       ],
