@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 
-const PARTY_COLORS = { dem: "#3b7dd8", rep: "#c0392b" };
-const PARTY_NAMES = { dem: "Democrats", rep: "Republicans" };
+const PARTY_COLORS = { DEM: "#3b7dd8", REP: "#c0392b" };
+const PARTY_NAMES = { DEM: "Democrats", REP: "Republicans" };
 
 function ViewToggle({ value, onChange }) {
   return (

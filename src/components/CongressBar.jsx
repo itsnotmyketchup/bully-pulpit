@@ -7,9 +7,9 @@ export default function CongressBar({ factions, chamber, hoveredFaction, setHove
   const majority = chamber === "Senate" ? 51 : 218;
   const total = chamber === "Senate" ? 100 : 435;
 
-  const ordered = FACTION_ORDER
-    .map(id => factions.find(f => f.id === id))
-    .filter(Boolean);
+  const knownInOrder = FACTION_ORDER.map(id => factions.find(f => f.id === id)).filter(Boolean);
+  const unknownFactions = factions.filter(f => !FACTION_ORDER.includes(f.id));
+  const ordered = [...knownInOrder, ...unknownFactions];
 
   const segments = ordered.map(f => ({
     faction: f,
