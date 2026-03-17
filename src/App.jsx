@@ -240,8 +240,9 @@ export default function Game() {
     // ── Block D: Inauguration — apply pending congress update at start of new year ──
     const nwPre = week + 1;
     const wiyPre = ((nwPre - 1) % 52) + 1;
+    let inauguratedFactions = null;
     if (wiyPre === 1 && pendingCongressUpdate) {
-      setCG(prev => ({ ...prev, factions: pendingCongressUpdate.newFactions }));
+      inauguratedFactions = pendingCongressUpdate.newFactions;
       setShowInaugurationModal(true);
       setPendingCongressUpdate(null);
       const netH = pendingCongressUpdate.houseNetChange;
@@ -284,7 +285,9 @@ export default function Game() {
     }
 
     // Bill progression + unity updates
-    const nf = { ...cg.factions };
+    // Use inaugurated factions if this is inauguration week, so weekly drift
+    // is applied on top of the new post-election composition (not stale cg.factions).
+    const nf = { ...(inauguratedFactions || cg.factions) };
 
     // Clear any pending negotiation — if player advances without acting, apply walk-away trust penalty
     let negWalkAwayFid = null;
