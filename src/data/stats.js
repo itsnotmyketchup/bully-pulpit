@@ -5,7 +5,7 @@ export const INITIAL_STATS = {
   inflation: 2.9,
   nationalDebt: 36.2,
   nationalDeficit: 1820,    // annual deficit in $B (~$1.8T realistic)
-  approvalRating: 52,
+  approvalRating: 54,
   population: 345426571,    // total US population
   birthRate: 10.8,          // births per 1,000 people per year
   deathRate: 9.2,           // deaths per 1,000 people per year

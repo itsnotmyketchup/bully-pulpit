@@ -12,11 +12,12 @@ import {
   getSeasonLabel,
   rollEligibleSpecialEvents,
 } from "./data/events.js";
-import { EXECUTIVE_ORDERS } from "./data/executiveOrders.js";
+import { EXECUTIVE_ORDERS, buildExecutiveOrderOutcome } from "./data/executiveOrders.js";
 import { TABS, ALLIED_FACTIONS, OPPOSITION_FACTIONS, COUNTRY_FACTION_EFFECTS } from "./data/constants.js";
 
 import { generateCongress, LEADER_NAMES } from "./logic/generateCongress.js";
 import { calcStateApproval } from "./logic/calcStateApproval.js";
+import { advanceApproval } from "./logic/approvalCalc.js";
 import { calcStageAdvance } from "./logic/billProgression.js";
 import { computeBudgetReactions } from "./systems/budgetCalc.js";
 import { makeSurrogates } from "./utils/makeSurrogates.js";
@@ -59,6 +60,12 @@ const NORMAL_EVENT_CHANCE = 0.65;
 const SPECIAL_EVENT_GATE_CHANCE = 0.35;
 const SPECIAL_EFFECTIVE_CHECKS_PER_YEAR = 13 * SPECIAL_EVENT_GATE_CHANCE;
 const SPECIAL_COOLDOWN_WEEKS = 4;
+const DRILLING_REGION_STATE_MAP = {
+  gulf: ["TX", "LA"],
+  bering: ["AK"],
+  atlantic: ["WV", "KY"],
+  pacific: ["NM", "WY"],
+};
 
 export default function Game() {
   const [screen, setScreen] = useState(0);
@@ -126,6 +133,7 @@ export default function Game() {
   );
   const [diplomacyThresholds, setDiplomacyThresholds] = useState({ tensionHigh: false, engagementLow: false, projectionWeak: false });
   const [overreachLastIncreasedWeek, setOverreachLastIncreasedWeek] = useState(0);
+  const [overreachLowSinceWeek, setOverreachLowSinceWeek] = useState(1);
   const [pendingChainEvents, setPendingChainEvents] = useState([]); // [{triggerAtWeek, event}]
   const [lastSpecialEventWeek, setLastSpecialEventWeek] = useState(0);
   const [actionsSubTab, setActionsSubTab] = useState("orders"); // "orders"|"visits"|"speeches"
@@ -164,11 +172,7 @@ export default function Game() {
     return r;
   }, [stats, pp, stBon]);
 
-  const natA = useMemo(() => {
-    let t = 0, w = 0;
-    STATE_DATA.forEach(s => { t += s.pop; w += s.pop * (sA[s.abbr] || 50); });
-    return t > 0 ? w / t : 50;
-  }, [sA]);
+  const natA = stats.approvalRating;
 
   const campaignMetrics = useMemo(() => {
     if (!cg || !pp) return null;
@@ -241,6 +245,7 @@ export default function Game() {
     setLastSpecialEventWeek(0);
     setExecutiveOverreach(20);
     setOverreachLastIncreasedWeek(0);
+    setOverreachLowSinceWeek(1);
     setPendingChainEvents([]);
     setActionsSubTab("orders");
     setSelectedEO(null);
@@ -582,8 +587,8 @@ export default function Game() {
     }
     // Debt changes by the signed weekly deficit share (B → T), so surpluses reduce it.
     ns.nationalDebt = Math.max(0, ns.nationalDebt + (ns.nationalDeficit / (52 * 1000)));
+    ns.approvalRating = advanceApproval(ns, pp, week + 1);
 
-    ns.approvalRating = natA + (Math.random() - 0.5) * 0.5;
     setStats(ns);
     setHist(p => {
       const h = { ...p };
@@ -750,12 +755,23 @@ export default function Game() {
       addLog(`ELECTION RESULTS — Year ${yrB}: Party ${netH >= 0 ? "GAINED" : "LOST"} ${Math.abs(netH)} House seat${Math.abs(netH) !== 1 ? "s" : ""} and ${netS >= 0 ? "gained" : "lost"} ${Math.abs(netS)} Senate seat${Math.abs(netS) !== 1 ? "s" : ""}. Approval: ${Math.round(natA)}%. Party enthusiasm: ${Math.round(partyEnthusiasm)}, Opposition: ${Math.round(oppEnthusiasm)}.`);
     }
 
-    // Overreach decay: if above 31 and hasn't increased in 2+ weeks, decay by 1/week
-    setExecutiveOverreach(prev => {
-      if (prev <= 31) return prev;
-      if (nw - overreachLastIncreasedWeek >= 2) return Math.max(31, prev - (prev > 60 ? 5 : 3));
-      return prev;
-    });
+    // Overreach decay: fast decay above 31, then slow cooling toward 15 after 4 quiet weeks below 31.
+    let nextOverreach = executiveOverreach;
+    let nextOverreachLowSinceWeek = overreachLowSinceWeek;
+    if (nextOverreach > 31) {
+      nextOverreachLowSinceWeek = 0;
+      if (nw - overreachLastIncreasedWeek >= 2) {
+        nextOverreach = Math.max(31, nextOverreach - (nextOverreach > 60 ? 5 : 3));
+      }
+      if (nextOverreach <= 31) nextOverreachLowSinceWeek = nw;
+    } else {
+      if (!nextOverreachLowSinceWeek) nextOverreachLowSinceWeek = week;
+      if (nw - nextOverreachLowSinceWeek >= 4 && nw - overreachLastIncreasedWeek >= 4) {
+        nextOverreach = Math.max(15, nextOverreach - 1);
+      }
+    }
+    setExecutiveOverreach(nextOverreach);
+    setOverreachLowSinceWeek(nextOverreach <= 31 ? nextOverreachLowSinceWeek : 0);
 
     // ── Diplomatic Metrics Update ────────────────────────────────────────────
 
@@ -1171,23 +1187,27 @@ export default function Game() {
 
   const issueEO = (eo, extraData = {}) => {
     if (act + 2 > 4) return;
+    const lastIssued = activeOrders
+      .filter(order => order.id === eo.id)
+      .sort((a, b) => b.issuedWeek - a.issuedWeek)[0];
+    if (eo.repeatable && lastIssued && week < lastIssued.issuedWeek + 52) return;
     const count = eoIssuedCount[eo.id] || 0;
     const mult = eo.repeatable ? Math.max(0.3, 1 / (1 + count * 0.5)) : 1;
+    const outcome = buildExecutiveOrderOutcome(eo, extraData);
 
     // Immediate stat effects
     const ns = { ...stats };
-    Object.entries(eo.effects || {}).forEach(([k, v]) => { if (ns[k] !== undefined) ns[k] += v * mult; });
-    setStats(ns);
+    Object.entries(outcome.effects || {}).forEach(([k, v]) => { if (ns[k] !== undefined) ns[k] += v * mult; });
 
     // Delayed effects via pFx queue
-    if (eo.delayedEffects) {
-      const de = Object.fromEntries(Object.entries(eo.delayedEffects.effects).map(([k, v]) => [k, v * mult]));
-      setPFx(p => [...p, { week: week + eo.delayedEffects.weeks, name: eo.name + " (delayed)", effects: de }]);
+    if (outcome.delayedEffects) {
+      const de = Object.fromEntries(Object.entries(outcome.delayedEffects.effects).map(([k, v]) => [k, v * mult]));
+      setPFx(p => [...p, { week: week + outcome.delayedEffects.weeks, name: eo.name + " (delayed)", effects: de }]);
     }
 
     // Faction reactions
     const oppositionIds = OPPOSITION_FACTIONS[pp] || [];
-    const reactions = extraData.factionOverride || eo.factionReactions;
+    const reactions = outcome.factionReactions;
     const controversyPenalty = eo.controversy * -6;
     const nf = { ...cg.factions };
     Object.entries(reactions).forEach(([fid, v]) => {
@@ -1202,15 +1222,24 @@ export default function Game() {
     setCG({ ...cg, factions: nf });
 
     // State approval effects
-    if (eo.stateEffects) {
+    if (outcome.stateEffects) {
       const b = { ...stBon };
-      const se = eo.stateEffects;
+      const se = outcome.stateEffects;
       STATE_DATA.forEach(s => {
         let hit = false;
         if (se.border && s.border) hit = true;
         if (se.economy && se.economy.includes(s.economy)) hit = true;
+        if (se.region && se.region.includes(s.region)) hit = true;
         if (se.minEducation && s.education >= se.minEducation) hit = true;
         if (se.minUrbanization && s.urbanization >= se.minUrbanization) hit = true;
+        if (se.stateAbbrs && se.stateAbbrs.includes(s.abbr)) hit = true;
+        if (se.drillingRegions?.length) {
+          const drillingHit = se.drillingRegions.some(regionId => {
+            const targets = DRILLING_REGION_STATE_MAP[regionId] || [];
+            return targets.includes(s.abbr) && s.economy === "energy";
+          });
+          if (drillingHit) hit = true;
+        }
         if (hit) b[s.abbr] = (b[s.abbr] || 0) + se.weight * mult;
       });
       setStBon(b);
@@ -1235,18 +1264,23 @@ export default function Game() {
         nc.status = nc.relationship >= 70 ? "ALLIED" : nc.relationship >= 50 ? "FRIENDLY" : nc.relationship >= 30 ? "NEUTRAL" : nc.relationship >= 15 ? "UNFRIENDLY" : "HOSTILE";
         return nc;
       }));
+      if (extraData.targetCountryId === "china") ns.gdpGrowth = Math.max(-2, ns.gdpGrowth - 0.06);
     }
+
+    setStats(ns);
 
     // Record it
     setActiveOrders(prev => [...prev, { id: eo.id, name: eo.name, issuedWeek: week, active: true, choiceData: extraData }]);
     setEoIssuedCount(prev => ({ ...prev, [eo.id]: count + 1 }));
     setPassedLegislation(prev => ({ ...prev, [eo.id]: week }));
-    setExecutiveOverreach(prev => Math.min(100, prev + 3 + 5 * eo.controversy));
+    const nextOverreach = Math.min(100, executiveOverreach + 3 + 5 * eo.controversy);
+    setExecutiveOverreach(nextOverreach);
     setOverreachLastIncreasedWeek(week);
+    setOverreachLowSinceWeek(nextOverreach <= 31 ? week : 0);
     setAct(n => n + 2);
     setSelectedEO(null);
     setEoChoice({});
-    addLog(`EXECUTIVE ORDER: "${eo.name}" signed.${eo.delayedEffects ? ` Effects delayed ${eo.delayedEffects.weeks} weeks.` : ""}`);
+    addLog(`EXECUTIVE ORDER: "${eo.name}" signed.${outcome.delayedEffects ? ` Effects delayed ${outcome.delayedEffects.weeks} weeks.` : ""}`);
 
     // Build result payload
     const factionLines = Object.entries(reactions).map(([fid, v]) => {
@@ -1256,7 +1290,16 @@ export default function Game() {
     const oppLines = oppositionIds.filter(fid => reactions[fid] == null || reactions[fid] >= 0).map(fid => {
       const f = nf[fid]; return f ? { name: f.name, val: Math.round(controversyPenalty) } : null;
     }).filter(Boolean);
-    setEoResult({ eo, mult, factionLines: [...factionLines, ...oppLines.filter(ol => !factionLines.find(fl => fl.name === ol.name))], extraData });
+    setEoResult({
+      eo: {
+        ...eo,
+        effects: outcome.effects,
+        delayedEffects: outcome.delayedEffects,
+      },
+      mult,
+      factionLines: [...factionLines, ...oppLines.filter(ol => !factionLines.find(fl => fl.name === ol.name))],
+      extraData,
+    });
   };
 
   const clampRel = v => Math.max(5, Math.min(95, v));
@@ -1348,7 +1391,9 @@ export default function Game() {
       amendments: billAmends,
     }]);
     setPassedLegislation(prev => ({ ...prev, [act.id]: week }));
-    setExecutiveOverreach(prev => Math.max(0, prev - 3));
+    const nextOverreach = Math.max(0, executiveOverreach - 3);
+    setExecutiveOverreach(nextOverreach);
+    setOverreachLowSinceWeek(nextOverreach <= 31 ? (overreachLowSinceWeek || week) : 0);
     if (act.id === 'defense_mod') setPowerProjection(p => Math.min(50, p + 5));
     addLog(`${act.name} SIGNED INTO LAW by President ${pn}`);
     setPendingSignature(null);
@@ -1414,7 +1459,9 @@ export default function Game() {
       [activeBill.act.id]: [...(prev[activeBill.act.id] || []), amendment.id],
     }));
     addLog(`Amendment accepted: "${amendment.label}" added to ${activeBill.act.name}.`);
-    setExecutiveOverreach(prev => Math.max(0, prev - 2));
+    const nextOverreach = Math.max(0, executiveOverreach - 2);
+    setExecutiveOverreach(nextOverreach);
+    setOverreachLowSinceWeek(nextOverreach <= 31 ? (overreachLowSinceWeek || week) : 0);
     setPendingNegotiation(null);
   };
 
@@ -1429,20 +1476,36 @@ export default function Game() {
       });
       addLog(`Walked away from negotiations — trust decreased.`);
     }
-    setExecutiveOverreach(prev => Math.min(100, prev + 5));
+    const nextOverreach = Math.min(100, executiveOverreach + 5);
+    setExecutiveOverreach(nextOverreach);
     setOverreachLastIncreasedWeek(week);
+    setOverreachLowSinceWeek(nextOverreach <= 31 ? week : 0);
     setPendingNegotiation(null);
   };
 
   const rescindEO = (orderId) => {
     const eo = EXECUTIVE_ORDERS.find(e => e.id === orderId);
-    if (!eo || !eo.reversible) return;
-    setActiveOrders(prev => prev.map(o => o.id === orderId ? { ...o, active: false } : o));
+    const activeOrder = activeOrders.find(o => o.id === orderId && o.active);
+    if (!eo || !eo.reversible || !activeOrder) return;
+    if (week < activeOrder.issuedWeek + 12) return;
+    const outcome = buildExecutiveOrderOutcome(eo, activeOrder.choiceData || {});
+    setActiveOrders(prev => prev.map(o => o === activeOrder ? { ...o, active: false } : o));
     // Political cost: allies annoyed at flip-flopping
     const allyIds = ALLIED_FACTIONS[pp] || [];
     const nf = { ...cg.factions };
     allyIds.forEach(fid => { if (nf[fid]) nf[fid] = { ...nf[fid], relationship: Math.max(5, nf[fid].relationship - 8) }; });
+    Object.entries(outcome?.factionReactions || {}).forEach(([fid, reaction]) => {
+      if (!nf[fid] || reaction <= 0) return;
+      nf[fid] = {
+        ...nf[fid],
+        trust: Math.max(5, nf[fid].trust - 10),
+        relationship: Math.max(5, nf[fid].relationship - 4),
+      };
+    });
     setCG({ ...cg, factions: nf });
+    const nextOverreach = Math.max(0, executiveOverreach - 5);
+    setExecutiveOverreach(nextOverreach);
+    setOverreachLowSinceWeek(nextOverreach <= 31 ? (overreachLowSinceWeek || week) : 0);
     addLog(`EXECUTIVE ORDER RESCINDED: "${eo.name}"`);
   };
 

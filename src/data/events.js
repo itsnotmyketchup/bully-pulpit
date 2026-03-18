@@ -323,8 +323,9 @@ export function generateDynamicEvents(
 
   base.forEach(e => {
     if (!e.repeatable && usedEvents.has(e.id)) return;
-   if (e.season && e.season !== season) return;
-   addEvent("normal", e);
+    if (e.season && e.season !== season) return;
+    if (e.id === "cyber" && passedLegislation.cybersecurity_strategy && Math.random() < 0.9) return;
+    addEvent("normal", e);
   });
 
   // ── Post-legislation triggered events ─────────────────────────────────

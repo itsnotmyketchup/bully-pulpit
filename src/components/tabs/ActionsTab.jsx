@@ -1,5 +1,12 @@
 import { useMemo } from "react";
-import { EXECUTIVE_ORDERS } from "../../data/executiveOrders.js";
+import {
+  EXECUTIVE_ORDERS,
+  DRILLING_REGION_OPTIONS,
+  DEFAULT_REFUGEE_CAP,
+  MIN_REFUGEE_CAP,
+  MAX_REFUGEE_CAP,
+  buildExecutiveOrderOutcome,
+} from "../../data/executiveOrders.js";
 import { VISIT_TYPES } from "../../data/visits.js";
 import { SPEECH_TOPICS } from "../../data/speeches.js";
 import { STATE_DATA } from "../../data/states.js";
@@ -8,13 +15,14 @@ import VisitMap from "../VisitMap.jsx";
 
 const STAT_LABELS = {
   nationalDebt: "Nat. debt", approvalRating: "Approval", gasPrice: "Gas price",
-  immigrationRate: "Immigration", tradeBalance: "Trade balance", inflation: "Inflation",
+  immigrationRate: "Immigration", tradeBalance: "Trade balance", inflation: "Inflation", gdpGrowth: "GDP growth",
 };
 
 const controvColor = c => c === 1 ? "#EF9F27" : c === 2 ? "#E27D27" : "#E24B4A";
 
 export default function ActionsTab({
   act,
+  week,
   actionsSubTab, setActionsSubTab,
   selectedEO, setSelectedEO,
   eoChoice, setEoChoice,
@@ -33,14 +41,30 @@ export default function ActionsTab({
   const oppIds = OPPOSITION_FACTIONS[pp] || [];
 
   const eo = selectedEO ? EXECUTIVE_ORDERS.find(e => e.id === selectedEO) : null;
-  const previewReactions = eo
-    ? (eo.choiceType === "declassify" && eoChoice.declassifyId
-      ? (eo.choices.find(c => c.id === eoChoice.declassifyId)?.factionOverride || eo.factionReactions)
-      : eo.factionReactions)
+  const eoExtraData = eo ? {
+    targetCountryId: eoChoice.countryId,
+    factionOverride: eo?.choiceType === "declassify" && eoChoice.declassifyId
+      ? eo.choices.find(c => c.id === eoChoice.declassifyId)?.factionOverride
+      : undefined,
+    declassifyId: eoChoice.declassifyId,
+    refugeeCap: eoChoice.refugeeCap ?? DEFAULT_REFUGEE_CAP,
+    drillingRegions: eoChoice.drillingRegions || [],
+  } : null;
+  const eoOutcome = eo ? buildExecutiveOrderOutcome(eo, eoExtraData) : null;
+  const previewReactions = eoOutcome?.factionReactions || null;
+  const lastIssuedOrder = eo
+    ? activeOrders
+        .filter(order => order.id === eo.id)
+        .sort((a, b) => b.issuedWeek - a.issuedWeek)[0]
     : null;
+  const repeatableCooldownRemaining = eo?.repeatable && lastIssuedOrder
+    ? Math.max(0, lastIssuedOrder.issuedWeek + 52 - week)
+    : 0;
   const canIssue = eo && act + 2 <= 4 && (eo.repeatable || !(eoIssuedCount[eo.id] > 0))
+    && repeatableCooldownRemaining === 0
     && (eo.choiceType !== "country" || eoChoice.countryId)
-    && (eo.choiceType !== "declassify" || eoChoice.declassifyId);
+    && (eo.choiceType !== "declassify" || eoChoice.declassifyId)
+    && (eo.choiceType !== "drilling_regions" || (eoChoice.drillingRegions || []).length > 0);
 
   const disabledStates = useMemo(() => {
     if (!visitType) return new Set();
@@ -107,20 +131,20 @@ export default function ActionsTab({
           const isSelected = selectedEO === e.id;
           const issued = eoIssuedCount[e.id] || 0;
           const exhausted = !e.repeatable && issued > 0;
-          const cc = controvColor(e.controversy);
+          const cooldownRemaining = e.repeatable
+            ? Math.max(
+                0,
+                ((activeOrders.filter(order => order.id === e.id).sort((a, b) => b.issuedWeek - a.issuedWeek)[0]?.issuedWeek ?? -52) + 52) - week
+              )
+            : 0;
           return (
-            <button key={e.id} onClick={() => setSelectedEO(isSelected ? null : e.id)} disabled={exhausted} style={{
+            <button key={e.id} onClick={() => setSelectedEO(isSelected ? null : e.id)} disabled={exhausted || cooldownRemaining > 0} style={{
               textAlign: "left", padding: "9px 11px", borderRadius: "var(--border-radius-lg)",
-              border: isSelected ? `2px solid ${cc}` : "0.5px solid var(--color-border-tertiary)",
+              border: isSelected ? "1px solid var(--color-border-secondary)" : "0.5px solid var(--color-border-tertiary)",
               background: isSelected ? "var(--color-background-secondary)" : exhausted ? "var(--color-background-tertiary)" : "var(--color-background-primary)",
-              cursor: exhausted ? "not-allowed" : "pointer", opacity: exhausted ? 0.6 : 1,
+              cursor: exhausted || cooldownRemaining > 0 ? "not-allowed" : "pointer", opacity: exhausted || cooldownRemaining > 0 ? 0.6 : 1,
             }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 3 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-primary)", lineHeight: 1.3 }}>{e.name}</div>
-                <div style={{ display: "flex", gap: 1, flexShrink: 0, marginLeft: 4 }}>
-                  {[1, 2, 3].map(n => <div key={n} style={{ width: 6, height: 6, borderRadius: "50%", background: n <= e.controversy ? cc : "var(--color-border-tertiary)" }} />)}
-                </div>
-              </div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-primary)", lineHeight: 1.3, marginBottom: 3 }}>{e.name}</div>
               <div style={{ fontSize: 9, color: "var(--color-text-secondary)", marginBottom: 4 }}>{e.category}</div>
               {Object.entries(e.effects || {}).filter(([, v]) => v !== 0).map(([k, v]) => (
                 <div key={k} style={{ fontSize: 9, color: v > 0 ? "#1D9E75" : "#E24B4A" }}>
@@ -134,6 +158,7 @@ export default function ActionsTab({
               ))}
               <div style={{ display: "flex", gap: 3, marginTop: 4, flexWrap: "wrap" }}>
                 {e.repeatable && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 4, background: "#2563eb22", color: "#2563eb" }}>Repeatable{issued > 0 ? ` ×${issued}` : ""}</span>}
+                {cooldownRemaining > 0 && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 4, background: "#EF9F2722", color: "#EF9F27" }}>Cooldown {cooldownRemaining}w</span>}
                 {e.reversible && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 4, background: "#1D9E7522", color: "#1D9E75" }}>Reversible</span>}
                 {exhausted && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 4, background: "#E24B4A22", color: "#E24B4A" }}>Issued</span>}
               </div>
@@ -143,7 +168,7 @@ export default function ActionsTab({
       </div>
 
       {eo && (
-        <div style={{ padding: "12px 14px", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-lg)", marginBottom: 12, borderLeft: `3px solid ${controvColor(eo.controversy)}` }}>
+        <div style={{ padding: "12px 14px", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-lg)", marginBottom: 12, border: "0.5px solid var(--color-border-tertiary)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{eo.name}</div>
@@ -156,18 +181,18 @@ export default function ActionsTab({
           </div>
           <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 8, lineHeight: 1.5 }}>{eo.desc}</div>
 
-          {(Object.keys(eo.effects || {}).length > 0 || eo.delayedEffects) && (
+          {(Object.keys(eoOutcome?.effects || {}).length > 0 || eoOutcome?.delayedEffects) && (
             <div style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 3 }}>Effects:</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {Object.entries(eo.effects || {}).filter(([, v]) => v !== 0).map(([k, v]) => (
+                {Object.entries(eoOutcome?.effects || {}).filter(([, v]) => v !== 0).map(([k, v]) => (
                   <span key={k} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: v > 0 ? "#1D9E7522" : "#E24B4A22", color: v > 0 ? "#1D9E75" : "#E24B4A" }}>
                     {v > 0 ? "+" : ""}{STAT_LABELS[k] || k}: {typeof v === "number" && Math.abs(v) < 1 ? (v > 0 ? "+" : "") + (v * 100).toFixed(0) + "%" : v}
                   </span>
                 ))}
-                {eo.delayedEffects && Object.entries(eo.delayedEffects.effects).map(([k, v]) => (
+                {eoOutcome?.delayedEffects && Object.entries(eoOutcome.delayedEffects.effects).map(([k, v]) => (
                   <span key={k} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: v > 0 ? "#1D9E7511" : "#E24B4A11", color: v > 0 ? "#1D9E75" : "#E24B4A", border: "1px dashed", borderColor: v > 0 ? "#1D9E75" : "#E24B4A" }}>
-                    {v > 0 ? "+" : ""}{STAT_LABELS[k] || k}: {(v * 100).toFixed(0)}% (in {eo.delayedEffects.weeks} wks)
+                    {v > 0 ? "+" : ""}{STAT_LABELS[k] || k}: {(v * 100).toFixed(0)}% (in {eoOutcome.delayedEffects.weeks} wks)
                   </span>
                 ))}
               </div>
@@ -177,13 +202,13 @@ export default function ActionsTab({
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontSize: 10, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 3 }}>Faction reactions:</div>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {Object.entries(previewReactions).map(([fid, v]) => {
+              {Object.entries(previewReactions || {}).map(([fid, v]) => {
                 const f = cg?.factions[fid]; if (!f) return null;
                 const rel = Math.round(v * 8); const isOpp = oppIds.includes(fid);
                 return <span key={fid} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: rel > 0 ? "#1D9E7522" : "#E24B4A22", color: rel > 0 ? "#1D9E75" : "#E24B4A" }}>{f.name.split(" ")[0]}: {rel > 0 ? "+" : ""}{rel} rel{isOpp ? " (opp)" : ""}</span>;
               })}
-              {oppIds.filter(fid => previewReactions[fid] == null || previewReactions[fid] >= 0).map(fid => {
-                const f = cg?.factions[fid]; if (!f || previewReactions[fid] != null) return null;
+              {oppIds.filter(fid => !previewReactions || previewReactions[fid] == null || previewReactions[fid] >= 0).map(fid => {
+                const f = cg?.factions[fid]; if (!f || (previewReactions && previewReactions[fid] != null)) return null;
                 const pen = -(eo.controversy * 6);
                 return <span key={fid} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: "#E24B4A22", color: "#E24B4A" }}>{f.name.split(" ")[0]}: {pen} rel (opp)</span>;
               })}
@@ -207,6 +232,69 @@ export default function ActionsTab({
             );
           })()}
 
+          {eo.choiceType === "refugee_cap" && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+                <div style={{ fontSize: 10, fontWeight: 500, color: "var(--color-text-primary)" }}>Annual refugee admissions cap</div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                  {(eoChoice.refugeeCap ?? DEFAULT_REFUGEE_CAP).toLocaleString()}
+                </div>
+              </div>
+              <input
+                type="range"
+                min={MIN_REFUGEE_CAP}
+                max={MAX_REFUGEE_CAP}
+                step="2500"
+                value={eoChoice.refugeeCap ?? DEFAULT_REFUGEE_CAP}
+                onChange={e => setEoChoice(prev => ({ ...prev, refugeeCap: Number(e.target.value) }))}
+                style={{ width: "100%", accentColor: controvColor(eo.controversy), marginBottom: 4 }}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--color-text-secondary)" }}>
+                <span>{MIN_REFUGEE_CAP.toLocaleString()}</span>
+                <span>Default {DEFAULT_REFUGEE_CAP.toLocaleString()}</span>
+                <span>{MAX_REFUGEE_CAP.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+
+          {eo.choiceType === "drilling_regions" && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 4 }}>Open drilling in:</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 4 }}>
+                {DRILLING_REGION_OPTIONS.map(option => {
+                  const checked = (eoChoice.drillingRegions || []).includes(option.id);
+                  return (
+                    <label key={option.id} style={{
+                      display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: "var(--border-radius-md)",
+                      border: checked ? "1px solid var(--color-border-info)" : "0.5px solid var(--color-border-tertiary)",
+                      background: checked ? "var(--color-background-primary)" : "transparent",
+                      fontSize: 10, color: "var(--color-text-primary)", cursor: "pointer",
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setEoChoice(prev => {
+                          const current = prev.drillingRegions || [];
+                          return {
+                            ...prev,
+                            drillingRegions: checked
+                              ? current.filter(id => id !== option.id)
+                              : [...current, option.id],
+                          };
+                        })}
+                        style={{ accentColor: controvColor(eo.controversy) }}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 9, color: "var(--color-text-secondary)", marginTop: 4 }}>
+                Each selected region adds a 6% gas-price decrease after 52 weeks.
+              </div>
+            </div>
+          )}
+
           {eo.choiceType === "declassify" && (
             <div style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 4 }}>What to declassify:</div>
@@ -226,19 +314,21 @@ export default function ActionsTab({
             </div>
           )}
 
-          <button onClick={() => onIssueEO(eo, {
-            targetCountryId: eoChoice.countryId,
-            factionOverride: eo.choiceType === "declassify" && eoChoice.declassifyId
-              ? eo.choices.find(c => c.id === eoChoice.declassifyId)?.factionOverride
-              : undefined,
-            declassifyId: eoChoice.declassifyId,
-          })} disabled={!canIssue} style={{
+          <button onClick={() => onIssueEO(eo, eoExtraData)} disabled={!canIssue} style={{
             padding: "6px 16px", fontSize: 11, fontWeight: 500, border: "none", borderRadius: "var(--border-radius-md)",
             background: !canIssue ? "var(--color-background-tertiary)" : controvColor(eo.controversy),
             color: !canIssue ? "var(--color-text-secondary)" : "#fff",
             cursor: !canIssue ? "not-allowed" : "pointer",
           }}>
-            {act + 2 > 4 ? "Not enough actions" : !eo.repeatable && eoIssuedCount[eo.id] > 0 ? "Already issued" : "Sign Executive Order (2 actions)"}
+            {act + 2 > 4
+              ? "Not enough actions"
+              : repeatableCooldownRemaining > 0
+                ? `Available in ${repeatableCooldownRemaining} weeks`
+              : !eo.repeatable && eoIssuedCount[eo.id] > 0
+                ? "Already issued"
+                : eo.choiceType === "drilling_regions" && (eoChoice.drillingRegions || []).length === 0
+                  ? "Select at least one region"
+                  : "Sign Executive Order (2 actions)"}
           </button>
         </div>
       )}
@@ -249,14 +339,40 @@ export default function ActionsTab({
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {activeOrders.filter(o => o.active).map((o, i) => {
               const eoData = EXECUTIVE_ORDERS.find(e => e.id === o.id);
+              const rescindCooldownRemaining = Math.max(0, o.issuedWeek + 12 - week);
+              const detail = o.choiceData?.declassifyId
+                ? eoData?.choices?.find(c => c.id === o.choiceData.declassifyId)?.label
+                : o.id === "refugee_cap" && o.choiceData?.refugeeCap
+                  ? `Cap ${Number(o.choiceData.refugeeCap).toLocaleString()}`
+                  : o.id === "drilling_permits" && o.choiceData?.drillingRegions?.length
+                    ? DRILLING_REGION_OPTIONS
+                        .filter(option => o.choiceData.drillingRegions.includes(option.id))
+                        .map(option => option.label)
+                        .join(", ")
+                    : "";
               return (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", borderRadius: "var(--border-radius-md)", background: "var(--color-background-secondary)", border: "0.5px solid var(--color-border-tertiary)" }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)" }}>{o.name}</div>
-                    <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>Signed Wk {o.issuedWeek}{o.choiceData?.declassifyId ? ` · ${eoData?.choices?.find(c => c.id === o.choiceData.declassifyId)?.label}` : ""}</div>
+                    <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>Signed Wk {o.issuedWeek}{detail ? ` · ${detail}` : ""}</div>
                   </div>
                   {eoData?.reversible && (
-                    <button onClick={() => onRescindEO(o.id)} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, border: "0.5px solid #E24B4A", background: "transparent", color: "#E24B4A", cursor: "pointer" }}>Rescind</button>
+                    <button
+                      onClick={() => onRescindEO(o.id)}
+                      disabled={rescindCooldownRemaining > 0}
+                      style={{
+                        fontSize: 10,
+                        padding: "3px 8px",
+                        borderRadius: 4,
+                        border: "0.5px solid #E24B4A",
+                        background: "transparent",
+                        color: rescindCooldownRemaining > 0 ? "var(--color-text-secondary)" : "#E24B4A",
+                        cursor: rescindCooldownRemaining > 0 ? "not-allowed" : "pointer",
+                        opacity: rescindCooldownRemaining > 0 ? 0.6 : 1,
+                      }}
+                    >
+                      {rescindCooldownRemaining > 0 ? `${rescindCooldownRemaining}w` : "Rescind"}
+                    </button>
                   )}
                 </div>
               );

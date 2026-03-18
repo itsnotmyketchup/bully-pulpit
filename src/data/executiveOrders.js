@@ -3,6 +3,86 @@
 // stateEffects: various filter types for which states get approval boosts
 // requiresChoice: needs extra data before issuing (country picker or sub-choice)
 
+export const DEFAULT_REFUGEE_CAP = 70000;
+export const MIN_REFUGEE_CAP = 7500;
+export const MAX_REFUGEE_CAP = 125000;
+
+export const DRILLING_REGION_OPTIONS = [
+  { id: "gulf", label: "Gulf of Mexico" },
+  { id: "bering", label: "Bering Sea" },
+  { id: "atlantic", label: "Atlantic Coast" },
+  { id: "pacific", label: "Pacific Coast" },
+];
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+export function getRefugeeCapConfig(rawCap) {
+  const cap = clamp(Number(rawCap) || DEFAULT_REFUGEE_CAP, MIN_REFUGEE_CAP, MAX_REFUGEE_CAP);
+  const mood = (cap - DEFAULT_REFUGEE_CAP) / (DEFAULT_REFUGEE_CAP - MIN_REFUGEE_CAP);
+
+  return {
+    cap,
+    effects: { immigrationRate: Number((mood * 0.05).toFixed(3)) },
+    factionReactions: {
+      freedom: Number((-0.55 * mood).toFixed(3)),
+      trad_con: Number((-0.45 * mood).toFixed(3)),
+      mod_rep: Number((-0.22 * mood).toFixed(3)),
+      blue_dog: Number((0.12 * mood).toFixed(3)),
+      mod_dem: Number((0.32 * mood).toFixed(3)),
+      prog: Number((0.62 * mood).toFixed(3)),
+    },
+  };
+}
+
+export function getDrillingPermitsConfig(rawRegions = []) {
+  const selectedRegions = DRILLING_REGION_OPTIONS
+    .map(option => option.id)
+    .filter((id, index, arr) => rawRegions.includes(id) && arr.indexOf(id) === index);
+
+  return {
+    selectedRegions,
+    delayedEffects: selectedRegions.length > 0
+      ? { weeks: 52, effects: { gasPrice: Number((-0.06 * selectedRegions.length).toFixed(3)) } }
+      : null,
+    stateEffects: {
+      drillingRegions: selectedRegions,
+      weight: 0.015,
+    },
+  };
+}
+
+export function buildExecutiveOrderOutcome(order, extraData = {}) {
+  if (!order) return null;
+
+  const outcome = {
+    effects: { ...(order.effects || {}) },
+    delayedEffects: order.delayedEffects
+      ? {
+          weeks: order.delayedEffects.weeks,
+          effects: { ...(order.delayedEffects.effects || {}) },
+        }
+      : null,
+    factionReactions: { ...(extraData.factionOverride || order.factionReactions || {}) },
+    stateEffects: order.stateEffects ? { ...order.stateEffects } : null,
+  };
+
+  if (order.id === "refugee_cap") {
+    const config = getRefugeeCapConfig(extraData.refugeeCap);
+    outcome.effects = config.effects;
+    outcome.factionReactions = config.factionReactions;
+    outcome.meta = { refugeeCap: config.cap };
+  }
+
+  if (order.id === "drilling_permits") {
+    const config = getDrillingPermitsConfig(extraData.drillingRegions);
+    outcome.delayedEffects = config.delayedEffects;
+    outcome.stateEffects = config.stateEffects;
+    outcome.meta = { drillingRegions: config.selectedRegions };
+  }
+
+  return outcome;
+}
+
 export const EXECUTIVE_ORDERS = [
   {
     id: "hiring_freeze",
@@ -16,6 +96,21 @@ export const EXECUTIVE_ORDERS = [
     approvalEffect: 0,
     factionReactions: { freedom: 0.5, trad_con: 0.3, mod_rep: 0.15, blue_dog: 0.1, mod_dem: -0.2, prog: -0.4 },
     stateEffects: { economy: ["government"], weight: -0.015 },
+  },
+  {
+    id: "refugee_cap",
+    name: "Refugee Cap Adjustment",
+    desc: "Set the annual refugee admissions ceiling. Lower caps marginally reduce overall immigration and reassure restrictionists; higher caps improve humanitarian standing but trigger backlash from immigration hawks.",
+    category: "Immigration",
+    controversy: 2,
+    repeatable: true,
+    reversible: false,
+    effects: {},
+    approvalEffect: 0,
+    factionReactions: {},
+    stateEffects: null,
+    requiresChoice: true,
+    choiceType: "refugee_cap",
   },
   {
     id: "immigration_enforcement",
@@ -70,6 +165,19 @@ export const EXECUTIVE_ORDERS = [
     stateEffects: { minUrbanization: 0.8, weight: 0.02 },
   },
   {
+    id: "buy_american",
+    name: "Tighten Buy American Rules",
+    desc: "Tighten domestic-content requirements for federal procurement. Slightly narrows the trade deficit and helps industrial supply chains, but modestly drags on near-term growth through higher input costs.",
+    category: "Trade",
+    controversy: 1,
+    repeatable: false,
+    reversible: true,
+    effects: { tradeBalance: 1.8, gdpGrowth: -0.04 },
+    approvalEffect: 0,
+    factionReactions: { blue_dog: 0.2, mod_rep: 0.18, trad_con: 0.1, mod_dem: 0.12, prog: 0.08, freedom: -0.08 },
+    stateEffects: { economy: ["manufacturing"], weight: 0.015 },
+  },
+  {
     id: "sanctions",
     name: "Economic Sanctions",
     desc: "Impose targeted economic and political sanctions on a hostile or adversarial nation. Big diplomatic signal — draws hawkish support but may provoke retaliation.",
@@ -114,7 +222,7 @@ export const EXECUTIVE_ORDERS = [
   {
     id: "drilling_permits",
     name: "Federal Lands Drilling Permits",
-    desc: "Open federal lands and offshore zones to expanded oil and gas exploration. Delayed price relief arrives in 4 weeks, but draws immediate environmentalist backlash.",
+    desc: "Open federal lands and offshore zones to expanded oil and gas exploration. Pick where to expand leasing; each region adds delayed price relief over the next year, but environmental backlash lands immediately.",
     category: "Energy",
     controversy: 2,
     repeatable: false,
@@ -122,8 +230,22 @@ export const EXECUTIVE_ORDERS = [
     effects: {},
     approvalEffect: 0,
     factionReactions: { freedom: 0.5, trad_con: 0.3, mod_rep: 0.3, blue_dog: -0.1, mod_dem: -0.2, prog: -0.7 },
-    stateEffects: { economy: ["energy"], weight: 0.03 },
-    delayedEffects: { weeks: 4, effects: { gasPrice: -0.25 } },
+    stateEffects: null,
+    requiresChoice: true,
+    choiceType: "drilling_regions",
+  },
+  {
+    id: "cybersecurity_strategy",
+    name: "National Cyber Security Strategy",
+    desc: "Direct agencies to harden federal networks, coordinate with the private sector, and expand cyber preparedness standards. Broadly bipartisan, low-drama, and effective at reducing major breach risk.",
+    category: "Security",
+    controversy: 1,
+    repeatable: false,
+    reversible: true,
+    effects: {},
+    approvalEffect: 0,
+    factionReactions: { mod_rep: 0.18, mod_dem: 0.18, blue_dog: 0.15, trad_con: 0.12, prog: 0.12, freedom: 0.05 },
+    stateEffects: null,
   },
   {
     id: "declassification",
