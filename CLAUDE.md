@@ -1,154 +1,203 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file gives future agents a compact, code-accurate map of the repository.
 
 ## Commands
 
 ```bash
-npm run dev       # Start dev server (port 5173, HMR enabled)
-npm run build     # Production build → /dist
-npm run preview   # Serve production build (port 4173)
-npm run lint      # Run ESLint
+npm run dev        # Vite dev server on 5173
+npm run build      # Production build into dist/
+npm run preview    # Preview build on 4173
+npm run lint       # ESLint
+npm test           # Vitest once
+npm run test:watch # Vitest watch mode
 ```
 
-No test suite exists. Verify changes visually via the dev server.
+Current test suite exists and passes: 8 files, 38 tests.
 
-## Tech Stack
+## Stack
 
-- **React 19** (functional components + hooks) with **Vite 8**, plain JavaScript (no TypeScript)
-- `react-simple-maps` + `topojson-client` for interactive state/world maps
-- `prop-types` for runtime prop validation
-- `@vercel/analytics` + `@vercel/speed-insights` for production telemetry
-- All state in `App.jsx` via `useState` — no Redux or Context API
+- React 19 + Vite 8
+- Plain JavaScript, no TypeScript
+- Vitest for unit tests
+- `react-simple-maps` for the world map
+- Vercel Analytics + Speed Insights in `src/main.jsx`
 
-## Architecture
+## Repo Shape
 
-### State Management
-
-All game state lives in `App.jsx` (~1,620 lines). Props flow down; callbacks flow up. Key state variables:
-
-| Variable | Purpose |
-|---|---|
-| `week` | Game time (1–∞, 52 weeks/year) |
-| `stats` / `prev` / `hist` | Game metrics (GDP, unemployment, etc.) + history |
-| `cg` | Congress object: factions, seats, leaders |
-| `passedLegislation` | `{ [billId]: weekPassed }` dict |
-| `executiveOverreach` | Overreach meter (0–100, starts at 20) |
-| `activeOrders` | `[{ id, issuedWeek, active, choiceData }]` issued EOs |
-| `activeBill` | `{ act, stage, fails, turnsInStage, consecutiveFails }` |
-| `pendingChainEvents` | `[{ triggerAtWeek, event }]` for follow-up events |
-| `usedEv` | Set of event IDs to prevent re-triggers |
-| `countries` | Array of country objects with `relationship`, `trust`, `status` |
-| `surrogates` | Two surrogate aides with task assignments and cooldowns |
-| `promises` | `[{ billId, factionId, madeWeek, deadline }]` faction promises |
-| `pendingNegotiation` | Active amendment negotiation state |
-| `reconciliationCooldown` | Week when budget reconciliation is available again |
-| `engagement` | International engagement metric (0–50, starts at 25) |
-| `powerProjection` | Military/diplomatic power projection metric (0–50, starts at 40) |
-| `globalTension` | Global crisis/conflict tension metric (0–50, starts at 25) |
-| `diplomacyThresholds` | Tracks `tensionHigh`, `engagementLow`, `projectionWeak` boolean thresholds |
-
-Key functions in `App.jsx`:
-- `advance()` — 4-week tick: decays overreach, checks promises, applies faction penalties, processes chains, generates event
-- `propose(action)` — Introduces a bill into committee stage
-- `issueEO(eo, extraData)` — Issues EO, increases overreach by `3 + 5×controversy`
-- `signBill()` — Signs pending bill, decreases overreach by 3, tracks in `passedLegislation`
-- `vetoBill()` — Vetoes pending bill
-- `acceptAmendment(amendment)` — Accepts amendment during negotiation, decreases overreach by 2
-- `walkAwayNegotiation()` — Abandons amendment negotiation
-- `rescindEO(orderId)` — Rescinds an active executive order
-- `makePromise(factionId, billId, relBoost)` — Promises a faction to pass a bill
-- `confirmPromise()` — Confirms the pending promise
-- `assignSurrogate(surrogateId, task)` — Assigns surrogate to a task (campaign, lobby, coach)
-- `doVisit()` — Presidential state visit
-- `doForeignVisit(countryId, isSurrogate, surrogateId)` — Foreign country visit
-- `doSpeech(pos)` — Presidential speech on a topic/position
-- `submitBudget()` — Submits the budget draft as a reconciliation bill
-- `handleEventChoice(choice)` — Applies effects, schedules chain events
-
-### Directory Layout
-
-```
+```text
 src/
-├── App.jsx                  # Root component, all state orchestration (~1,620 lines)
-├── assets/                  # Static assets (images, etc.)
-├── components/
-│   ├── tabs/                # 7 main tabs (Overview, Congress, Party, Policy, Actions, Diplomacy, Log)
-│   ├── screens/             # Full-screen states (Landing, Setup, Crisis)
-│   ├── modals/              # Dialog overlays (Budget, SignBill, EoResult, ForeignVisit, Promise, BrokenPromise, Inauguration, Midterm, SurrogateDone)
-│   └── *.jsx                # Shared sub-components (TileMap, VisitMap, CongressBar, Hemicycle, etc.)
-├── data/
-│   ├── constants.js         # Tab names, faction alliances, surrogate names, country faction effects
-│   ├── countries.js         # 17 country definitions with initial relationship/trust/status
-│   ├── events.js            # generateDynamicEvents() + all event definitions
-│   ├── executiveOrders.js   # EO definitions (controversy, effects, choices, delayedEffects)
-│   ├── factions.js          # 6 faction definitions (name, color, goals, policy priorities)
-│   ├── policies.js          # Bills, BILL_STAGES, BILL_LOCKS, BILL_AMENDMENTS
-│   ├── speeches.js          # 7 speech topics × 4 intensity positions
-│   ├── states.js            # 50 state data with demographics and regional tags
-│   ├── stats.js             # 15 game metrics (GDP, unemployment, etc.) + metadata
-│   ├── usMapPaths.js        # SVG path data for US tile map
-│   └── visits.js            # 12+ visit types with effects and restrictions
-├── logic/
-│   ├── billProgression.js   # calcStageAdvance(): vote calculation, filibuster rules, faction logic
-│   ├── calcStateApproval.js # Per-state approval from stats and demographics
-│   ├── electionCalc.js      # Election mechanics: enthusiasm, seat changes, polling projection, midterm results
-│   ├── generateCongress.js  # Generate Congress factions, seats, leaders
-│   └── willPassCongress.js  # Simple pass likelihood prediction
-├── systems/
-│   └── budgetCalc.js        # computeBudgetReactions(): faction reactions to budget changes
-└── utils/
-    ├── clamp.js             # clamp(), clampRel(), clampUni()
-    ├── countryStatus.js     # Derive diplomatic status string from relationship score
-    └── makeSurrogates.js    # Generate two named surrogate aides
+  App.jsx                # Main game orchestrator and state owner
+  components/
+    screens/             # Landing/setup/full-screen overlays
+    tabs/                # Main gameplay tabs
+    modals/              # Result / choice / confirmation overlays
+  data/                  # Mostly static content definitions
+  logic/                 # Pure-ish simulation helpers
+  systems/               # Cross-cutting systems (currently budget)
+  utils/                 # Small helpers
 ```
 
-### Game Systems
+## Architecture Summary
 
-**Factions** — 3 Democratic (Progressive Caucus, Moderate Democrats, Blue Dog Coalition) + 3 Republican (Freedom Caucus, Moderate Republicans, Traditional Conservatives). Relationships 5–100. Event `factionEffects` values are multiplied by **8×** during application.
+`src/App.jsx` is the application shell and simulation engine. Almost all durable game state lives here and is pushed down through props. There is no global store, reducer, or context layer.
 
-**Executive Overreach** — Increases per EO (`3 + 5×controversy`), decreases per bill signed (−3), per amendment accepted (−2). Decays −3/week (low/medium range) or −5/week (high range). Every 8 weeks applies faction penalties scaled by overreach level.
+The repo has four practical layers:
 
-**Bills** — Flow: Introduce → Committee → Chamber 1 → Chamber 2 → Reconciliation → Sign/Veto. Tracked in `passedLegislation`. Failed bills enter a cooldown before retry. `BILL_LOCKS` prevent certain bills while others are active.
+1. `data/`
+   Static authored content: bills, executive orders, events, speeches, visits, factions, countries, states, base stats.
+2. `logic/` and `systems/`
+   Calculation modules used by `App.jsx` for economy, elections, bill progression, state approval, appointments, and budgets.
+3. `App.jsx`
+   Orchestrates turn flow, mutates state, wires content definitions into simulation rules, and decides when tabs/modals/events appear.
+4. `components/`
+   Mostly presentation. Tabs render slices of state and call back into `App.jsx`.
 
-**Amendments** — After a vote fails, `pendingNegotiation` opens with available amendments. Accepting costs −2 overreach and boosts the relevant faction; walking away abandons the bill stage.
+## Control Flow
 
-**Promises** — `makePromise()` boosts a faction's relationship immediately in exchange for a deadline to pass a specified bill. Breaking a promise triggers `brokenPromises` notifications and relationship penalties.
+### Startup
 
-**Surrogates** — Two named aides (Senior Advisor, Campaign Director) assignable to tasks: `campaign` (state approval boost), `lobby` (faction relationship boost), `coach` (coaching cooldown reset). Each has an independent cooldown.
+- `src/main.jsx` renders `App` plus Vercel telemetry.
+- `App.jsx` begins on `screen === 0` (landing), then `screen === 1` (setup), then game screen.
+- `start()` in `App.jsx` resets all state, generates Congress, initializes macro state, seeds logs/history, and creates surrogates.
 
-**Speeches** — 7 topics (immigration, economy, healthcare, etc.) × 4 intensity positions. Each position has approval and faction effects. Delivered via `doSpeech(pos)`.
+### Core loop
 
-**Visits** — 12 domestic visit types with regional/state restrictions and faction reactions. Presidential state visits via `doVisit()`.
+The player spends up to 4 actions per week. Major actions cost:
 
-**Diplomacy** — 17 countries with `relationship` (0–100), `trust`, and `status` (ally/neutral/rival/hostile). Visits boost relationship; some EOs affect bilateral relations. `COUNTRY_FACTION_EFFECTS` maps country interactions to domestic faction reactions. Three global metrics tracked: `engagement` (international cooperation, 0–50), `powerProjection` (military/diplomatic influence, 0–50), `globalTension` (crisis/conflict level, 0–50). `diplomacyThresholds` fires warnings when these cross key thresholds.
+- Bills: 2
+- Executive orders: 2
+- Domestic visits / speeches / surrogate assignments: 1
+- Presidential foreign visits: 2 in the Americas, otherwise 3
 
-**Elections** — `electionCalc.js` handles midterm and presidential election logic: `computeEnthusiasms()` (base + modifier per faction), `computeSeatChanges()` (seat deltas based on approval/enthusiasm), `computePollingProjection()` (polling with noise), `buildMidtermResults()` (full midterm summary). Results shown via `MidtermModal`. Congress is updated via `pendingCongressUpdate`.
+`advance()` in `App.jsx` is the weekly tick and the most important function in the codebase. It performs, in rough order:
 
-**Budget** — `budgetDraft` holds tax rate and spending allocations. `computeBudgetReactions()` previews faction responses. `submitBudget()` converts draft into a reconciliation bill (one per `reconciliationCooldown` period).
+1. Apply inauguration/pending post-election Congress updates at new-year week 1.
+2. Advance macroeconomy via `logic/macroEconomy.js`.
+3. Update births/deaths/population and drift stats.
+4. Apply queued delayed effects from prior laws/orders/events.
+5. Start campaign season at year-even week 28.
+6. Advance any active bill through Congress using `calcStageAdvance()`.
+7. Apply unity/trust/relationship drift, leader replacement, negotiation penalties, and executive-overreach penalties.
+8. Progress appointment pipelines.
+9. Recompute stats/history/state approval.
+10. Resolve promises and surrogate task completion.
+11. Trigger elections at year-even week 44, but apply seat updates next year week 1.
+12. Decay executive overreach.
+13. Update diplomacy metrics: engagement, power projection, global tension.
+14. Possibly create a Fed vacancy event.
+15. Generate and fire events:
+    - chain events first
+    - immediate events next
+    - normal/special events only on 4-week cadence
 
-**Events** — `generateDynamicEvents()` in `data/events.js` builds the event pool each 4-week tick. Events can be gated by season, triggered 4–52 weeks after a bill passes (`triggeredBy`), fired if a bill was never passed (`triggeredByAbsence`), or chained via `schedulesChain` (follow-up event after min/max delay).
+### Event cadence
 
-**Season Calculation**: `wiy = ((week - 1) % 52) + 1`; seasons: Winter 1–8 & 48–52, Spring 9–21, Summer 22–35, Autumn 36–47.
+- The simulation advances weekly.
+- Event generation only runs on `nw % 4 === 0` for normal/special events, except immediate and chain events.
+- Campaign season begins 16 weeks before elections.
+- Elections happen in even-numbered years at week 44.
+- New Congress is sworn in at week 1 of the following year.
 
-### Event Definition Pattern
+## State Domains
 
-```js
-{
-  id: "event_name",
-  name: "Event Title",
-  season: "summer",              // optional gate
-  triggeredBy: "bill_id",        // optional: fires 4–52 weeks after bill passes
-  triggeredByAbsence: "bill_id", // optional: fires if bill never passed
-  effects: { approvalRating: ±n },
-  choices: [{
-    text: "Choice A",
-    effects: { approvalRating: ±n },
-    factionEffects: { faction_id: ±n }, // multiplied by 8× on application
-    schedulesChain: {
-      minDelay: 4, maxDelay: 8,
-      outcomes: [{ probability: 0.5, event: FOLLOW_UP_EVENT_OBJECT }]
-    }
-  }]
-}
-```
+Useful buckets inside `App.jsx`:
+
+- Session/UI state: `screen`, active tab, hover state, modal visibility, preview state.
+- Core simulation state: `week`, `act`, `stats`, `macroState`, `prev`, `hist`, `log`.
+- Congress/political state: `cg`, `factionHist`, `activeBill`, `pendingNegotiation`, `pendingSignature`, `billRecord`, `billLikelihood`, `billFactionVotes`.
+- Promise/surrogate state: `promises`, `promiseOffers`, `pendingPromise`, `surrogates`, `surrogateUI`, `coachCooldown`.
+- Executive power state: `activeOrders`, `eoIssuedCount`, `executiveOverreach`, `overreachLastIncreasedWeek`, `overreachLowSinceWeek`.
+- Diplomacy state: `countries`, `visitedCountries`, `engagement`, `powerProjection`, `globalTension`, `countryStatusSnapshot`, `diplomacyThresholds`.
+- Election state: `campaignSeasonStarted`, `campaignActivity`, `pollingNoise`, `pendingCongressUpdate`, `midtermResults`, `congressHistory`.
+- Appointment state: `cabinet`, `pendingAppointment`, `confirmationHistory`.
+
+## Key Modules
+
+### `src/logic/macroEconomy.js`
+
+- Owns the deeper macro model and Fed behavior.
+- `deriveVisibleStats()` is the bridge from hidden macro state to UI-visible stats.
+- `advanceMacroEconomy()` is called every week from `advance()`.
+- `applyMacroEffects()` and `adaptLegacyEffectsToMacroImpulses()` let older content definitions still influence the new macro model.
+
+### `src/logic/billProgression.js`
+
+- Resolves support for the current bill stage.
+- Uses faction reaction, relationship, trust, and unity.
+- Chamber votes require a 60-vote Senate threshold unless the bill is reconciliation.
+
+### `src/logic/electionCalc.js`
+
+- Computes enthusiasm, seat swings, history snapshots, and modal payloads.
+- Election results are staged, not applied immediately.
+
+### `src/data/events.js`
+
+- Builds event pools dynamically from current stats, approvals, legislation, week, and countries.
+- Supports `normal`, `special`, `immediate`, and chain events.
+- Many events are generated with random IDs, so event uniqueness is sometimes runtime-generated rather than entirely static.
+
+## Component Boundaries
+
+Tabs are mostly renderers, not business-logic owners:
+
+- `OverviewTab`: dashboards, map, macro/fiscal display
+- `CongressTab`: faction panels, history, legislation record, confirmations
+- `PartyTab`: party management and promises
+- `CabinetTab`: president/VP/cabinet/Fed and appointment workflow UI
+- `PolicyTab`: bill selection, reconciliation entry point, amendment negotiation UI
+- `ActionsTab`: executive orders, speeches, domestic visits
+- `DiplomacyTab`: world map, international metrics, foreign visit UI
+- `LogTab`: chronological text log
+
+Most gameplay rules still live in `App.jsx`, even when the initiating UI sits in a tab.
+
+## Content Authoring Rules
+
+When changing content, prefer editing data files over hard-coding more branches in `App.jsx`.
+
+- Bills live in `src/data/policies.js`
+- Executive orders live in `src/data/executiveOrders.js`
+- Events live in `src/data/events.js`
+- Speeches live in `src/data/speeches.js`
+- Visits live in `src/data/visits.js`
+
+Content definitions often support:
+
+- `effects`: direct visible-stat changes
+- `macroEffects`: hidden macro impulses / macro state shifts
+- `factionReactions` or `factionEffects`
+- `stateEffects`
+- `countryEffects`
+- delayed effects
+
+Important scaling rule: many faction deltas authored in content are fractional and later multiplied in `App.jsx`:
+
+- event choice `factionEffects`: multiplied by 8
+- EO `factionReactions`: multiplied by 8, then sometimes scaled by repeat-use multiplier
+- speeches/visits use different multipliers, usually 6 or 3 depending on action
+
+Do not assume a content value is already the final relationship delta.
+
+## Known Hotspots
+
+- `src/App.jsx` is large and stateful. Read the nearby section before editing; many systems are cross-coupled.
+- Election logic sometimes reads `cg` while other parts stage `nf` mutated copies in the same tick. Be careful when changing weekly-order semantics.
+- There is intentional staging between:
+  - bill passage and presidential signature
+  - election results and inauguration
+  - event selection and event choice resolution
+- The world map in `DiplomacyTab` fetches topojson from a CDN at runtime.
+
+## Recommended Working Style
+
+- For simulation changes, inspect `App.jsx` callsites first, then the helper module.
+- For balance/content changes, prefer `data/` edits plus tests if logic behavior changes.
+- For architecture work, keep new logic out of tabs when possible; tabs are mostly view components.
+- If a repeated pattern in `App.jsx` becomes painful, extract a helper only after confirming it does not need direct setter coordination.
+
+## Extra Docs
+
+- `docs/architecture.md`
+- `docs/content-authoring.md`
