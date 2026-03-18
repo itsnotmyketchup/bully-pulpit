@@ -22,6 +22,7 @@ function pickN(arr, n) {
 // ─── Event chain definitions ───────────────────────────────────────────────
 export const LIBERAL_STATES_COURT_WIN = {
   id: "liberal_states_court_win",
+  category: "chain",
   name: "Federal Court Rules in Your Favor on Immigration Enforcement",
   desc: "A federal appeals court has sided with the administration, ordering sanctuary jurisdictions to comply with the Immigration Enforcement Directive or face federal funding penalties. Governors vow to appeal.",
   isChainEvent: true,
@@ -36,6 +37,7 @@ export const LIBERAL_STATES_COURT_WIN = {
 
 export const LIBERAL_STATES_COURT_LOSS = {
   id: "liberal_states_court_loss",
+  category: "chain",
   name: "Federal Court Blocks Immigration Enforcement Directive",
   desc: "An appeals court has ruled the administration's coercive measures against sanctuary jurisdictions unconstitutional, in a major legal setback. The ruling temporarily halts federal funding threats.",
   isChainEvent: true,
@@ -63,14 +65,37 @@ export function getSeasonLabel(week) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+export function annualChanceToPerCheckChance(annualChance, effectiveChecksPerYear) {
+  if (annualChance <= 0 || effectiveChecksPerYear <= 0) return 0;
+  if (annualChance >= 1) return 1;
+  return 1 - ((1 - annualChance) ** (1 / effectiveChecksPerYear));
+}
+
+export function rollEligibleSpecialEvents(
+  specialPool,
+  effectiveChecksPerYear,
+  rng = Math.random
+) {
+  return specialPool.filter((event) => rng() < annualChanceToPerCheckChance(event.annualChance || 0, effectiveChecksPerYear));
+}
+
 export function generateDynamicEvents(
   stats, stAppr, usedEvents,
   playerParty = "DEM", week = 1,
   passedLegislation = {},
-  executiveOverreach = 20,
   countries = []
 ) {
-  const pool = [];
+  const normalPool = [];
+  const specialPool = [];
+  const immediatePool = [];
+  const addEvent = (category, event) => {
+    const targetPool = category === "special"
+      ? specialPool
+      : category === "immediate"
+        ? immediatePool
+        : normalPool;
+    targetPool.push({ category, ...event });
+  };
   const season = getSeason(week);
   const pick = () => CITIES[Math.floor(Math.random() * CITIES.length)];
   const pickState = (city) => { const m = city.match(/,\s*(\w+)$/); return m ? m[1] : null; };
@@ -88,7 +113,7 @@ export function generateDynamicEvents(
     : "Conservative base energized. Progressive opposition mobilizes.";
 
   // ── Stat-triggered events ──────────────────────────────────────────────
-  if (stats.inflation > 3.5) pool.push({
+  if (stats.inflation > 3.5) addEvent("normal", {
     id:"infl_"+Math.random(),
     name:"Grocery prices spark protests",
     desc:`With inflation at ${stats.inflation.toFixed(1)}%, families struggle with food costs.`,
@@ -100,7 +125,7 @@ export function generateDynamicEvents(
     ]
   });
 
-  if (stats.unemployment > 5.5) pool.push({
+  if (stats.unemployment > 5.5) addEvent("normal", {
     id:"unemp_"+Math.random(),
     name:"Major employer announces 40,000 layoffs",
     desc:`Unemployment at ${stats.unemployment.toFixed(1)}%. A Fortune 100 company cuts thousands.`,
@@ -112,7 +137,7 @@ export function generateDynamicEvents(
     ]
   });
 
-  if (stats.gasPrice > 4.5) pool.push({
+  if (stats.gasPrice > 4.5) addEvent("normal", {
     id:"gas_"+Math.random(),
     name:"Gas station lines stretch for blocks",
     desc:`At $${stats.gasPrice.toFixed(2)}/gallon, commuters face crushing fuel costs.`,
@@ -124,7 +149,7 @@ export function generateDynamicEvents(
     ]
   });
 
-  if (stats.crimeRate > 5.5) pool.push({
+  if (stats.crimeRate > 5.5) addEvent("normal", {
     id:"crime_"+Math.random(),
     name:"Violent crime surge alarms cities",
     desc:`Homicide rate at ${stats.crimeRate.toFixed(1)}/100k. Mayors demand federal help.`,
@@ -139,7 +164,7 @@ export function generateDynamicEvents(
   const worst = Object.entries(stAppr).sort((a,b) => a[1] - b[1]);
   if (worst[0] && worst[0][1] < 30) {
     const ws = STATE_DATA.find(s => s.abbr === worst[0][0]);
-    if (ws) pool.push({
+    if (ws) addEvent("normal", {
       id:"prot_"+ws.abbr,
       name:`Large protests in ${ws.name}`,
       desc:`Approval at ${Math.round(worst[0][1])}% in ${ws.name}. Thousands march.`,
@@ -154,7 +179,7 @@ export function generateDynamicEvents(
   }
 
   const city = pick(), st = pickState(city);
-  pool.push({
+  addEvent("normal", {
     id:"shoot_"+Math.random(),
     repeatable:true,
     name:`Mass shooting in ${city}`,
@@ -299,22 +324,18 @@ export function generateDynamicEvents(
   base.forEach(e => {
     if (!e.repeatable && usedEvents.has(e.id)) return;
    if (e.season && e.season !== season) return;
-   pool.push(e);
+   addEvent("normal", e);
   });
 
   // ── Post-legislation triggered events ─────────────────────────────────
 
-  // liberal_states_refuse: base 60%, +10% at medium overreach, +30% at high overreach
   if (passedLegislation.immigration_enforcement) {
     const elapsed = week - passedLegislation.immigration_enforcement;
-    let refuseChance = 0.60;
-    if (executiveOverreach > 60) refuseChance = 0.90;
-    else if (executiveOverreach > 30) refuseChance = 0.70;
-
-    if (elapsed >= 4 && elapsed <= 52 && !usedEvents.has("liberal_states_refuse") && Math.random() < refuseChance) {
+    if (elapsed >= 4 && elapsed <= 52 && !usedEvents.has("liberal_states_refuse")) {
       const sanctuaryStates = ["CA","NY","IL","MA","WA","CO","OR","NJ"];
-      pool.push({
+      addEvent("special", {
         id: "liberal_states_refuse",
+        annualChance: 0.70,
         name: "Sanctuary States Defy Immigration Enforcement Directive",
         desc: "In the wake of the Immigration Enforcement Directive, governors of several sanctuary states announce their states will not cooperate with federal deportation operations, filing injunctions in federal court.",
         triggeredBy: "Immigration Enforcement Directive",
@@ -343,12 +364,12 @@ export function generateDynamicEvents(
     }
   }
 
-  // Pentagon audit failure: 30% chance, 4-52 weeks after Defense Modernization Act passes
   if (passedLegislation.defense_mod) {
     const elapsed = week - passedLegislation.defense_mod;
-    if (elapsed >= 4 && elapsed <= 52 && !usedEvents.has("pentagon_audit_fail") && Math.random() < 0.30) {
-      pool.push({
+    if (elapsed >= 4 && elapsed <= 52 && !usedEvents.has("pentagon_audit_fail")) {
+      addEvent("special", {
         id: "pentagon_audit_fail",
+        annualChance: 0.35,
         name: "Pentagon Fails Audit Despite Defense Modernization Act",
         desc: "Auditors report the Department of Defense has failed its sixth consecutive audit, unable to account for over $4 trillion in assets — even after the recently passed Defense Modernization Act poured in new funding. Critics demand accountability before more money flows.",
         triggeredBy: "Defense Modernization Act",
@@ -369,9 +390,10 @@ export function generateDynamicEvents(
 
   // 1. Anti-Israel protests if friendly/allied with Israel (40%/yr ≈ 0.06/tick)
   const israelRel = (countries.find(c => c.id === "israel") || {}).relationship || 0;
-  if (israelRel >= 60 && !usedEvents.has("anti_israel_protests") && Math.random() < 0.06) {
-    pool.push({
+  if (israelRel >= 60 && !usedEvents.has("anti_israel_protests")) {
+    addEvent("special", {
       id: "anti_israel_protests",
+      annualChance: 0.40,
       name: "Anti-Israel Protests Sweep College Campuses",
       desc: "Close U.S.-Israel ties have ignited a wave of student demonstrations at dozens of universities. Protesters are demanding the administration condemn Israeli military operations. Encampments are forming.",
       unique: true,
@@ -386,9 +408,10 @@ export function generateDynamicEvents(
 
   // 2. Russia imprisons American tourist if hostile relations (20%/yr ≈ 0.03/tick)
   const russiaRel = (countries.find(c => c.id === "russia") || {}).relationship || 50;
-  if (russiaRel < 30 && !usedEvents.has("russia_hostage") && Math.random() < 0.03) {
-    pool.push({
+  if (russiaRel < 30 && !usedEvents.has("russia_hostage")) {
+    addEvent("special", {
       id: "russia_hostage",
+      annualChance: 0.20,
       name: "Russia Detains American Tourist on Espionage Charges",
       desc: "Russian authorities have arrested a 26-year-old American tourist in Moscow, charging them with espionage in what diplomats widely believe is a retaliatory move amid strained U.S.-Russia relations. The family is pleading for action.",
       unique: true,
@@ -404,9 +427,10 @@ export function generateDynamicEvents(
   // ── Stat-condition triggered events ────────────────────────────────────────
 
   // 4. Record corporate profits if corporate tax below default (50%/yr ≈ 0.08/tick)
-  if (stats.corporateTaxRate < 21 && !usedEvents.has("corp_profits_surge") && Math.random() < 0.08) {
-    pool.push({
+  if (stats.corporateTaxRate < 21 && !usedEvents.has("corp_profits_surge")) {
+    addEvent("special", {
       id: "corp_profits_surge",
+      annualChance: 0.50,
       name: "Corporate Profits Hit Record Highs Amid Tax Cuts",
       desc: `With the corporate tax rate at ${stats.corporateTaxRate.toFixed(0)}%, Fortune 500 companies are reporting record quarterly profits. Critics note wages have stagnated while stock buybacks soar. #TaxTheRich trends nationwide.`,
       unique: true,
@@ -420,9 +444,10 @@ export function generateDynamicEvents(
   }
 
   // 5. Literacy crisis if education spending below default (50%/yr ≈ 0.08/tick)
-  if (stats.educationSpending < 102 && !usedEvents.has("literacy_crisis") && Math.random() < 0.08) {
-    pool.push({
+  if (stats.educationSpending < 102 && !usedEvents.has("literacy_crisis")) {
+    addEvent("special", {
       id: "literacy_crisis",
+      annualChance: 0.50,
       name: "National Report: Student Literacy Rates at 30-Year Low",
       desc: `With education spending down to $${Math.round(stats.educationSpending)}B, a new federal assessment finds 4th-grade reading scores have fallen to their lowest level since 1992. The teachers union calls it a "manufactured crisis."`,
       unique: true,
@@ -440,9 +465,10 @@ export function generateDynamicEvents(
   // 3. Weed industry boom if marijuana_fed passed (50%/yr ≈ 0.08/tick)
   if (passedLegislation.marijuana_fed) {
     const mjelapsed = week - passedLegislation.marijuana_fed;
-    if (mjelapsed >= 4 && mjelapsed <= 52 && !usedEvents.has("weed_industry_boom") && Math.random() < 0.08) {
-      pool.push({
+    if (mjelapsed >= 4 && mjelapsed <= 52 && !usedEvents.has("weed_industry_boom")) {
+      addEvent("special", {
         id: "weed_industry_boom",
+        annualChance: 0.50,
         name: "Legal Cannabis Industry Surges Following Federal Legalization",
         desc: "The cannabis industry has exploded since federal legalization — generating $40B in new economic activity, creating 280,000 jobs, and triggering a stock market boom for cannabis companies. Tax revenues are exceeding projections.",
         triggeredBy: "Federal Marijuana Legalization Act",
@@ -459,7 +485,7 @@ export function generateDynamicEvents(
 
   // 6. Car factory closure in rust belt state
   const rustBeltState = pickOne(RUST_BELT_STATES);
-  pool.push({
+  addEvent("normal", {
     id: "factory_closure_" + Math.random(),
     repeatable: true,
     name: `Major Auto Plant Announces Closure in ${rustBeltState}`,
@@ -477,7 +503,7 @@ export function generateDynamicEvents(
   const rareEarthMetal = pickOne(RARE_EARTH_METALS);
   const rareEarthState = pickOne(WEST_STATES);
   const rareLabel = rareEarthMetal.charAt(0).toUpperCase() + rareEarthMetal.slice(1);
-  pool.push({
+  addEvent("normal", {
     id: "rare_earth_" + Math.random(),
     repeatable: true,
     name: `Major ${rareLabel} Deposit Discovered in ${rareEarthState}`,
@@ -495,7 +521,7 @@ export function generateDynamicEvents(
   const scandalFactionId = pickOne(allyIds);
   const FACTION_DISPLAY = { prog: "Progressive Caucus", mod_dem: "New Democrats", blue_dog: "Blue Dog Coalition", freedom: "Freedom Caucus", mod_rep: "Main Street Republicans", trad_con: "Traditional Conservatives" };
   const scandalFactionName = FACTION_DISPLAY[scandalFactionId] || scandalFactionId;
-  pool.push({
+  addEvent("normal", {
     id: "faction_scandal_" + Math.random(),
     repeatable: true,
     name: `${scandalFactionName} Leader Arrested for Domestic Abuse`,
@@ -512,7 +538,7 @@ export function generateDynamicEvents(
   const FOOD_ITEMS = ["romaine lettuce","ground beef","frozen chicken nuggets","peanut butter","baby spinach","frozen strawberries","deli meat","canned tuna","shredded cheese","raw oysters"];
   const recalledFood = pickOne(FOOD_ITEMS);
   const foodLabel = recalledFood.charAt(0).toUpperCase() + recalledFood.slice(1);
-  pool.push({
+  addEvent("normal", {
     id: "fda_recall_" + Math.random(),
     repeatable: true,
     name: `FDA Issues Nationwide Recall of ${foodLabel}`,
@@ -528,9 +554,10 @@ export function generateDynamicEvents(
   // ── Absence-triggered events ───────────────────────────────────────────────
 
   // 9. Detention camp report if neither border nor immigration_exp passed (50%/yr ≈ 0.08/tick)
-  if (!passedLegislation.border && !passedLegislation.immigration_exp && !usedEvents.has("detention_conditions") && Math.random() < 0.08) {
-    pool.push({
+  if (!passedLegislation.border && !passedLegislation.immigration_exp && !usedEvents.has("detention_conditions")) {
+    addEvent("special", {
       id: "detention_conditions",
+      annualChance: 0.50,
       name: "Report: Inhumane Overcrowding in Immigration Detention Camps",
       desc: "A damning DHS Inspector General report reveals immigration detention facilities are operating at 400% capacity. Viral photos of overcrowded conditions draw international condemnation from human rights groups.",
       triggeredByAbsence: "Border Security Enhancement Act or Immigration & Visa Expansion Act",
@@ -545,9 +572,10 @@ export function generateDynamicEvents(
   }
 
   // Amtrak cuts if Infrastructure Investment Package never passed (20% chance per check)
-  if (!passedLegislation.infra_boost && !usedEvents.has("amtrak_cuts") && Math.random() < 0.90) {
-    pool.push({
+  if (!passedLegislation.infra_boost && !usedEvents.has("amtrak_cuts")) {
+    addEvent("special", {
       id: "amtrak_cuts",
+      annualChance: 0.70,
       name: "Amtrak Announces Major Route Cuts and Service Reductions",
       desc: "Facing a shrinking federal budget and no new infrastructure investment, Amtrak has announced the elimination of several long-distance routes and a 30% reduction in service frequency, leaving rural and mid-sized communities without passenger rail access.",
       triggeredByAbsence: "Infrastructure Investment Package",
@@ -561,5 +589,5 @@ export function generateDynamicEvents(
     });
   }
 
-  return pool;
+  return { normalPool, specialPool, immediatePool };
 }

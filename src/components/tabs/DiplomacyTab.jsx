@@ -140,7 +140,7 @@ function WorldMap({ countries, mode }) {
 }
 
 const engLabel  = v => v <= 10 ? "isolated" : v <= 20 ? "disengaged" : v <= 30 ? "moderately engaged" : v <= 40 ? "actively engaged" : "highly engaged";
-const projLabel = v => v <= 10 ? "marginalized" : v <= 20 ? "a regional power" : v <= 30 ? "a significant power" : v <= 40 ? "a major power" : "globally dominant";
+const projLabel = v => v <= 10 ? "in total retreat" : v <= 20 ? "eclipsed by others" : v <= 30 ? "challenged by others" : v <= 40 ? "the global superpower" : "utterly dominant";
 const tensLabel = v => v <= 10 ? "stable" : v <= 20 ? "low" : v <= 30 ? "moderate" : v <= 40 ? "high" : "critical";
 
 function MetricBar({ value, color, label, sentence }) {

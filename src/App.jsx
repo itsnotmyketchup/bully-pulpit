@@ -7,7 +7,11 @@ import { INITIAL_STATS } from "./data/stats.js";
 import { VISIT_TYPES } from "./data/visits.js";
 import { SPEECH_TOPICS } from "./data/speeches.js";
 import { POLICY_ACTIONS, BILL_STAGES, BILL_LOCKS, BILL_AMENDMENTS } from "./data/policies.js";
-import { generateDynamicEvents, getSeasonLabel } from "./data/events.js";
+import {
+  generateDynamicEvents,
+  getSeasonLabel,
+  rollEligibleSpecialEvents,
+} from "./data/events.js";
 import { EXECUTIVE_ORDERS } from "./data/executiveOrders.js";
 import { TABS, ALLIED_FACTIONS, OPPOSITION_FACTIONS, COUNTRY_FACTION_EFFECTS } from "./data/constants.js";
 
@@ -50,6 +54,11 @@ import {
   buildHistorySnapshot,
   computePollingProjection,
 } from "./logic/electionCalc.js";
+
+const NORMAL_EVENT_CHANCE = 0.65;
+const SPECIAL_EVENT_GATE_CHANCE = 0.35;
+const SPECIAL_EFFECTIVE_CHECKS_PER_YEAR = 13 * SPECIAL_EVENT_GATE_CHANCE;
+const SPECIAL_COOLDOWN_WEEKS = 4;
 
 export default function Game() {
   const [screen, setScreen] = useState(0);
@@ -118,6 +127,7 @@ export default function Game() {
   const [diplomacyThresholds, setDiplomacyThresholds] = useState({ tensionHigh: false, engagementLow: false, projectionWeak: false });
   const [overreachLastIncreasedWeek, setOverreachLastIncreasedWeek] = useState(0);
   const [pendingChainEvents, setPendingChainEvents] = useState([]); // [{triggerAtWeek, event}]
+  const [lastSpecialEventWeek, setLastSpecialEventWeek] = useState(0);
   const [actionsSubTab, setActionsSubTab] = useState("orders"); // "orders"|"visits"|"speeches"
   const [selectedEO, setSelectedEO] = useState(null); // eo id for preview
   const [eoChoice, setEoChoice] = useState({}); // {countryId, declassifyId} for choice EOs
@@ -172,6 +182,23 @@ export default function Game() {
 
   const addLog = useCallback(msg => setLog(p => [{ week, text: msg }, ...p].slice(0, 100)), [week]);
 
+  const fireEvent = useCallback((event, nextStats, eventWeek, options = {}) => {
+    const { isSpecial = false } = options;
+    const updatedStats = { ...nextStats };
+    if (event.unique) setUsedEv(p => new Set([...p, event.id]));
+    Object.entries(event.effects || {}).forEach(([k, v]) => { if (updatedStats[k] !== undefined) updatedStats[k] += v; });
+    setStats(updatedStats);
+    setCurEv(event);
+    setScreen(3);
+    if (isSpecial) setLastSpecialEventWeek(eventWeek);
+    return updatedStats;
+  }, []);
+
+  const pickRandomEvent = useCallback((pool) => {
+    if (!pool.length) return null;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }, []);
+
   const start = () => {
     if (!pp || !pf || !pn.trim()) return;
     const c = generateCongress(pp, pf);
@@ -212,6 +239,7 @@ export default function Game() {
     setActiveOrders([]);
     setEoIssuedCount({});
     setPassedLegislation({});
+    setLastSpecialEventWeek(0);
     setExecutiveOverreach(20);
     setOverreachLastIncreasedWeek(0);
     setPendingChainEvents([]);
@@ -791,28 +819,47 @@ export default function Game() {
       setDiplomacyThresholds(t => ({ ...t, tensionHigh: false }));
     }
 
+    const { normalPool, specialPool, immediatePool } = generateDynamicEvents(
+      ns,
+      sA,
+      usedEv,
+      pp,
+      nw,
+      passedLegislation,
+      countries
+    );
+
     // Fire pending chain events (priority over regular events)
     const readyChain = pendingChainEvents.find(c => nw >= c.triggerAtWeek);
     if (readyChain) {
       setPendingChainEvents(prev => prev.filter(c => c !== readyChain));
-      const chainEv = readyChain.event;
-      if (chainEv.unique) setUsedEv(p => new Set([...p, chainEv.id]));
-      Object.entries(chainEv.effects || {}).forEach(([k, v]) => { if (ns[k] !== undefined) ns[k] += v; });
-      setStats({ ...ns });
-      setCurEv(chainEv);
-      setScreen(3);
+      fireEvent(readyChain.event, ns, nw);
       return;
     }
 
-    if (nw % 4 === 0 && Math.random() > 0.35) {
-      const pool = generateDynamicEvents(ns, sA, usedEv, pp, nw, passedLegislation, executiveOverreach, countries);
-      if (pool.length > 0) {
-        const ev = pool[Math.floor(Math.random() * pool.length)];
-        if (ev.unique) setUsedEv(p => new Set([...p, ev.id]));
-        Object.entries(ev.effects || {}).forEach(([k, v]) => { if (ns[k] !== undefined) ns[k] += v; });
-        setStats({ ...ns });
-        setCurEv(ev);
-        setScreen(3);
+    const immediateEvent = pickRandomEvent(immediatePool);
+    if (immediateEvent) {
+      fireEvent(immediateEvent, ns, nw, { isSpecial: immediateEvent.category === "special" });
+      return;
+    }
+
+    if (nw % 4 === 0) {
+      const selectedNormalEvent = Math.random() < NORMAL_EVENT_CHANCE ? pickRandomEvent(normalPool) : null;
+
+      let selectedSpecialEvent = null;
+      const specialCooldownActive = lastSpecialEventWeek > 0 && (nw - lastSpecialEventWeek) <= SPECIAL_COOLDOWN_WEEKS;
+      if (!specialCooldownActive && Math.random() < SPECIAL_EVENT_GATE_CHANCE) {
+        const passedSpecialEvents = rollEligibleSpecialEvents(
+          specialPool,
+          SPECIAL_EFFECTIVE_CHECKS_PER_YEAR,
+          Math.random
+        );
+        selectedSpecialEvent = pickRandomEvent(passedSpecialEvents);
+      }
+
+      const chosenEvent = selectedSpecialEvent || selectedNormalEvent;
+      if (chosenEvent) {
+        fireEvent(chosenEvent, ns, nw, { isSpecial: chosenEvent.category === "special" });
       }
     }
   };
