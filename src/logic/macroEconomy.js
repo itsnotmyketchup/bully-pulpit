@@ -4,20 +4,6 @@ export const TREND_GDP_GROWTH = 2.2;
 export const NATURAL_UNEMPLOYMENT = 4.4;
 export const INFLATION_TARGET = 2.2;
 export const FED_PERSONALITIES = ["HAWKISH", "NEUTRAL", "DOVISH"];
-const FED_CHAIR_NAMES = [
-  "Evelyn Hart",
-  "Marcus Bell",
-  "Naomi Sterling",
-  "Adrian Cole",
-  "Lillian Price",
-  "Victor Hale",
-  "Maya Ellison",
-  "Julian Mercer",
-  "Claire Whitman",
-  "Daniel Sloane",
-  "Tessa Vaughn",
-  "Owen Cartwright",
-];
 
 const BASELINE_NOMINAL_GDP = 28.0;
 const BASELINE_PRICE_LEVEL = 100;
@@ -74,17 +60,16 @@ export const INITIAL_MACRO_STATE = {
   },
 };
 
-export function createInitialMacroState() {
+export function createInitialMacroState(initialFedChairName = "Evelyn Hart") {
   return {
     ...INITIAL_MACRO_STATE,
+    fedChairName: initialFedChairName,
     impulses: { ...INITIAL_MACRO_STATE.impulses },
   };
 }
 
-export function pickFedChairName(exclude = []) {
-  const pool = FED_CHAIR_NAMES.filter(name => !exclude.includes(name));
-  if (!pool.length) return FED_CHAIR_NAMES[0];
-  return pool[Math.floor(Math.random() * pool.length)];
+export function pickFedChairName(nameRegistry) {
+  return nameRegistry.drawName("Fed Chair");
 }
 
 export function getTotalFederalSpending(stats) {
@@ -204,6 +189,45 @@ export function adaptLegacyEffectsToMacroImpulses(macroState, effects = {}, sour
     ...macroState,
     impulses,
   };
+}
+
+export function applyMacroEffects(macroState, macroEffects = {}, mult = 1) {
+  const nextMacroState = {
+    ...macroState,
+    impulses: { ...macroState.impulses },
+  };
+
+  Object.entries(macroEffects || {}).forEach(([key, rawValue]) => {
+    const value = rawValue * mult;
+    if (!value) return;
+
+    if (["demand", "investment", "price", "labor", "technology", "productivity", "confidence", "nx"].includes(key)) {
+      nextMacroState.impulses[key] += value;
+      return;
+    }
+
+    if (key === "educationQuality") {
+      nextMacroState.educationQuality = clamp(nextMacroState.educationQuality + value, 20, 100);
+      return;
+    }
+    if (key === "infrastructureQuality") {
+      nextMacroState.infrastructureQuality = clamp(nextMacroState.infrastructureQuality + value, 20, 100);
+      return;
+    }
+    if (key === "technologicalAdvancement") {
+      nextMacroState.technologicalAdvancement = clamp(nextMacroState.technologicalAdvancement + value, 20, 100);
+      return;
+    }
+    if (key === "consumerConfidence") {
+      nextMacroState.consumerConfidence = clamp(nextMacroState.consumerConfidence + value, 20, 85);
+      return;
+    }
+    if (key === "businessConfidence") {
+      nextMacroState.businessConfidence = clamp(nextMacroState.businessConfidence + value, 20, 85);
+    }
+  });
+
+  return nextMacroState;
 }
 
 function applyImpulseDecay(impulses) {
@@ -455,10 +479,8 @@ export function advanceMacroEconomy(currentMacroState, currentStats, week, rando
   };
 }
 
-export function buildFedNominationEvent() {
-  const first = pickFedChairName();
-  const second = pickFedChairName([first]);
-  const third = pickFedChairName([first, second]);
+export function buildFedNominationEvent(nameRegistry) {
+  const [first, second, third] = nameRegistry.drawNames(3, "Fed Chair");
   const chairNames = [
     first,
     second,

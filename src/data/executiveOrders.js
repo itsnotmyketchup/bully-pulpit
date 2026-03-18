@@ -23,6 +23,7 @@ export function getRefugeeCapConfig(rawCap) {
   return {
     cap,
     effects: { immigrationRate: Number((mood * 0.05).toFixed(3)) },
+    macroEffects: { labor: Number((-mood * 0.03).toFixed(3)), confidence: Number((mood * 0.02).toFixed(3)) },
     factionReactions: {
       freedom: Number((-0.55 * mood).toFixed(3)),
       trad_con: Number((-0.45 * mood).toFixed(3)),
@@ -44,6 +45,9 @@ export function getDrillingPermitsConfig(rawRegions = []) {
     delayedEffects: selectedRegions.length > 0
       ? { weeks: 52, effects: { gasPrice: Number((-0.06 * selectedRegions.length).toFixed(3)) } }
       : null,
+    delayedMacroEffects: selectedRegions.length > 0
+      ? { weeks: 52, effects: { investment: Number((0.03 * selectedRegions.length).toFixed(3)) } }
+      : null,
     stateEffects: {
       drillingRegions: selectedRegions,
       weight: 0.015,
@@ -56,10 +60,17 @@ export function buildExecutiveOrderOutcome(order, extraData = {}) {
 
   const outcome = {
     effects: { ...(order.effects || {}) },
+    macroEffects: { ...(order.macroEffects || {}) },
     delayedEffects: order.delayedEffects
       ? {
           weeks: order.delayedEffects.weeks,
           effects: { ...(order.delayedEffects.effects || {}) },
+        }
+      : null,
+    delayedMacroEffects: order.delayedMacroEffects
+      ? {
+          weeks: order.delayedMacroEffects.weeks,
+          effects: { ...(order.delayedMacroEffects.effects || {}) },
         }
       : null,
     factionReactions: { ...(extraData.factionOverride || order.factionReactions || {}) },
@@ -69,6 +80,7 @@ export function buildExecutiveOrderOutcome(order, extraData = {}) {
   if (order.id === "refugee_cap") {
     const config = getRefugeeCapConfig(extraData.refugeeCap);
     outcome.effects = config.effects;
+    outcome.macroEffects = config.macroEffects;
     outcome.factionReactions = config.factionReactions;
     outcome.meta = { refugeeCap: config.cap };
   }
@@ -76,6 +88,7 @@ export function buildExecutiveOrderOutcome(order, extraData = {}) {
   if (order.id === "drilling_permits") {
     const config = getDrillingPermitsConfig(extraData.drillingRegions);
     outcome.delayedEffects = config.delayedEffects;
+    outcome.delayedMacroEffects = config.delayedMacroEffects;
     outcome.stateEffects = config.stateEffects;
     outcome.meta = { drillingRegions: config.selectedRegions };
   }
@@ -172,7 +185,8 @@ export const EXECUTIVE_ORDERS = [
     controversy: 1,
     repeatable: false,
     reversible: true,
-    effects: { tradeBalance: 1.8, gdpGrowth: -0.04 },
+    effects: { tradeBalance: 1.8 },
+    macroEffects: { nx: 0.08, investment: -0.05 },
     approvalEffect: 0,
     factionReactions: { blue_dog: 0.2, mod_rep: 0.18, trad_con: 0.1, mod_dem: 0.12, prog: 0.08, freedom: -0.08 },
     stateEffects: { economy: ["manufacturing"], weight: 0.015 },
@@ -213,7 +227,8 @@ export const EXECUTIVE_ORDERS = [
     controversy: 3,
     repeatable: true,
     reversible: true,
-    effects: { tradeBalance: 2, inflation: 0.2, gasPrice: 0.08 },
+    effects: { tradeBalance: 2, gasPrice: 0.08 },
+    macroEffects: { nx: 0.1, price: 0.12, investment: -0.04 },
     approvalEffect: 0,
     factionReactions: { mod_rep: 0.15, trad_con: 0.2, blue_dog: 0.2, freedom: -0.3, mod_dem: -0.2, prog: -0.1 },
     stateEffects: { economy: ["manufacturing"], weight: 0.025 },

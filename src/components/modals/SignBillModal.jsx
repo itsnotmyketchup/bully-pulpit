@@ -1,5 +1,5 @@
 import { BILL_AMENDMENTS } from "../../data/policies.js";
-import { SM } from "../../data/stats.js";
+import { buildEffectPreview } from "../../utils/effectDisplay.js";
 
 export default function SignBillModal({ pendingSignature, appliedAmendments, factions, pn, week, onSign, onVeto }) {
   if (!pendingSignature) return null;
@@ -9,8 +9,8 @@ export default function SignBillModal({ pendingSignature, appliedAmendments, fac
   const billAmends = (appliedAmendments[act.id] || [])
     .map(id => (BILL_AMENDMENTS[act.id] || []).find(a => a.id === id))
     .filter(Boolean);
-  const isBudgetStat = key => key.toLowerCase().includes("spending");
   const countryNames = { china: "China", russia: "Russia" };
+  const effectItems = buildEffectPreview(act);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1015, padding: "16px" }}>
@@ -70,17 +70,13 @@ export default function SignBillModal({ pendingSignature, appliedAmendments, fac
                 <div style={{ fontSize: 7, color: "#2d6a3f", textTransform: "uppercase", letterSpacing: "0.08em" }}>Approval</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#2d6a3f" }}>+1.5</div>
               </div>
-              {Object.entries(act.effects || {}).filter(([, v]) => v !== 0).map(([k, v]) => {
-                const meta = SM[k];
-                if (!meta) return null;
-                const neutralBudget = isBudgetStat(k) && v > 0;
-                const good = !neutralBudget && ((meta.g === "up" && v > 0) || (meta.g === "down" && v < 0));
-                const bg = neutralBudget ? "#ede8e0" : good ? "#d4eedd" : "#f8d7d7";
-                const fg = neutralBudget ? "#7a6040" : good ? "#2d6a3f" : "#8b1a1a";
+              {effectItems.map(item => {
+                const bg = item.isMacro ? (item.positive ? "#e4eefb" : "#efe6f8") : item.positive ? "#d4eedd" : "#f8d7d7";
+                const fg = item.isMacro ? (item.positive ? "#245ea8" : "#7c3aed") : item.positive ? "#2d6a3f" : "#8b1a1a";
                 return (
-                  <div key={k} style={{ background: bg, borderRadius: 3, padding: "4px 8px", textAlign: "center" }}>
-                    <div style={{ fontSize: 7, color: fg, textTransform: "uppercase", letterSpacing: "0.08em" }}>{meta.l}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: fg }}>{v > 0 ? "+" : ""}{v}</div>
+                  <div key={item.id} style={{ background: bg, borderRadius: 3, padding: "4px 8px", textAlign: "center" }}>
+                    <div style={{ fontSize: 7, color: fg, textTransform: "uppercase", letterSpacing: "0.08em" }}>{item.label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: fg }}>{item.valueText}</div>
                   </div>
                 );
               })}

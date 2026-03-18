@@ -1,6 +1,7 @@
 export default function EoResultModal({ eoResult, pn, week, onDismiss }) {
   if (!eoResult) return null;
   const { eo, mult, factionLines } = eoResult;
+  const hasDelayed = !!(eo.delayedEffects || eo.delayedMacroEffects);
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1010, padding: "16px" }}>
       <div style={{
@@ -24,15 +25,15 @@ export default function EoResultModal({ eoResult, pn, week, onDismiss }) {
             <div style={{ fontSize: 16, fontWeight: 700, color: "#1a1208", lineHeight: 1.25, fontFamily: "Georgia, serif", marginBottom: 6 }}>{eo.name}</div>
             <div style={{ fontSize: 10, color: "#5a4830", lineHeight: 1.5 }}>{eo.desc}</div>
           </div>
-          {(mult < 1 || eo.delayedEffects) && (
+          {(mult < 1 || hasDelayed) && (
             <div style={{ borderTop: "1px solid #d4c4a8", borderBottom: "1px solid #d4c4a8", padding: "7px 0", marginBottom: 12 }}>
               {mult < 1 && (
-                <div style={{ fontSize: 9, color: "#8a5a20", marginBottom: eo.delayedEffects ? 3 : 0 }}>
+                <div style={{ fontSize: 9, color: "#8a5a20", marginBottom: hasDelayed ? 3 : 0 }}>
                   ⚠ Diminishing returns — effects applied at {Math.round(mult * 100)}%
                 </div>
               )}
-              {eo.delayedEffects && (
-                <div style={{ fontSize: 9, color: "#7a6040" }}>◷ Some effects arrive in {eo.delayedEffects.weeks} weeks</div>
+              {hasDelayed && (
+                <div style={{ fontSize: 9, color: "#7a6040" }}>◷ Some effects arrive in {(eo.delayedEffects?.weeks || eo.delayedMacroEffects?.weeks)} weeks</div>
               )}
             </div>
           )}

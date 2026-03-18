@@ -11,12 +11,8 @@ import { VISIT_TYPES } from "../../data/visits.js";
 import { SPEECH_TOPICS } from "../../data/speeches.js";
 import { STATE_DATA } from "../../data/states.js";
 import { OPPOSITION_FACTIONS } from "../../data/constants.js";
+import { buildEffectPreview } from "../../utils/effectDisplay.js";
 import VisitMap from "../VisitMap.jsx";
-
-const STAT_LABELS = {
-  nationalDebt: "Nat. debt", approvalRating: "Approval", gasPrice: "Gas price",
-  immigrationRate: "Immigration", tradeBalance: "Trade balance", inflation: "Inflation", gdpGrowth: "GDP growth",
-};
 
 const controvColor = c => c === 1 ? "#EF9F27" : c === 2 ? "#E27D27" : "#E24B4A";
 
@@ -131,6 +127,7 @@ export default function ActionsTab({
           const isSelected = selectedEO === e.id;
           const issued = eoIssuedCount[e.id] || 0;
           const exhausted = !e.repeatable && issued > 0;
+          const previewItems = buildEffectPreview(e);
           const cooldownRemaining = e.repeatable
             ? Math.max(
                 0,
@@ -146,14 +143,9 @@ export default function ActionsTab({
             }}>
               <div style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-primary)", lineHeight: 1.3, marginBottom: 3 }}>{e.name}</div>
               <div style={{ fontSize: 9, color: "var(--color-text-secondary)", marginBottom: 4 }}>{e.category}</div>
-              {Object.entries(e.effects || {}).filter(([, v]) => v !== 0).map(([k, v]) => (
-                <div key={k} style={{ fontSize: 9, color: v > 0 ? "#1D9E75" : "#E24B4A" }}>
-                  {v > 0 ? "+" : ""}{typeof v === "number" && Math.abs(v) < 1 ? (v * 100).toFixed(0) + "%" : v} {STAT_LABELS[k] || k}
-                </div>
-              ))}
-              {e.delayedEffects && Object.entries(e.delayedEffects.effects || {}).map(([k, v]) => (
-                <div key={k} style={{ fontSize: 9, color: v > 0 ? "#1D9E75" : "#E24B4A" }}>
-                  {v > 0 ? "+" : ""}{typeof v === "number" && Math.abs(v) < 1 ? (v * 100).toFixed(0) + "%" : v} {STAT_LABELS[k] || k} (delayed)
+              {previewItems.slice(0, 3).map(item => (
+                <div key={item.id} style={{ fontSize: 9, color: item.isMacro ? (item.positive ? "#2563eb" : "#7c3aed") : item.positive ? "#1D9E75" : "#E24B4A" }}>
+                  {item.label}: {item.valueText}
                 </div>
               ))}
               <div style={{ display: "flex", gap: 3, marginTop: 4, flexWrap: "wrap" }}>
@@ -185,14 +177,9 @@ export default function ActionsTab({
             <div style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 3 }}>Effects:</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {Object.entries(eoOutcome?.effects || {}).filter(([, v]) => v !== 0).map(([k, v]) => (
-                  <span key={k} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: v > 0 ? "#1D9E7522" : "#E24B4A22", color: v > 0 ? "#1D9E75" : "#E24B4A" }}>
-                    {v > 0 ? "+" : ""}{STAT_LABELS[k] || k}: {typeof v === "number" && Math.abs(v) < 1 ? (v > 0 ? "+" : "") + (v * 100).toFixed(0) + "%" : v}
-                  </span>
-                ))}
-                {eoOutcome?.delayedEffects && Object.entries(eoOutcome.delayedEffects.effects).map(([k, v]) => (
-                  <span key={k} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: v > 0 ? "#1D9E7511" : "#E24B4A11", color: v > 0 ? "#1D9E75" : "#E24B4A", border: "1px dashed", borderColor: v > 0 ? "#1D9E75" : "#E24B4A" }}>
-                    {v > 0 ? "+" : ""}{STAT_LABELS[k] || k}: {(v * 100).toFixed(0)}% (in {eoOutcome.delayedEffects.weeks} wks)
+                {buildEffectPreview(eoOutcome).map(item => (
+                  <span key={item.id} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: item.isMacro ? (item.positive ? "#2563eb22" : "#7c3aed22") : item.positive ? "#1D9E7522" : "#E24B4A22", color: item.isMacro ? (item.positive ? "#2563eb" : "#7c3aed") : item.positive ? "#1D9E75" : "#E24B4A", border: item.delayed ? "1px dashed currentColor" : "none" }}>
+                    {item.label}: {item.valueText}
                   </span>
                 ))}
               </div>

@@ -14,7 +14,7 @@ function unityLabel(unity) {
   return { text: "Split", color: "#E24B4A" };
 }
 
-export default function BillProgress({ bill, passLikelihood, factionVotes, process }) {
+export default function BillProgress({ bill, passLikelihood, factionVotes, process, topControls, midControls }) {
   const view = process || (bill ? {
     name: bill.act.name,
     desc: bill.act.desc,
@@ -66,6 +66,7 @@ export default function BillProgress({ bill, passLikelihood, factionVotes, proce
       <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>
         {view.desc}
       </div>
+      {topControls ? <div style={{ marginBottom: 8 }}>{topControls}</div> : null}
 
       {/* Stage progress bar */}
       <div style={{ display: "flex", gap: 3, marginBottom: 6 }}>
@@ -114,6 +115,7 @@ export default function BillProgress({ bill, passLikelihood, factionVotes, proce
           Pass likelihood: <span style={{ fontWeight: 600, color: view.passLikelihood > 50 ? "#1D9E75" : "#E24B4A" }}>{view.passLikelihood}%</span>
         </div>
       )}
+      {midControls ? <div style={{ marginBottom: 8 }}>{midControls}</div> : null}
 
       {/* Per-faction vote breakdown */}
       {view.factionVotes && view.factionVotes.length > 0 && (

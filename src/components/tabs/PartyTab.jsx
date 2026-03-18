@@ -6,7 +6,7 @@ import SectionHeader from "../SectionHeader.jsx";
 
 export default function PartyTab({
   allF, allyF, cg, pf,
-  factionHist, promises, usedPol, billCooldowns, week,
+  factionHist, promises, promiseOffers, passedLegislation, week,
   surrogates, surrogateUI, setSurrogateUI,
   coachCooldown, countries, visitedCountries, act,
   onMakePromise, onAssignSurrogate,
@@ -34,12 +34,8 @@ export default function PartyTab({
 
     <SectionHeader label="Coalition Factions" />
     {allyF.map(f => {
-      const supportedBills = POLICY_ACTIONS.filter(a =>
-        (a.factionReactions[f.id] || 0) > 0.5 &&
-        !usedPol.has(a.id) &&
-        !(billCooldowns[a.id] && week < billCooldowns[a.id])
-      );
       const activePromise = promises.find(p => p.factionId === f.id);
+      const offers = promiseOffers[f.id] || [];
       return (
         <div key={f.id} style={{ marginBottom: 6, padding: "8px 10px", borderRadius: "var(--border-radius-lg)", border: f.id === pf ? `2px solid ${f.color}` : "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
@@ -76,28 +72,24 @@ export default function PartyTab({
           <div style={{ marginTop: 5, borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 5 }}>
             {activePromise ? (
               <div style={{ fontSize: 9, color: "#EF9F27" }}>
-                Promise: pass "{POLICY_ACTIONS.find(a => a.id === activePromise.billId)?.name}" by wk {activePromise.deadline} ({Math.max(0, activePromise.deadline - week)} wks left)
+                Promise: {activePromise.type === "cabinet" ? `appoint Secretary of State from ${activePromise.promisedFactionName}` : `pass "${activePromise.billName}"`} by wk {activePromise.deadline} ({Math.max(0, activePromise.deadline - week)} wks left)
               </div>
-            ) : supportedBills.length > 0 ? (
+            ) : offers.length > 0 ? (
               <div>
                 <div style={{ fontSize: 9, color: "var(--color-text-secondary)", marginBottom: 3 }}>Promise to pass this year:</div>
                 <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                  {supportedBills.slice(0, 3).map(bill => {
-                    const controversy = Object.values(bill.factionReactions).reduce((s, v) => s + Math.abs(v), 0) / Object.keys(bill.factionReactions).length;
-                    const relBoost = Math.max(3, Math.round(controversy * 12));
-                    return (
-                      <button key={bill.id} onClick={() => onMakePromise(f.id, bill.id, relBoost)} style={{
-                        fontSize: 9, padding: "2px 7px", borderRadius: 4, cursor: "pointer",
-                        background: "#EF9F2722", color: "#EF9F27", border: "1px solid #EF9F2744",
-                      }}>
-                        {bill.name.split(" ").slice(0, 3).join(" ")}… (+{relBoost} rel)
-                      </button>
-                    );
-                  })}
+                  {offers.map(offer => (
+                    <button key={`${f.id}-${offer.type}-${offer.billId || offer.officeId}-${offer.promisedFactionId || ""}`} onClick={() => onMakePromise(f.id, offer)} style={{
+                      fontSize: 9, padding: "2px 7px", borderRadius: 4, cursor: "pointer",
+                      background: "#EF9F2722", color: "#EF9F27", border: "1px solid #EF9F2744",
+                    }}>
+                      {offer.type === "cabinet" ? `SecState: ${offer.promisedFactionName.split(" ")[0]}` : `${offer.billName.split(" ").slice(0, 3).join(" ")}…`} (+{offer.relBoost} rel)
+                    </button>
+                  ))}
                 </div>
               </div>
             ) : (
-              <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>No available bills this faction supports</div>
+              <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>No available promise this year</div>
             )}
           </div>
         </div>
@@ -232,12 +224,14 @@ export default function PartyTab({
         const bill = POLICY_ACTIONS.find(a => a.id === p.billId);
         const faction = cg.factions[p.factionId];
         const weeksLeft = p.deadline - week;
-        const fulfilled = usedPol.has(p.billId);
+        const fulfilled = p.type === "bill"
+          ? !!passedLegislation[p.billId]
+          : false;
         return (
           <div key={i} style={{ marginBottom: 4, padding: "6px 10px", borderRadius: "var(--border-radius-md)", background: "var(--color-background-secondary)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ fontSize: 10 }}>
               <span style={{ fontWeight: 500, color: "var(--color-text-primary)" }}>{faction?.name}</span>
-              <span style={{ color: "var(--color-text-secondary)" }}> — pass "{bill?.name}"</span>
+              <span style={{ color: "var(--color-text-secondary)" }}> — {p.type === "cabinet" ? `appoint Secretary of State from ${p.promisedFactionName}` : `pass "${bill?.name}"`}</span>
             </div>
             <div style={{ fontSize: 9, color: fulfilled ? "#1D9E75" : weeksLeft < 4 ? "#E24B4A" : "#EF9F27" }}>
               {fulfilled ? "✓ Fulfilled" : `Due wk ${p.deadline} (${weeksLeft}w)`}

@@ -20,7 +20,6 @@ export default function BudgetModal({ budgetDraft, stats, macroState, factions, 
   const reactions = computeBudgetReactions(budgetDraft);
 
   const projection = computeBudgetProjection(stats, macroState, budgetDraft);
-  const projTaxRev = projection.taxRevenue;
   const projDeficit = projection.nationalDeficit;
   const deficitDelta = projDeficit - stats.nationalDeficit;
 

@@ -8,9 +8,3 @@ export const COUNTRY_FACTION_EFFECTS = {
   saudi:  { prog: -0.2, mod_dem: -0.1 },
   china:  { freedom: -0.3, mod_rep: -0.15 },
 };
-
-export const SURROGATE_NAMES = [
-  "Marcus Webb","Priya Nair","Darnell Hayes","Sofia Reyes","Patrick Luo",
-  "Amara Osei","Ethan Kovacs","Leila Farouk","Caleb Nguyen","Diane Okonkwo",
-  "Victor Salinas","Naomi Whitfield","Jesse Park","Carmen Delgado","Theo Burrows",
-];

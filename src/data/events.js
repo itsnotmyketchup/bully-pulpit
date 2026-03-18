@@ -129,7 +129,8 @@ export function generateDynamicEvents(
     id:"unemp_"+Math.random(),
     name:"Major employer announces 40,000 layoffs",
     desc:`Unemployment at ${stats.unemployment.toFixed(1)}%. A Fortune 100 company cuts thousands.`,
-    effects:{unemployment:0.15,approvalRating:-2},
+    effects:{approvalRating:-2},
+    macroEffects:{ labor: 0.12, confidence: -0.08 },
     choices:[
       {text:"Propose emergency jobs program",effects:{approvalRating:2,nationalDebt:0.08},result:"Workers appreciate swift response."},
       {text:"Offer corporate tax incentives to retain workers",effects:{approvalRating:0,nationalDebt:0.03},result:"Some jobs saved. Critics call it a handout."},
@@ -207,7 +208,7 @@ export function generateDynamicEvents(
     {id:"hurricane",season:"summer",
       name:`Category 4 hurricane strikes ${hurricaneState}`,
       desc:`A devastating hurricane makes landfall near the Gulf/Atlantic coast. Catastrophic flooding reported in ${hurricaneState}.`,
-      repeatable:true,isDisaster:true,affectedStates:[hurricaneState],effects:{gdpGrowth:-0.2,nationalDebt:0.05},choices:[
+      repeatable:true,isDisaster:true,affectedStates:[hurricaneState],effects:{nationalDebt:0.05},macroEffects:{ demand:-0.12, investment:-0.08, infrastructureQuality:-0.25 },choices:[
         {text:"Declare emergency, full federal resources",effects:{approvalRating:4,nationalDebt:0.1},stateBoost:0.05,result:"Swift response praised."},
         {text:"Measured federal assistance",effects:{approvalRating:0},stateBoost:0.01,result:"Some say insufficient."},
         {text:"Delegate to states",effects:{approvalRating:-5},stateBoost:-0.04,result:"Accused of abandoning the coast."},
@@ -217,19 +218,19 @@ export function generateDynamicEvents(
       {text:"Quietly brief Congress",effects:{approvalRating:1},result:"Restrained approach noted."},
       {text:"Push expanded surveillance",effects:{approvalRating:-1,crimeRate:-0.2},factionEffects:{prog:-0.4,freedom:0.3},result:"Privacy debate erupts."},
     ]},
-    {id:"oil_spike",name:"Global oil price surge",desc:"Mideast conflict spikes crude prices 30%.",unique:true,effects:{gasPrice:0.85,inflation:0.4,approvalRating:-2},choices:[
+    {id:"oil_spike",name:"Global oil price surge",desc:"Mideast conflict spikes crude prices 30%.",unique:true,effects:{gasPrice:0.85,approvalRating:-2},macroEffects:{ price:0.18, confidence:-0.06 },choices:[
       {text:"Release petroleum reserves",effects:{gasPrice:-0.4,approvalRating:1},result:"Prices ease slightly."},
       {text:"Negotiate with oil producers",effects:{gasPrice:-0.2},countryEffects:{saudi:{relationship:5}},result:"Slow relief through diplomacy."},
       {text:"Accelerate domestic production",effects:{gasPrice:-0.1},factionEffects:{prog:-0.5,freedom:0.3},result:"Environmentalists protest."},
     ]},
-    {id:"pandemic",name:"New virus variant emerges",desc:"WHO flags a concerning respiratory virus variant.",unique:true,effects:{gdpGrowth:-0.1,approvalRating:-1},choices:[
+    {id:"pandemic",name:"New virus variant emerges",desc:"WHO flags a concerning respiratory virus variant.",unique:true,effects:{approvalRating:-1},macroEffects:{ demand:-0.08, labor:0.05, confidence:-0.05 },choices:[
       {text:"Aggressive public health response",effects:{healthcareSpending:20,approvalRating:2,nationalDebt:0.05},result:"Health experts praise proactivity."},
       {text:"Monitor and prepare",effects:{approvalRating:0},result:"Measured. Critics divided."},
-      {text:"Downplay the threat",effects:{approvalRating:-3,gdpGrowth:0.1},result:"Risky bet."},
+      {text:"Downplay the threat",effects:{approvalRating:-3},macroEffects:{ confidence:0.03 },result:"Risky bet."},
     ]},
-    {id:"tech_boom",name:"AI industry creates 500K jobs",desc:"Tech sector booming in CA, WA, TX, NY.",unique:true,affectedStates:["CA","WA","TX","NY"],effects:{gdpGrowth:0.3,unemployment:-0.2,approvalRating:2},choices:[
+    {id:"tech_boom",name:"AI industry creates 500K jobs",desc:"Tech sector booming in CA, WA, TX, NY.",unique:true,affectedStates:["CA","WA","TX","NY"],effects:{approvalRating:2},macroEffects:{ technology:0.18, investment:0.18, labor:-0.1, businessConfidence:1.5 },choices:[
       {text:"Claim credit, tech-friendly policies",effects:{approvalRating:2},result:"Silicon Valley applauds."},
-      {text:"Push AI regulation",effects:{approvalRating:0,gdpGrowth:-0.05},result:"Balanced. Lobbies grumble."},
+      {text:"Push AI regulation",effects:{approvalRating:0},macroEffects:{ investment:-0.04, confidence:-0.02 },result:"Balanced. Lobbies grumble."},
       {text:"Retrain displaced workers",effects:{educationSpending:10,approvalRating:1},result:"Forward-thinking support."},
     ]},
     {id:"cyber",name:"Major cyberattack hits federal agencies",desc:"State-sponsored attack compromises federal databases.",unique:true,effects:{approvalRating:-3},choices:[
@@ -262,7 +263,7 @@ export function generateDynamicEvents(
       {text:"Push for targeted forgiveness for low-income borrowers",effects:{approvalRating:1,nationalDebt:0.08},factionEffects:{prog:0.5,mod_dem:0.1,freedom:-0.5,trad_con:-0.3},result:"Divisive but popular with graduates."},
       {text:"Call for universities to reduce tuition",effects:{approvalRating:0},result:"Deflects responsibility. Borrowers unimpressed."},
     ]},
-    {id:"market_crash",name:"Stock market drops 14% in a week",desc:"A credit rating downgrade and weak jobs data trigger a sharp sell-off on Wall Street.",unique:true,effects:{gdpGrowth:-0.4,approvalRating:-3,tradeBalance:-5},choices:[
+    {id:"market_crash",name:"Stock market drops 14% in a week",desc:"A credit rating downgrade and weak jobs data trigger a sharp sell-off on Wall Street.",unique:true,effects:{approvalRating:-3,tradeBalance:-5},macroEffects:{ demand:-0.2, investment:-0.28, confidence:-0.16 },choices:[
       {text:"Emergency economic stabilization package",effects:{approvalRating:2,nationalDebt:0.12},factionEffects:{mod_dem:0.2,mod_rep:0.2,freedom:-0.2},result:"Markets stabilize. Deficit hawks push back."},
       {text:"Convene economic advisers, signal calm",effects:{approvalRating:1},result:"Steady-hand messaging helps sentiment slightly."},
       {text:"Blame the Federal Reserve",effects:{approvalRating:-2},result:"Finger-pointing deepens investor anxiety."},
@@ -301,7 +302,7 @@ export function generateDynamicEvents(
     {id:"wildfire_west",season:"summer",
       name:`Wildfire tears across ${wildfireState}`,
       desc:`Over 2 million acres ablaze in ${wildfireState}. Air quality alerts issued statewide.`,
-      repeatable:true,isDisaster:true,affectedStates:[wildfireState],effects:{approvalRating:-1,gdpGrowth:-0.05},choices:[
+      repeatable:true,isDisaster:true,affectedStates:[wildfireState],effects:{approvalRating:-1},macroEffects:{ demand:-0.04, infrastructureQuality:-0.08 },choices:[
         {text:"Deploy federal firefighting resources and declare emergency",effects:{approvalRating:3,nationalDebt:0.05},stateBoost:0.04,result:"Rapid federal response praised."},
         {text:"Partner with states on long-term forest management",effects:{approvalRating:1},factionEffects:{mod_rep:0.2,blue_dog:0.2,prog:0.1},result:"Bipartisan approach. Slower to show results."},
         {text:"Link to climate change, push green energy agenda",effects:{approvalRating:0},factionEffects:{prog:0.4,freedom:-0.5},result:"Base energized. Rural communities skeptical."},
@@ -309,12 +310,12 @@ export function generateDynamicEvents(
     {id:"winter_storm",season:"winter",
       name:`Severe winter storm paralyzes ${winterStorm[0]} and neighbors`,
       desc:`A historic blizzard brings record snowfall and ice to ${winterStorm.join(", ")}, knocking out power to millions and closing highways.`,
-      repeatable:true,isDisaster:true,affectedStates:winterStorm,effects:{approvalRating:-1,gdpGrowth:-0.05,infrastructureSpending:3},choices:[
+      repeatable:true,isDisaster:true,affectedStates:winterStorm,effects:{approvalRating:-1,infrastructureSpending:3},macroEffects:{ demand:-0.04, infrastructureQuality:-0.06 },choices:[
         {text:"Issue emergency declaration, mobilize National Guard",effects:{approvalRating:3,nationalDebt:0.04},stateBoost:0.04,result:"Rapid federal response praised by governors."},
         {text:"Coordinate with state emergency managers",effects:{approvalRating:1},stateBoost:0.02,result:"Steady, methodical response."},
         {text:"Urge residents to shelter in place, minimal federal role",effects:{approvalRating:-2},stateBoost:-0.03,result:"Critics say the federal government was missing in action."},
     ]},
-    {id:"trade_deal",name:"Historic trade deal with Pacific partners",desc:"A new multilateral trade agreement with 10 Pacific nations is ready for congressional approval.",unique:true,engagementEffect:3,effects:{tradeBalance:8,gdpGrowth:0.15,approvalRating:1},choices:[
+    {id:"trade_deal",name:"Historic trade deal with Pacific partners",desc:"A new multilateral trade agreement with 10 Pacific nations is ready for congressional approval.",unique:true,engagementEffect:3,effects:{tradeBalance:8,approvalRating:1},macroEffects:{ nx:0.18, investment:0.06, businessConfidence:0.8 },choices:[
       {text:"Sign and push Congress hard for ratification",effects:{approvalRating:2,tradeBalance:5},factionEffects:{mod_dem:0.3,mod_rep:0.4,prog:-0.3,blue_dog:0.2},result:"Business community celebrates."},
       {text:"Sign with stronger labor protections",effects:{approvalRating:1},factionEffects:{prog:0.2,blue_dog:0.3,mod_rep:0.1,freedom:-0.2},result:"Labor unions back it. Some partners grumble."},
       {text:"Renegotiate key terms before signing",effects:{approvalRating:-1,tradeBalance:-2},result:"Caution noted but partners grow impatient."},
@@ -474,7 +475,8 @@ export function generateDynamicEvents(
         desc: "The cannabis industry has exploded since federal legalization — generating $40B in new economic activity, creating 280,000 jobs, and triggering a stock market boom for cannabis companies. Tax revenues are exceeding projections.",
         triggeredBy: "Federal Marijuana Legalization Act",
         unique: true,
-        effects: { gdpGrowth: 0.2, unemployment: -0.1, approvalRating: 2 },
+        effects: { approvalRating: 2 },
+        macroEffects: { demand: 0.08, labor: -0.05, businessConfidence: 0.8 },
         choices: [
           { text: "Highlight economic wins, propose cannabis tax reinvestment", effects: { approvalRating: 2, nationalDebt: -0.02 }, factionEffects: { prog: 0.3, mod_dem: 0.2, freedom: 0.1 }, result: "Bipartisan economic good news. Popularity spikes." },
           { text: "Announce federal research grants on cannabis health effects", effects: { approvalRating: 1, healthcareSpending: 5 }, result: "Science-based approach wins moderate support." },
@@ -492,7 +494,8 @@ export function generateDynamicEvents(
     name: `Major Auto Plant Announces Closure in ${rustBeltState}`,
     desc: `A major automobile manufacturer has announced the permanent closure of its ${rustBeltState} assembly plant, eliminating 8,500 union jobs. Workers are demanding federal intervention.`,
     affectedStates: [rustBeltState],
-    effects: { unemployment: 0.1, approvalRating: -2 },
+    effects: { approvalRating: -2 },
+    macroEffects: { labor: 0.08, confidence: -0.05 },
     choices: [
       { text: "Negotiate with the company to reverse the closure", effects: { approvalRating: 2 }, stateBoost: 0.03, result: "Talks begin. No guarantee of success, but workers feel heard." },
       { text: "Announce worker retraining and relocation assistance", effects: { approvalRating: 1, nationalDebt: 0.03, educationSpending: 5 }, stateBoost: 0.02, result: "Workers appreciate the support, though many feel left behind." },
@@ -510,9 +513,10 @@ export function generateDynamicEvents(
     name: `Major ${rareLabel} Deposit Discovered in ${rareEarthState}`,
     desc: `Geological surveys have confirmed one of the largest ${rareEarthMetal} deposits ever found in ${rareEarthState}. The discovery could reshape U.S. strategic mineral independence — but mining would require federal permitting on protected land.`,
     affectedStates: [rareEarthState],
-    effects: { approvalRating: 1, gdpGrowth: 0.1 },
+    effects: { approvalRating: 1 },
+    macroEffects: { investment: 0.08, productivity: 0.03, nx: 0.04 },
     choices: [
-      { text: "Fast-track mining permits for national security", effects: { approvalRating: 1, gdpGrowth: 0.2 }, factionEffects: { freedom: 0.4, mod_rep: 0.3, prog: -0.5, trad_con: 0.2 }, stateBoost: 0.03, result: "Industry cheers. Environmentalists launch legal challenges." },
+      { text: "Fast-track mining permits for national security", effects: { approvalRating: 1 }, macroEffects: { investment: 0.12, productivity: 0.05, nx: 0.06 }, factionEffects: { freedom: 0.4, mod_rep: 0.3, prog: -0.5, trad_con: 0.2 }, stateBoost: 0.03, result: "Industry cheers. Environmentalists launch legal challenges." },
       { text: "Require full environmental review before permitting", effects: { approvalRating: 0 }, factionEffects: { prog: 0.3, freedom: -0.2 }, result: "Balanced approach. Mining companies complain of delays." },
       { text: "Designate deposit as strategic reserve, pause development", effects: { approvalRating: 0 }, factionEffects: { prog: 0.4, freedom: -0.4 }, result: "Environmentalists pleased. Geopolitical strategists divided." },
     ],

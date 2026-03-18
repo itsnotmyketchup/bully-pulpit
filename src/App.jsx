@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 
 import { PARTIES, FACTION_DATA } from "./data/factions.js";
 import { STATE_DATA } from "./data/states.js";
@@ -15,12 +15,13 @@ import {
 import { EXECUTIVE_ORDERS, buildExecutiveOrderOutcome } from "./data/executiveOrders.js";
 import { TABS, ALLIED_FACTIONS, OPPOSITION_FACTIONS, COUNTRY_FACTION_EFFECTS } from "./data/constants.js";
 
-import { generateCongress, LEADER_NAMES } from "./logic/generateCongress.js";
+import { generateCongress } from "./logic/generateCongress.js";
 import { calcStateApproval } from "./logic/calcStateApproval.js";
 import { advanceApproval } from "./logic/approvalCalc.js";
 import { calcStageAdvance } from "./logic/billProgression.js";
 import {
   adaptLegacyEffectsToMacroImpulses,
+  applyMacroEffects,
   advanceMacroEconomy,
   buildFedNominationEvent,
   createInitialMacroState,
@@ -28,9 +29,11 @@ import {
   pickFedChairName,
   resolveFedNomination,
 } from "./logic/macroEconomy.js";
+import { generateSecStateCandidates } from "./logic/cabinetAppointments.js";
 import { APPOINTMENT_STAGES, evaluateAppointment } from "./logic/appointmentProgression.js";
 import { computeBudgetReactions } from "./systems/budgetCalc.js";
 import { makeSurrogates } from "./utils/makeSurrogates.js";
+import { createNameRegistry } from "./utils/nameBank.js";
 
 import Badge from "./components/Badge.jsx";
 
@@ -78,7 +81,80 @@ const DRILLING_REGION_STATE_MAP = {
   pacific: ["NM", "WY"],
 };
 
+const clampStat = (value, min = 5, max = 95) => Math.max(min, Math.min(max, value));
+
+function createInitialCabinetState() {
+  return {
+    secState: {
+      occupantName: null,
+      factionId: null,
+      party: null,
+      startWeek: null,
+      candidates: [],
+      selectedCandidateId: null,
+    },
+  };
+}
+
+function getPromiseLabel(promise) {
+  if (!promise) return "";
+  if (promise.type === "cabinet") return `appoint Secretary of State from ${promise.promisedFactionName}`;
+  return `pass "${promise.billName}"`;
+}
+
+function buildYearlyPromiseOffers({ playerParty, usedPol, billCooldowns, week, cabinetState, pendingAppointment }) {
+  const offers = {};
+  const secStateAvailable = !cabinetState.secState.occupantName && pendingAppointment?.officeId !== "sec_state";
+
+  FACTION_DATA[playerParty].forEach(faction => {
+    const billOptions = POLICY_ACTIONS
+      .filter(action => (action.factionReactions?.[faction.id] || 0) > 0 && !usedPol.has(action.id) && !(billCooldowns[action.id] && week < billCooldowns[action.id]))
+      .sort((a, b) => (b.factionReactions?.[faction.id] || 0) - (a.factionReactions?.[faction.id] || 0))
+      .slice(0, 4)
+      .map(action => {
+        const controversy = Object.values(action.factionReactions).reduce((sum, value) => sum + Math.abs(value), 0) / Object.keys(action.factionReactions).length;
+        return {
+          type: "bill",
+          billId: action.id,
+          billName: action.name,
+          label: `Pass "${action.name}"`,
+          relBoost: Math.max(3, Math.round(controversy * 12)),
+          brokenRelPenalty: 10,
+          brokenTrustPenalty: 15,
+          successTrustBoost: 5,
+        };
+      });
+
+    const cabinetOption = secStateAvailable ? [{
+      type: "cabinet",
+      officeId: "sec_state",
+      officeLabel: "Secretary of State",
+      promisedFactionId: faction.id,
+      promisedFactionName: faction.name,
+      label: `Give Secretary of State to ${faction.name}`,
+      relBoost: 8,
+      brokenRelPenalty: 12,
+      brokenTrustPenalty: 20,
+      betrayalRelPenalty: 18,
+      betrayalTrustPenalty: 35,
+      successTrustBoost: 8,
+    }] : [];
+
+    const candidatePool = [...billOptions, ...cabinetOption];
+    if (candidatePool.length > 0) {
+      offers[faction.id] = candidatePool
+        .sort(() => Math.random() - 0.5)
+        .slice(0, Math.min(2, candidatePool.length));
+    } else {
+      offers[faction.id] = [];
+    }
+  });
+
+  return offers;
+}
+
 export default function Game() {
+  const nameRegistryRef = useRef(createNameRegistry());
   const [screen, setScreen] = useState(0);
   const [pp, setPP] = useState(null);
   const [pf, setPF] = useState(null);
@@ -117,7 +193,8 @@ export default function Game() {
   const [congressTab, setCongressTab] = useState("overview");
   const [policyFilter, setPolicyFilter] = useState("all");
   const [promises, setPromises] = useState([]); // [{billId, factionId, madeWeek, deadline}]
-  const [surrogates, setSurrogates] = useState(makeSurrogates);
+  const [promiseOffers, setPromiseOffers] = useState({});
+  const [surrogates, setSurrogates] = useState([]);
   const [billCooldowns, setBillCooldowns] = useState({}); // {billId: canRetryAfterWeek}
   const [foreignVisitResult, setForeignVisitResult] = useState(null);
   const [surrogateUI, setSurrogateUI] = useState({}); // per-surrogate pending assignment UI state
@@ -159,6 +236,7 @@ export default function Game() {
   const [pendingSignature, setPendingSignature] = useState(null); // { act, votes, factionVotes, isBudget, budgetDraft } — awaiting sign/veto
   const [pendingAppointment, setPendingAppointment] = useState(null); // {officeId, officeLabel, nomineeName, personality, stage, stages, startedWeek, factionReactions}
   const [confirmationHistory, setConfirmationHistory] = useState([]);
+  const [cabinet, setCabinet] = useState(() => createInitialCabinetState());
 
   // ── Election state ──────────────────────────────────────────────────────────
   const [congressHistory, setCongressHistory] = useState([]);
@@ -207,7 +285,8 @@ export default function Game() {
 
   const applyEffectsBundle = useCallback((currentStats, currentMacroState, effects = {}, sourceMeta = {}, mult = 1) => {
     let nextStats = { ...currentStats };
-    let nextMacroState = adaptLegacyEffectsToMacroImpulses(currentMacroState, effects, sourceMeta, mult);
+    let nextMacroState = applyMacroEffects(currentMacroState, sourceMeta.macroEffects || {}, mult);
+    nextMacroState = adaptLegacyEffectsToMacroImpulses(nextMacroState, effects, sourceMeta, mult);
 
     Object.entries(effects || {}).forEach(([key, rawValue]) => {
       const value = rawValue * mult;
@@ -219,19 +298,359 @@ export default function Game() {
     return { stats: nextStats, macroState: nextMacroState };
   }, [syncDerivedStats]);
 
-  const buildAppointmentProcess = useCallback((officeId, officeLabel, nomineeName, personality) => ({
-    officeId,
-    officeLabel,
-    nomineeName,
-    personality,
-    stage: "committee_hearing",
-    stages: APPOINTMENT_STAGES,
-    startedWeek: week,
-    turnsInStage: 0,
-    factionReactions: resolveFedNomination(cg, pp, personality).reactions,
-    factionVotes: [],
-    passLikelihood: 100,
-  }), [cg, pp, week]);
+  const buildAppointmentProcess = useCallback((config) => {
+    const {
+      officeId,
+      officeLabel,
+      nomineeName,
+      personality = null,
+      factionReactions = null,
+      nomineeFactionId = null,
+      nomineeFactionName = null,
+      isHighPriority = false,
+    } = config;
+
+    return {
+      officeId,
+      officeLabel,
+      nomineeName,
+      personality,
+      nomineeFactionId,
+      nomineeFactionName,
+      stage: "committee_hearing",
+      stages: APPOINTMENT_STAGES,
+      startedWeek: week,
+      turnsInStage: 0,
+      factionReactions: factionReactions || resolveFedNomination(cg, pp, personality).reactions,
+      factionVotes: [],
+      passLikelihood: 100,
+      isHighPriority,
+    };
+  }, [cg, pp, week]);
+
+  const refreshPromiseOffers = useCallback((overrides = {}) => {
+    const factions = overrides.factions || cg?.factions;
+    const playerParty = overrides.playerParty || pp;
+    if (!factions || !playerParty) return;
+    setPromiseOffers(buildYearlyPromiseOffers({
+      factions,
+      playerParty,
+      usedPol: overrides.usedPol || usedPol,
+      billCooldowns: overrides.billCooldowns || billCooldowns,
+      week: overrides.week || week,
+      cabinetState: overrides.cabinetState || cabinet,
+      pendingAppointment: Object.prototype.hasOwnProperty.call(overrides, "pendingAppointment") ? overrides.pendingAppointment : pendingAppointment,
+    }));
+  }, [billCooldowns, cabinet, cg, pendingAppointment, pp, usedPol, week]);
+
+  const settleSecStatePromises = useCallback((factionsSnapshot, confirmedFactionId, occupantName) => {
+    const nextFactions = { ...factionsSnapshot };
+    const remainingPromises = [];
+    const broken = [];
+    const logs = [];
+
+    promises.forEach(promise => {
+      if (promise.type !== "cabinet" || promise.officeId !== "sec_state") {
+        remainingPromises.push(promise);
+        return;
+      }
+
+      if (promise.promisedFactionId === confirmedFactionId) {
+        if (nextFactions[promise.factionId]) {
+          nextFactions[promise.factionId] = {
+            ...nextFactions[promise.factionId],
+            trust: clampStat(nextFactions[promise.factionId].trust + (promise.successTrustBoost || 8)),
+          };
+        }
+        logs.push(`Promise kept: ${occupantName} gave ${promise.promisedFactionName} Secretary of State. Trust +${promise.successTrustBoost || 8}.`);
+        return;
+      }
+
+      if (nextFactions[promise.factionId]) {
+        nextFactions[promise.factionId] = {
+          ...nextFactions[promise.factionId],
+          relationship: clampStat(nextFactions[promise.factionId].relationship - (promise.betrayalRelPenalty || 18)),
+          trust: clampStat(nextFactions[promise.factionId].trust - (promise.betrayalTrustPenalty || 35)),
+        };
+      }
+      logs.push(`Broken promise: ${promise.promisedFactionName} was promised Secretary of State, but ${occupantName} came from another faction.`);
+      broken.push({
+        factionName: nextFactions[promise.factionId]?.name || promise.promisedFactionName,
+        promiseLabel: getPromiseLabel(promise),
+        relationshipLoss: promise.betrayalRelPenalty || 18,
+        trustLoss: promise.betrayalTrustPenalty || 35,
+      });
+    });
+
+    return { nextFactions, remainingPromises, broken, logs };
+  }, [promises]);
+
+  const beginSecStateAppointment = useCallback(() => {
+    if (act >= 4 || pendingAppointment) return;
+    const candidates = generateSecStateCandidates(pp, nameRegistryRef.current);
+    setCabinet(prev => ({
+      ...prev,
+      secState: {
+        ...prev.secState,
+        candidates,
+        selectedCandidateId: null,
+      },
+    }));
+    setAct(prev => prev + 1);
+  }, [act, pendingAppointment, pp]);
+
+  const selectSecStateCandidate = useCallback((candidateId) => {
+    setCabinet(prev => ({
+      ...prev,
+      secState: {
+        ...prev.secState,
+        selectedCandidateId: prev.secState.selectedCandidateId === candidateId ? null : candidateId,
+      },
+    }));
+  }, []);
+
+  const nominateSecStateCandidate = useCallback(() => {
+    const candidateId = cabinet.secState.selectedCandidateId;
+    const candidate = cabinet.secState.candidates.find(entry => entry.id === candidateId);
+    if (!candidate) return;
+    setPendingAppointment(buildAppointmentProcess({
+      officeId: "sec_state",
+      officeLabel: "Secretary of State",
+      nomineeName: candidate.name,
+      nomineeFactionId: candidate.factionId,
+      nomineeFactionName: candidate.factionName,
+      factionReactions: candidate.reactions,
+      isHighPriority: true,
+      lobbyUsedStage: null,
+    }));
+    setCabinet(prev => ({
+      ...prev,
+      secState: {
+        ...prev.secState,
+        selectedCandidateId: null,
+      },
+    }));
+    refreshPromiseOffers({ pendingAppointment: { officeId: "sec_state" } });
+    addLog(`${candidate.name} was nominated for Secretary of State.`);
+  }, [addLog, buildAppointmentProcess, cabinet.secState.candidates, cabinet.secState.selectedCandidateId, refreshPromiseOffers]);
+
+  const resolveAppointmentStep = useCallback((appointment, factionsSnapshot, effectiveWeek, macroSnapshot) => {
+    const nextAppointment = { ...appointment, turnsInStage: (appointment.turnsInStage || 0) + 1 };
+
+    if (appointment.stage === "committee_hearing") {
+      return {
+        nextAppointment: { ...nextAppointment, stage: "committee_vote", turnsInStage: 0, passLikelihood: 100, lobbyUsedStage: null },
+        nextMacroState: macroSnapshot,
+        logs: [`${appointment.nomineeName} completed the committee hearing for ${appointment.officeLabel}.`],
+      };
+    }
+
+    const appointmentVote = evaluateAppointment({ ...cg, factions: factionsSnapshot }, appointment.factionReactions);
+
+    if (appointmentVote.passed && appointment.stage === "committee_vote") {
+      return {
+        nextAppointment: {
+          ...nextAppointment,
+          stage: "senate_vote",
+          turnsInStage: 0,
+          factionVotes: appointmentVote.factionVotes,
+          passLikelihood: appointmentVote.passLikelihood,
+          committeeVote: appointmentVote,
+          lobbyUsedStage: null,
+        },
+        nextMacroState: macroSnapshot,
+        logs: [`${appointment.nomineeName} cleared committee and is headed to the Senate floor.`],
+      };
+    }
+
+    if (appointmentVote.passed && appointment.stage === "senate_vote") {
+      const confirmationRecord = {
+        id: `${appointment.officeId}_${effectiveWeek}_${appointment.nomineeName}`,
+        officeId: appointment.officeId,
+        officeLabel: appointment.officeLabel,
+        nomineeName: appointment.nomineeName,
+        personality: appointment.personality,
+        passed: true,
+        committeeYes: appointment.committeeVote?.senateYes ?? 100,
+        committeeNo: appointment.committeeVote?.senateNo ?? 0,
+        senateYes: appointmentVote.senateYes,
+        senateNo: appointmentVote.senateNo,
+        year: Math.ceil(effectiveWeek / 52),
+        weekOfYear: ((effectiveWeek - 1) % 52) + 1,
+      };
+
+      if (appointment.officeId === "fed_chair") {
+        return {
+          nextAppointment: null,
+          nextMacroState: {
+            ...macroSnapshot,
+            fedVacant: false,
+            fedChairName: appointment.nomineeName,
+            fedChairStartWeek: effectiveWeek,
+            governorPersonality: appointment.personality,
+            fedDecisionSummary: `${appointment.nomineeName} was confirmed as ${appointment.personality.toLowerCase()} Fed chair by the Senate ${appointmentVote.senateYes}-${appointmentVote.senateNo}.`,
+          },
+          confirmationRecord,
+          notification: { type: "appointment_success", message: `Senate confirmed ${appointment.nomineeName} as Fed chair.`, tab: "cabinet" },
+          logs: [`${appointment.nomineeName} was confirmed as Federal Reserve Chair.`],
+        };
+      }
+
+      if (appointment.officeId === "sec_state") {
+        return {
+          nextAppointment: null,
+          nextMacroState: macroSnapshot,
+          confirmationRecord,
+          notification: { type: "appointment_success", message: `Senate confirmed ${appointment.nomineeName} as Secretary of State.`, tab: "cabinet" },
+          logs: [`${appointment.nomineeName} was confirmed as Secretary of State.`],
+          secStateConfirmed: {
+            name: appointment.nomineeName,
+            factionId: appointment.nomineeFactionId,
+          },
+        };
+      }
+    }
+
+    const confirmationRecord = {
+      id: `${appointment.officeId}_${effectiveWeek}_${appointment.nomineeName}`,
+      officeId: appointment.officeId,
+      officeLabel: appointment.officeLabel,
+      nomineeName: appointment.nomineeName,
+      personality: appointment.personality,
+      passed: false,
+      committeeYes: appointment.stage === "senate_vote"
+        ? (appointment.committeeVote?.senateYes ?? 100)
+        : appointmentVote.senateYes,
+      committeeNo: appointment.stage === "senate_vote"
+        ? (appointment.committeeVote?.senateNo ?? 0)
+        : appointmentVote.senateNo,
+      senateYes: appointment.stage === "senate_vote" ? appointmentVote.senateYes : 0,
+      senateNo: appointment.stage === "senate_vote" ? appointmentVote.senateNo : 0,
+      year: Math.ceil(effectiveWeek / 52),
+      weekOfYear: ((effectiveWeek - 1) % 52) + 1,
+    };
+
+    if (appointment.officeId === "fed_chair") {
+      const replacementName = pickFedChairName(nameRegistryRef.current);
+      return {
+        nextAppointment: buildAppointmentProcess({
+          officeId: "fed_chair",
+          officeLabel: "Federal Reserve Chair",
+          nomineeName: replacementName,
+          personality: appointment.personality,
+        }),
+        nextMacroState: {
+          ...macroSnapshot,
+          fedVacant: true,
+          fedDecisionSummary: `${replacementName} is the new ${appointment.personality.toLowerCase()} Fed nominee after the Senate rejected ${appointment.nomineeName}.`,
+        },
+        confirmationRecord,
+        notification: { type: "appointment_fail", message: `Senate rejected ${appointment.nomineeName} for ${appointment.officeLabel}.`, tab: "cabinet" },
+        logs: [
+          `${appointment.nomineeName} was rejected for ${appointment.officeLabel}.`,
+          `${replacementName} was automatically nominated to replace the rejected Fed chair nominee.`,
+        ],
+      };
+    }
+
+    const candidates = generateSecStateCandidates(pp, nameRegistryRef.current);
+    return {
+      nextAppointment: null,
+      nextMacroState: macroSnapshot,
+      confirmationRecord,
+      notification: { type: "appointment_fail", message: `Senate rejected ${appointment.nomineeName} for ${appointment.officeLabel}.`, tab: "cabinet" },
+      logs: [
+        `${appointment.nomineeName} was rejected for ${appointment.officeLabel}.`,
+        "A new Secretary of State shortlist has been generated.",
+      ],
+      secStateRejected: { candidates },
+    };
+  }, [buildAppointmentProcess, cg, pp]);
+
+  const fastTrackAppointment = useCallback(() => {
+    if (!pendingAppointment?.isHighPriority) return;
+    if (pendingAppointment.lobbyUsedStage === pendingAppointment.stage) return;
+
+    const result = resolveAppointmentStep(pendingAppointment, { ...cg.factions }, week, { ...macroState });
+    result.logs?.forEach(addLog);
+    if (result.notification) addNotification(result.notification);
+    if (result.confirmationRecord) setConfirmationHistory(prev => [...prev, result.confirmationRecord]);
+
+    let finalFactions = { ...cg.factions };
+      if (result.secStateConfirmed) {
+        const settled = settleSecStatePromises(finalFactions, result.secStateConfirmed.factionId, result.secStateConfirmed.name);
+        finalFactions = { ...settled.nextFactions };
+        settled.logs.forEach(addLog);
+        if (settled.broken.length > 0) setBrokenPromises(prev => [...prev, ...settled.broken]);
+        setPromises(settled.remainingPromises);
+        setEngagement(prev => Math.min(50, prev + 7));
+        setCabinet(prev => ({
+          ...prev,
+          secState: {
+          ...prev.secState,
+          occupantName: result.secStateConfirmed.name,
+          factionId: result.secStateConfirmed.factionId,
+          party: finalFactions[result.secStateConfirmed.factionId]?.party || null,
+          startWeek: week,
+          candidates: [],
+          selectedCandidateId: null,
+        },
+      }));
+    } else if (result.secStateRejected) {
+      setCabinet(prev => ({
+        ...prev,
+        secState: {
+          ...prev.secState,
+          occupantName: null,
+          factionId: null,
+          party: null,
+          startWeek: null,
+          candidates: result.secStateRejected.candidates,
+          selectedCandidateId: null,
+        },
+      }));
+    }
+
+    setCG(prev => ({ ...prev, factions: finalFactions }));
+    setMacroState(result.nextMacroState);
+    setPendingAppointment(result.nextAppointment);
+    refreshPromiseOffers({
+      factions: finalFactions,
+      cabinetState: {
+        ...cabinet,
+        secState: result.nextAppointment?.officeId === "sec_state"
+          ? cabinet.secState
+          : {
+            ...cabinet.secState,
+            candidates: result.nextAppointment ? cabinet.secState.candidates : [],
+          },
+      },
+      pendingAppointment: result.nextAppointment,
+    });
+  }, [addLog, addNotification, cabinet, cg, macroState, pendingAppointment, refreshPromiseOffers, resolveAppointmentStep, settleSecStatePromises, week]);
+
+  const lobbyAppointment = useCallback(() => {
+    if (pendingAppointment?.officeId !== "sec_state") return;
+
+    const success = Math.random() < 0.66;
+    const boostedReactions = Object.fromEntries(
+      Object.entries(pendingAppointment.factionReactions || {}).map(([fid, reaction]) => [
+        fid,
+        Math.max(-0.95, Math.min(0.95, reaction + (success ? 0.04 : 0))),
+      ])
+    );
+    const appointmentVote = evaluateAppointment({ ...cg, factions: cg.factions }, boostedReactions);
+
+    setPendingAppointment(prev => ({
+      ...prev,
+      factionReactions: boostedReactions,
+      factionVotes: appointmentVote.factionVotes,
+      passLikelihood: appointmentVote.passLikelihood,
+      lobbyUsedStage: prev.stage,
+    }));
+
+    addLog(`${surrogates.find(s => s.id === "s1")?.name || "Senior Advisor"} ${success ? "improved" : "failed to improve"} Senate sentiment for ${pendingAppointment.nomineeName}.`);
+  }, [addLog, cg, pendingAppointment, surrogates]);
 
   const fireEvent = useCallback((event, nextStats, eventWeek, options = {}) => {
     const { isSpecial = false, macro = macroState } = options;
@@ -253,8 +672,10 @@ export default function Game() {
 
   const start = () => {
     if (!pp || !pf || !pn.trim()) return;
-    const c = generateCongress(pp, pf);
-    const freshMacroState = createInitialMacroState();
+    nameRegistryRef.current = createNameRegistry();
+    const freshFedChairName = nameRegistryRef.current.drawName("Fed Chair");
+    const c = generateCongress(pp, pf, nameRegistryRef.current);
+    const freshMacroState = createInitialMacroState(freshFedChairName);
     const freshStats = syncDerivedStats({ ...INITIAL_STATS }, freshMacroState);
     setCG(c);
     setMacroState(freshMacroState);
@@ -276,7 +697,16 @@ export default function Game() {
     setBillLikelihood(null);
     setCongressTab("overview");
     setPromises([]);
-    setSurrogates(makeSurrogates());
+    setPromiseOffers(buildYearlyPromiseOffers({
+      factions: c.factions,
+      playerParty: pp,
+      usedPol: new Set(),
+      billCooldowns: {},
+      week: 1,
+      cabinetState: createInitialCabinetState(),
+      pendingAppointment: null,
+    }));
+    setSurrogates(makeSurrogates(nameRegistryRef.current));
     setBillCooldowns({});
     setForeignVisitResult(null);
     setSurrogateUI({});
@@ -309,6 +739,7 @@ export default function Game() {
     setPendingSignature(null);
     setPendingAppointment(null);
     setConfirmationHistory([]);
+    setCabinet(createInitialCabinetState());
     setCongressHistory([buildHistorySnapshot(c, 1, 0, 0, freshStats.approvalRating, 0, freshStats.approvalRating, false, { isInitial: true })]);
     setMidtermResults(null);
     setShowMidtermModal(false);
@@ -422,7 +853,7 @@ export default function Game() {
       // Auto-replace leader if unity < 25
       if (nf[fid].unity < 25) {
         const newLeader = {
-          name: LEADER_NAMES[Math.floor(Math.random() * LEADER_NAMES.length)],
+          name: nameRegistryRef.current.drawName("Leader"),
           charisma: 1 + Math.floor(Math.random() * 10),
           authority: 1 + Math.floor(Math.random() * 10),
           sincerity: 1 + Math.floor(Math.random() * 10),
@@ -641,89 +1072,71 @@ export default function Game() {
     });
 
     if (pendingAppointment) {
-      const nextAppointment = { ...pendingAppointment, turnsInStage: (pendingAppointment.turnsInStage || 0) + 1 };
-      if (pendingAppointment.stage === "committee_hearing") {
-        setPendingAppointment({ ...nextAppointment, stage: "committee_vote", turnsInStage: 0, passLikelihood: 100 });
-        addLog(`${pendingAppointment.nomineeName} completed the committee hearing for ${pendingAppointment.officeLabel}.`);
-      } else {
-        const appointmentVote = evaluateAppointment({ ...cg, factions: nf }, pendingAppointment.factionReactions);
-        if (appointmentVote.passed && pendingAppointment.stage === "committee_vote") {
-          setPendingAppointment({
-            ...nextAppointment,
-            stage: "senate_vote",
-            turnsInStage: 0,
-            factionVotes: appointmentVote.factionVotes,
-            passLikelihood: appointmentVote.passLikelihood,
-            committeeVote: appointmentVote,
-          });
-          addLog(`${pendingAppointment.nomineeName} cleared committee and is headed to the Senate floor.`);
-        } else if (appointmentVote.passed && pendingAppointment.stage === "senate_vote") {
-          setConfirmationHistory(prev => [...prev, {
-            id: `${pendingAppointment.officeId}_${week + 1}_${pendingAppointment.nomineeName}`,
-            officeId: pendingAppointment.officeId,
-            officeLabel: pendingAppointment.officeLabel,
-            nomineeName: pendingAppointment.nomineeName,
-            personality: pendingAppointment.personality,
-            passed: true,
-            committeeYes: pendingAppointment.committeeVote?.senateYes ?? 100,
-            committeeNo: pendingAppointment.committeeVote?.senateNo ?? 0,
-            senateYes: appointmentVote.senateYes,
-            senateNo: appointmentVote.senateNo,
-            year: Math.ceil((week + 1) / 52),
-            weekOfYear: (((week + 1) - 1) % 52) + 1,
-          }]);
-          if (pendingAppointment.officeId === "fed_chair") {
-            nextMacroState = {
-              ...nextMacroState,
-              fedVacant: false,
-              fedChairName: pendingAppointment.nomineeName,
-              fedChairStartWeek: week + 1,
-              governorPersonality: pendingAppointment.personality,
-              fedDecisionSummary: `${pendingAppointment.nomineeName} was confirmed as ${pendingAppointment.personality.toLowerCase()} Fed chair by the Senate ${appointmentVote.senateYes}-${appointmentVote.senateNo}.`,
-            };
-            addNotification({ type: "appointment_success", message: `Senate confirmed ${pendingAppointment.nomineeName} as Fed chair.`, tab: "cabinet" });
-            addLog(`${pendingAppointment.nomineeName} was confirmed as Federal Reserve Chair.`);
-          }
-          setPendingAppointment(null);
-        } else if (!appointmentVote.passed) {
-          setConfirmationHistory(prev => [...prev, {
-            id: `${pendingAppointment.officeId}_${week + 1}_${pendingAppointment.nomineeName}`,
-            officeId: pendingAppointment.officeId,
-            officeLabel: pendingAppointment.officeLabel,
-            nomineeName: pendingAppointment.nomineeName,
-            personality: pendingAppointment.personality,
-            passed: false,
-            committeeYes: pendingAppointment.stage === "senate_vote"
-              ? (pendingAppointment.committeeVote?.senateYes ?? 100)
-              : appointmentVote.senateYes,
-            committeeNo: pendingAppointment.stage === "senate_vote"
-              ? (pendingAppointment.committeeVote?.senateNo ?? 0)
-              : appointmentVote.senateNo,
-            senateYes: pendingAppointment.stage === "senate_vote" ? appointmentVote.senateYes : 0,
-            senateNo: pendingAppointment.stage === "senate_vote" ? appointmentVote.senateNo : 0,
-            year: Math.ceil((week + 1) / 52),
-            weekOfYear: (((week + 1) - 1) % 52) + 1,
-          }]);
-          addNotification({ type: "appointment_fail", message: `Senate rejected ${pendingAppointment.nomineeName} for ${pendingAppointment.officeLabel}.`, tab: "cabinet" });
-          addLog(`${pendingAppointment.nomineeName} was rejected for ${pendingAppointment.officeLabel}.`);
-          if (pendingAppointment.officeId === "fed_chair") {
-            const replacementName = pickFedChairName([pendingAppointment.nomineeName, nextMacroState.fedChairName]);
-            setPendingAppointment(buildAppointmentProcess(
-              "fed_chair",
-              "Federal Reserve Chair",
-              replacementName,
-              pendingAppointment.personality
-            ));
-            nextMacroState = {
-              ...nextMacroState,
-              fedVacant: true,
-              fedDecisionSummary: `${replacementName} is the new ${pendingAppointment.personality.toLowerCase()} Fed nominee after the Senate rejected ${pendingAppointment.nomineeName}.`,
-            };
-            addLog(`${replacementName} was automatically nominated to replace the rejected Fed chair nominee.`);
-          } else {
-            setPendingAppointment(null);
-          }
-        }
+      const appointmentResult = resolveAppointmentStep(pendingAppointment, nf, week + 1, nextMacroState);
+      appointmentResult.logs?.forEach(addLog);
+      if (appointmentResult.notification) addNotification(appointmentResult.notification);
+      if (appointmentResult.confirmationRecord) setConfirmationHistory(prev => [...prev, appointmentResult.confirmationRecord]);
+      nextMacroState = appointmentResult.nextMacroState;
+      setPendingAppointment(appointmentResult.nextAppointment);
+
+      if (appointmentResult.secStateConfirmed) {
+        const settled = settleSecStatePromises(nf, appointmentResult.secStateConfirmed.factionId, appointmentResult.secStateConfirmed.name);
+        Object.assign(nf, settled.nextFactions);
+        settled.logs.forEach(addLog);
+        setPromises(settled.remainingPromises);
+        if (settled.broken.length > 0) setBrokenPromises(prev => [...prev, ...settled.broken]);
+        setEngagement(prev => Math.min(50, prev + 7));
+        const updatedCabinetState = {
+          ...cabinet,
+          secState: {
+            ...cabinet.secState,
+            occupantName: appointmentResult.secStateConfirmed.name,
+            factionId: appointmentResult.secStateConfirmed.factionId,
+            party: nf[appointmentResult.secStateConfirmed.factionId]?.party || null,
+            startWeek: week + 1,
+            candidates: [],
+            selectedCandidateId: null,
+          },
+        };
+        setCabinet(prev => ({
+          ...prev,
+          secState: {
+            ...prev.secState,
+            occupantName: appointmentResult.secStateConfirmed.name,
+            factionId: appointmentResult.secStateConfirmed.factionId,
+            party: nf[appointmentResult.secStateConfirmed.factionId]?.party || null,
+            startWeek: week + 1,
+            candidates: [],
+            selectedCandidateId: null,
+          },
+        }));
+        refreshPromiseOffers({ factions: nf, cabinetState: updatedCabinetState, pendingAppointment: appointmentResult.nextAppointment });
+      } else if (appointmentResult.secStateRejected) {
+        const updatedCabinetState = {
+          ...cabinet,
+          secState: {
+            ...cabinet.secState,
+            occupantName: null,
+            factionId: null,
+            party: null,
+            startWeek: null,
+            candidates: appointmentResult.secStateRejected.candidates,
+            selectedCandidateId: null,
+          },
+        };
+        setCabinet(prev => ({
+          ...prev,
+          secState: {
+            ...prev.secState,
+            occupantName: null,
+            factionId: null,
+            party: null,
+            startWeek: null,
+            candidates: appointmentResult.secStateRejected.candidates,
+            selectedCandidateId: null,
+          },
+        }));
+        refreshPromiseOffers({ factions: nf, cabinetState: updatedCabinetState, pendingAppointment: appointmentResult.nextAppointment });
       }
     }
 
@@ -772,7 +1185,7 @@ export default function Game() {
     // Warn player 12 weeks before promise deadline if bill not yet passed
     const nwCheck = week + 1;
     promises.forEach(p => {
-      if (p.deadline - nwCheck === 12 && !usedPol.has(p.billId)) {
+      if (p.type === "bill" && p.deadline - nwCheck === 12 && !passedLegislation[p.billId]) {
         const bill = POLICY_ACTIONS.find(a => a.id === p.billId);
         const faction = nf[p.factionId];
         addNotification({
@@ -783,32 +1196,45 @@ export default function Game() {
       }
     });
 
-    // Process promise deadlines (year-end = multiple of 52)
-    const yearEnd = Math.ceil(week / 52) * 52;
-    if (week === yearEnd || week + 1 > yearEnd) {
-      const remainingPromises = [];
-      const newBrokenPromises = [];
-      promises.forEach(p => {
-        if (p.deadline <= week + 1) {
-          if (usedPol.has(p.billId)) {
-            addLog(`Promise kept: passed "${POLICY_ACTIONS.find(a => a.id === p.billId)?.name}". ${nf[p.factionId]?.name} trust +5.`);
-            if (nf[p.factionId]) nf[p.factionId] = { ...nf[p.factionId], trust: Math.min(95, nf[p.factionId].trust + 5) };
-          } else {
-            const bill = POLICY_ACTIONS.find(a => a.id === p.billId);
-            addLog(`Broken promise: failed to pass "${bill?.name}". ${nf[p.factionId]?.name} relationship -10, trust -15.`);
-            if (nf[p.factionId]) nf[p.factionId] = { ...nf[p.factionId],
-              relationship: Math.max(5, nf[p.factionId].relationship - 10),
-              trust: Math.max(5, nf[p.factionId].trust - 15),
-            };
-            newBrokenPromises.push({ factionName: nf[p.factionId]?.name, billName: bill?.name });
-          }
-        } else {
-          remainingPromises.push(p);
-        }
-      });
+    // Process promise fulfillment and deadlines weekly.
+    const remainingPromises = [];
+    const newBrokenPromises = [];
+    let promiseResolved = false;
+    promises.forEach(p => {
+      const fulfilled = p.type === "bill"
+        ? !!passedLegislation[p.billId]
+        : (cabinet.secState.occupantName && cabinet.secState.factionId === p.promisedFactionId);
+
+      if (fulfilled) {
+        addLog(`Promise kept: ${getPromiseLabel(p)}. ${nf[p.factionId]?.name} trust +${p.successTrustBoost || 5}.`);
+        if (nf[p.factionId]) nf[p.factionId] = { ...nf[p.factionId], trust: Math.min(95, nf[p.factionId].trust + (p.successTrustBoost || 5)) };
+        promiseResolved = true;
+        return;
+      }
+
+      if (p.deadline <= week + 1) {
+        addLog(`Broken promise: failed to ${getPromiseLabel(p)}. ${nf[p.factionId]?.name} relationship -${p.brokenRelPenalty || 10}, trust -${p.brokenTrustPenalty || 15}.`);
+        if (nf[p.factionId]) nf[p.factionId] = { ...nf[p.factionId],
+          relationship: Math.max(5, nf[p.factionId].relationship - (p.brokenRelPenalty || 10)),
+          trust: Math.max(5, nf[p.factionId].trust - (p.brokenTrustPenalty || 15)),
+        };
+        newBrokenPromises.push({
+          factionName: nf[p.factionId]?.name,
+          promiseLabel: getPromiseLabel(p),
+          relationshipLoss: p.brokenRelPenalty || 10,
+          trustLoss: p.brokenTrustPenalty || 15,
+        });
+        promiseResolved = true;
+        return;
+      }
+
+      remainingPromises.push(p);
+    });
+    if (promiseResolved) {
       setPromises(remainingPromises);
-      if (newBrokenPromises.length > 0) setBrokenPromises(q => [...q, ...newBrokenPromises]);
+      refreshPromiseOffers({ factions: nf, cabinetState: cabinet, pendingAppointment });
     }
+    if (newBrokenPromises.length > 0) setBrokenPromises(q => [...q, ...newBrokenPromises]);
 
     // Process surrogate tasks — compute completions first to avoid side effects inside updater
     const completedSurrogates = [];
@@ -883,6 +1309,14 @@ export default function Game() {
     setNotifications(prev => prev.filter(n => nw - n.addedWeek < 2));
     setRecentDisasters(rd => Object.fromEntries(Object.entries(rd).filter(([, w]) => week - w < 4)));
     setAct(0);
+    if (((nw - 1) % 52) + 1 === 1) {
+      refreshPromiseOffers({
+        factions: nf,
+        week: nw,
+        cabinetState: cabinet,
+        pendingAppointment: pendingAppointment ? null : pendingAppointment,
+      });
+    }
 
     // ── Block B: Election trigger ─────────────────────────────────────────────
     const yrB = Math.ceil(nw / 52);
@@ -929,8 +1363,19 @@ export default function Game() {
 
     // 1. Engagement decay (0.5/week, only after first 8 weeks, only if no trip in 6+ weeks)
     const willDecayEng = nw > 8 && (lastForeignTripWeek === 0 || nw - lastForeignTripWeek > 6);
-    const newEngagement = willDecayEng ? Math.max(0, engagement - 0.5) : engagement;
+    const secStateVacantPenalty = nw >= 8 && !cabinet.secState.occupantName ? 3 : 0;
+    const newEngagement = Math.max(0, engagement - (willDecayEng ? 0.5 : 0) - secStateVacantPenalty);
     if (willDecayEng) setEngagement(() => newEngagement);
+    else if (secStateVacantPenalty > 0) setEngagement(() => newEngagement);
+
+    if (nw === 8 && !cabinet.secState.occupantName) {
+      addNotification({
+        type: "appointment_fail",
+        message: "Secretary of State is still vacant. International engagement will now fall by 3 each week until the post is filled.",
+        tab: "cabinet",
+      });
+      addLog("Secretary of State remains vacant at week 8. International engagement will now drop by 3 each week.");
+    }
 
     // 2. Power projection (one-time adjustment per spending change, capped ±6)
     const spendingChange = ns.militarySpending - lastMilitarySpending;
@@ -988,7 +1433,7 @@ export default function Game() {
     if (wiyPre === 1 && !nextMacroState.fedVacant && Math.random() < 0.2) {
       const vacancyState = { ...nextMacroState, fedVacant: true, fedDecisionSummary: "Chair vacancy pending Senate confirmation." };
       setMacroState(vacancyState);
-      setCurEv(buildFedNominationEvent());
+      setCurEv(buildFedNominationEvent(nameRegistryRef.current));
       addLog("Federal Reserve Chair vacancy opened. Senate confirmation is required for a new governor.");
       return;
     }
@@ -1042,7 +1487,7 @@ export default function Game() {
     setPrev({ ...stats });
     let ns = { ...stats };
     let nextMacroState = { ...macroState, impulses: { ...macroState.impulses } };
-    ({ stats: ns, macroState: nextMacroState } = applyEffectsBundle(ns, nextMacroState, choice.effects || {}, curEv));
+    ({ stats: ns, macroState: nextMacroState } = applyEffectsBundle(ns, nextMacroState, choice.effects || {}, { ...curEv, macroEffects: choice.macroEffects || {} }));
     // Schedule chain event if this choice triggers one
     if (choice.schedulesChain) {
       const { minDelay, maxDelay, outcomes } = choice.schedulesChain;
@@ -1079,12 +1524,12 @@ export default function Game() {
       setStBon(b);
     }
     if (choice.fedGovernorChoice) {
-      setPendingAppointment(buildAppointmentProcess(
-        "fed_chair",
-        "Federal Reserve Chair",
-        choice.fedGovernorName || pickFedChairName([nextMacroState.fedChairName]),
-        choice.fedGovernorChoice
-      ));
+      setPendingAppointment(buildAppointmentProcess({
+        officeId: "fed_chair",
+        officeLabel: "Federal Reserve Chair",
+        nomineeName: choice.fedGovernorName || pickFedChairName(nameRegistryRef.current),
+        personality: choice.fedGovernorChoice,
+      }));
       nextMacroState = {
         ...nextMacroState,
         fedVacant: true,
@@ -1149,21 +1594,22 @@ export default function Game() {
     addLog(`${action.name} introduced — entering committee`);
   };
 
-  const makePromise = (factionId, billId, relBoost) => {
-    setPendingPromise({ factionId, billId, relBoost });
+  const makePromise = (factionId, offer) => {
+    if (!offer) return;
+    if (offer.type === "cabinet" && cabinet.secState.occupantName) return;
+    setPendingPromise({ factionId, ...offer });
   };
 
   const confirmPromise = () => {
     if (!pendingPromise) return;
-    const { factionId, billId, relBoost } = pendingPromise;
+    const { factionId, relBoost } = pendingPromise;
     const deadline = Math.ceil(week / 52) * 52;
     const nf = { ...cg.factions };
     if (nf[factionId]) nf[factionId] = { ...nf[factionId], relationship: Math.min(95, nf[factionId].relationship + relBoost) };
     setCG({ ...cg, factions: nf });
-    setPromises(p => [...p, { billId, factionId, madeWeek: week, deadline }]);
-    const bill = POLICY_ACTIONS.find(a => a.id === billId);
+    setPromises(p => [...p, { ...pendingPromise, factionId, madeWeek: week, deadline }]);
     const faction = cg.factions[factionId];
-    addLog(`Promised ${faction?.name}: will pass "${bill?.name}" by year end. Relationship +${relBoost}.`);
+    addLog(`Promised ${faction?.name}: will ${getPromiseLabel(pendingPromise)} by year end. Relationship +${relBoost}.`);
     setPendingPromise(null);
   };
 
@@ -1376,12 +1822,24 @@ export default function Game() {
     // Immediate stat effects
     let ns = { ...stats };
     let nextMacroState = { ...macroState, impulses: { ...macroState.impulses } };
-    ({ stats: ns, macroState: nextMacroState } = applyEffectsBundle(ns, nextMacroState, outcome.effects || {}, eo, mult));
+    ({ stats: ns, macroState: nextMacroState } = applyEffectsBundle(ns, nextMacroState, outcome.effects || {}, outcome, mult));
 
     // Delayed effects via pFx queue
     if (outcome.delayedEffects) {
       const de = Object.fromEntries(Object.entries(outcome.delayedEffects.effects).map(([k, v]) => [k, v * mult]));
-      setPFx(p => [...p, { week: week + outcome.delayedEffects.weeks, name: eo.name + " (delayed)", effects: de }]);
+      setPFx(p => [...p, {
+        week: week + outcome.delayedEffects.weeks,
+        name: eo.name + " (delayed)",
+        effects: de,
+        macroEffects: Object.fromEntries(Object.entries(outcome.delayedMacroEffects?.effects || {}).map(([k, v]) => [k, v * mult])),
+      }]);
+    } else if (outcome.delayedMacroEffects) {
+      setPFx(p => [...p, {
+        week: week + outcome.delayedMacroEffects.weeks,
+        name: eo.name + " (delayed)",
+        effects: {},
+        macroEffects: Object.fromEntries(Object.entries(outcome.delayedMacroEffects.effects || {}).map(([k, v]) => [k, v * mult])),
+      }]);
     }
 
     // Faction reactions
@@ -1444,7 +1902,7 @@ export default function Game() {
         return nc;
       }));
       if (extraData.targetCountryId === "china") {
-        nextMacroState = adaptLegacyEffectsToMacroImpulses(nextMacroState, { gdpGrowth: -0.06 }, eo);
+        nextMacroState = applyMacroEffects(nextMacroState, { investment: -0.04, nx: -0.03, confidence: -0.02 });
         ns = syncDerivedStats(ns, nextMacroState);
       }
     }
@@ -1463,7 +1921,7 @@ export default function Game() {
     setAct(n => n + 2);
     setSelectedEO(null);
     setEoChoice({});
-    addLog(`EXECUTIVE ORDER: "${eo.name}" signed.${outcome.delayedEffects ? ` Effects delayed ${outcome.delayedEffects.weeks} weeks.` : ""}`);
+    addLog(`EXECUTIVE ORDER: "${eo.name}" signed.${outcome.delayedEffects || outcome.delayedMacroEffects ? ` Effects delayed ${(outcome.delayedEffects?.weeks || outcome.delayedMacroEffects?.weeks)} weeks.` : ""}`);
 
     // Build result payload
     const factionLines = Object.entries(reactions).map(([fid, v]) => {
@@ -1478,6 +1936,8 @@ export default function Game() {
         ...eo,
         effects: outcome.effects,
         delayedEffects: outcome.delayedEffects,
+        macroEffects: outcome.macroEffects,
+        delayedMacroEffects: outcome.delayedMacroEffects,
       },
       mult,
       factionLines: [...factionLines, ...oppLines.filter(ol => !factionLines.find(fl => fl.name === ol.name))],
@@ -1506,16 +1966,25 @@ export default function Game() {
       ({ stats: ns, macroState: nextMacroState } = applyEffectsBundle(
         ns,
         nextMacroState,
-        Object.fromEntries(Object.entries(act.effects).filter(([k]) => !["gdpGrowth","unemployment","crimeRate"].includes(k))),
+        Object.fromEntries(Object.entries(act.effects).filter(([k]) => !["crimeRate"].includes(k))),
         act
       ));
       ns.approvalRating = (ns.approvalRating || 50) + 1.5;
       setStats(syncDerivedStats(ns, nextMacroState));
       setMacroState(nextMacroState);
       // Delayed effects
+      if (act.delayedEffects || act.delayedMacroEffects) {
+        setPFx(p => [...p, {
+          name: act.name,
+          effects: act.delayedEffects?.effects || {},
+          macroEffects: act.delayedMacroEffects?.effects || {},
+          week: week + (act.delayedEffects?.weeks || act.delayedMacroEffects?.weeks || 9),
+        }]);
+      }
       Object.entries(act.effects).forEach(([k, val]) => {
-        if (["gdpGrowth","unemployment","crimeRate"].includes(k))
-          setPFx(p => [...p, { name: act.name, effects: { [k]: val }, week: week + 9 }]);
+        if (["crimeRate"].includes(k)) {
+          setPFx(p => [...p, { name: act.name, effects: { [k]: val }, macroEffects: {}, week: week + 9 }]);
+        }
       });
       applyStateEffects(act);
       if (act.engagementEffect) setEngagement(e => Math.max(0, Math.min(50, e + act.engagementEffect)));
@@ -1843,7 +2312,7 @@ export default function Game() {
         <PartyTab
           allF={allF} allyF={allyF} cg={cg} pf={pf}
           factionHist={factionHist}
-          promises={promises} usedPol={usedPol} billCooldowns={billCooldowns} week={week}
+          promises={promises} promiseOffers={promiseOffers} passedLegislation={passedLegislation} week={week}
           surrogates={surrogates} surrogateUI={surrogateUI} setSurrogateUI={setSurrogateUI}
           coachCooldown={coachCooldown}
           countries={countries} visitedCountries={visitedCountries}
@@ -1861,7 +2330,15 @@ export default function Game() {
           pf={pf}
           week={week}
           macroState={macroState}
+          cabinet={cabinet}
+          act={act}
           pendingAppointment={pendingAppointment}
+          surrogates={surrogates}
+          onStartSecStateSelection={beginSecStateAppointment}
+          onSelectSecStateCandidate={selectSecStateCandidate}
+          onNominateSecStateCandidate={nominateSecStateCandidate}
+          onLobbyAppointment={lobbyAppointment}
+          onFastTrackAppointment={fastTrackAppointment}
         />
       )}
 

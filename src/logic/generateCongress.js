@@ -1,24 +1,12 @@
 import { FACTION_DATA } from "../data/factions.js";
 
-export const LEADER_NAMES = [
-  "Margaret Holloway","James Sutton","Patricia Vance","Robert Calloway","Sandra Merritt",
-  "Thomas Prescott","Linda Kauffman","Charles Ellsworth","Barbara Whitmore","David Langford",
-  "Nancy Aldridge","Richard Holbrook","Karen Stratton","Michael Dunmore","Betty Ashford",
-  "William Farrow","Helen Cortland","Joseph Blackwell","Dorothy Quinlan","Edward Harrington",
-  "Ruth Pendleton","Frank Kimball","Shirley Bowman","Raymond Castillo","Janet Norris",
-  "Arthur Gillespie","Martha Davenport","Walter Osborne","Virginia Tanner","Harold Fisk",
-  "Carol Westbrook","Gerald Munroe","Donna Slattery","Lawrence Pittman","Judith Cranston",
-  "Roger Fairfield","Carolyn Bridger","Keith Madden","Jean Collier","Gary Stoneman",
-  "Diane Whitfield","Alan Holt","Cheryl Paxton","Brian Sommers","Ann Burgess",
-];
-
 import { clamp } from "../utils/clamp.js";
 
 const randInt = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
 
-function makeLeader() {
+function makeLeader(nameRegistry) {
   return {
-    name: LEADER_NAMES[Math.floor(Math.random() * LEADER_NAMES.length)],
+    name: nameRegistry.drawName("Leader"),
     charisma: randInt(1, 10),
     authority: randInt(1, 10),
     sincerity: randInt(1, 10),
@@ -30,7 +18,7 @@ function initUnity(leader, isOpposition) {
   return clamp(base - (isOpposition ? 5 : 0), 40, 80);
 }
 
-export function generateCongress(playerParty, playerFaction) {
+export function generateCongress(playerParty, playerFaction, nameRegistry) {
   const op = playerParty === "DEM" ? "REP" : "DEM";
   const sm = 52 + Math.floor(Math.random() * 3);
   const hm = 222 + Math.floor(Math.random() * 10);
@@ -38,7 +26,7 @@ export function generateCongress(playerParty, playerFaction) {
 
   FACTION_DATA[playerParty].forEach((f, i) => {
     const sw = [0.4, 0.35, 0.25][i], hw = [0.38, 0.37, 0.25][i];
-    const leader = makeLeader();
+    const leader = makeLeader(nameRegistry);
     factions[f.id] = {
       ...f,
       party: playerParty,
@@ -53,7 +41,7 @@ export function generateCongress(playerParty, playerFaction) {
 
   FACTION_DATA[op].forEach((f, i) => {
     const sw = [0.35, 0.38, 0.27][i], hw = [0.33, 0.4, 0.27][i];
-    const leader = makeLeader();
+    const leader = makeLeader(nameRegistry);
     factions[f.id] = {
       ...f,
       party: op,
