@@ -13,7 +13,7 @@ const MAP_VIEWS = [
   { id: "religious", label: "Religious" },
 ];
 
-export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, setHov, activeBill, billLikelihood, week }) {
+export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, setHov, activeBill, billLikelihood, week, macroState }) {
   const [mapView, setMapView] = useState("approval");
   const [otherExpanded, setOtherExpanded] = useState(false);
   const yr = Math.ceil(week / 52);
@@ -35,6 +35,30 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
     urban: [["#ede9fe","<47%"],["#c4b5fd","47-57"],["#a78bfa","57-68"],["#8b5cf6","68-78"],["#7c3aed","78-90"],["#5b21b6",">90%"]],
     religious: [["#fef9c3","<35%"],["#fde68a","35-45"],["#fbbf24","45-55"],["#f59e0b","55-65"],["#d97706","65-75"],["#b45309",">75%"]],
   };
+
+  const panelStyle = {
+    background: "var(--color-background-secondary)",
+    borderRadius: "var(--border-radius-lg)",
+    padding: "12px",
+    border: "0.5px solid var(--color-border-secondary)",
+  };
+
+  const cardGridStyle = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))",
+    gap: 8,
+  };
+
+  const renderStatGroup = (label, keys) => (
+    <div style={panelStyle}>
+      <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 8 }}>{label}</div>
+      <div style={cardGridStyle}>
+        {keys.map(k => (
+          <StatCard key={k} statKey={k} value={stats[k]} history={hist[k]} prevValue={prev[k]} />
+        ))}
+      </div>
+    </div>
+  );
 
   const renderBudgetRow = (label, val, pval, opts = {}) => {
     const d = val - pval;
@@ -129,25 +153,50 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
       </div>
 
       {/* Right: Stats */}
-      <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+      <div style={{ flex: "1 1 360px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
         <SectionHeader label="Economy" />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(80px,1fr))", gap: 5 }}>
-          {["gdpGrowth", "nominalGdp", "unemployment", "inflation", "gasPrice", "tradeBalance"].map(k => (
-            <StatCard key={k} statKey={k} value={stats[k]} history={hist[k]} prevValue={prev[k]} />
-          ))}
+        {renderStatGroup("Output", ["gdpGrowth", "nominalGdp"])}
+        <div style={panelStyle}>
+          <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 8 }}>GDP per capita</div>
           {(() => {
             const gpc = stats.nominalGdp * 1e12 / stats.population;
             const pgpc = prev.nominalGdp * 1e12 / prev.population;
             const d = gpc - pgpc;
             const chg = Math.abs(d) > 50;
             return (
-              <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "8px 10px", minWidth: 0 }}>
-                <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>GDP per capita</div>
-                <div style={{ fontSize: 17, fontWeight: 500, color: "var(--color-text-primary)" }}>${Math.round(gpc).toLocaleString()}</div>
-                {chg && <div style={{ fontSize: 9, color: d > 0 ? "#1D9E75" : "#E24B4A" }}>{d > 0 ? "+" : ""}{Math.round(d).toLocaleString()}</div>}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "var(--color-text-primary)" }}>${Math.round(gpc).toLocaleString()}</div>
+                  {chg && <div style={{ fontSize: 10, marginTop: 4, color: d > 0 ? "#1D9E75" : "#E24B4A" }}>{d > 0 ? "+" : ""}{Math.round(d).toLocaleString()} this week</div>}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--color-text-secondary)", textAlign: "right" }}>
+                  <div>Nominal GDP scaled by population</div>
+                </div>
               </div>
             );
           })()}
+        </div>
+        {renderStatGroup("Prices & Labor", ["unemployment", "inflation", "gasPrice", "tradeBalance", "housingStarts"])}
+
+        <SectionHeader label="Federal Reserve" />
+        <div style={panelStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10, gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)" }}>Chair</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>{macroState.fedChairName}</div>
+              <div style={{ marginTop: 5 }}>
+                <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 600, border: "0.5px solid var(--color-border-secondary)", background: "var(--color-background-primary)", color: "var(--color-text-secondary)", textTransform: "capitalize" }}>
+                  {macroState.governorPersonality.toLowerCase()}
+                </span>
+              </div>
+            </div>
+            <div style={{ flex: "0 0 180px" }}>
+              <StatCard statKey="fedFundsRate" value={stats.fedFundsRate} history={hist.fedFundsRate} prevValue={prev.fedFundsRate} />
+            </div>
+          </div>
+          <div style={{ fontSize: 10, lineHeight: 1.55, color: "var(--color-text-secondary)" }}>
+            {macroState.fedDecisionSummary}
+          </div>
         </div>
 
         <SectionHeader label="Society" />
@@ -156,7 +205,7 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
           const popDelta = stats.population - prev.population;
           const chg = Math.abs(popDelta) > 100;
           return (
-            <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "8px 12px", marginBottom: 5, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ ...panelStyle, padding: "10px 14px", marginBottom: 0, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 2 }}>Total Population</div>
                 <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: "var(--color-text-primary)" }}>{stats.population.toLocaleString()}</div>
@@ -168,20 +217,23 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
             </div>
           );
         })()}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 5, marginBottom: 5 }}>
-          {["birthRate", "deathRate", "crimeRate", "immigrationRate"].map(k => (
-            <StatCard key={k} statKey={k} value={stats[k]} history={hist[k]} prevValue={prev[k]} />
-          ))}
-        </div>
+        {renderStatGroup("Demographics", ["birthRate", "deathRate", "immigrationRate"])}
+        {renderStatGroup("Public Safety", ["crimeRate"])}
 
         <SectionHeader label="Fiscal" />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
-          <StatCard statKey="nationalDebt" value={stats.nationalDebt} history={hist.nationalDebt} prevValue={prev.nationalDebt} />
-          <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "8px 10px", minWidth: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 8 }}>
+          <div style={panelStyle}>
+            <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 8 }}>Revenue & debt</div>
+            <div style={cardGridStyle}>
+              <StatCard statKey="taxRevenue" value={stats.taxRevenue} history={hist.taxRevenue} prevValue={prev.taxRevenue} />
+              <StatCard statKey="nationalDebt" value={stats.nationalDebt} history={hist.nationalDebt} prevValue={prev.nationalDebt} />
+            </div>
+          </div>
+          <div style={{ ...panelStyle, minWidth: 0 }}>
             <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 1 }}>Annual deficit</div>
-            <div style={{ fontSize: 17, fontWeight: 500, color: defColor }}>{SM.nationalDeficit.f(stats.nationalDeficit)}</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: defColor }}>{SM.nationalDeficit.f(stats.nationalDeficit)}</div>
             {Math.abs((stats.nationalDeficit || 0) - (prev.nationalDeficit || 0)) > 1 && (
-              <div style={{ fontSize: 9, color: stats.nationalDeficit < prev.nationalDeficit ? "#1D9E75" : "#E24B4A" }}>
+              <div style={{ fontSize: 10, marginTop: 4, color: stats.nationalDeficit < prev.nationalDeficit ? "#1D9E75" : "#E24B4A" }}>
                 {stats.nationalDeficit < prev.nationalDeficit ? "↓" : "↑"} {Math.abs(Math.round(stats.nationalDeficit - prev.nationalDeficit))}B
               </div>
             )}
@@ -189,7 +241,7 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
         </div>
 
         <SectionHeader label="Tax Rates" />
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "6px 10px" }}>
+        <div style={panelStyle}>
           {[
             ["Corporate",       stats.corporateTaxRate, prev.corporateTaxRate],
             ["Income <$50k",    stats.incomeTaxLow,     prev.incomeTaxLow],
@@ -212,15 +264,15 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
         </div>
 
         <SectionHeader label="Budget" />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
-          <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "6px 10px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 8 }}>
+          <div style={panelStyle}>
             <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 4 }}>Mandatory</div>
             {[
               ["Healthcare", stats.healthcareSpending, prev.healthcareSpending],
               ["Social Security", stats.socialSecuritySpending, prev.socialSecuritySpending],
             ].map(([label, val, pval]) => renderBudgetRow(label, val, pval))}
           </div>
-          <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "6px 10px" }}>
+          <div style={panelStyle}>
             <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 4 }}>Discretionary</div>
             {[
               ["Defense", stats.militarySpending, prev.militarySpending],

@@ -252,7 +252,7 @@ export function buildMidtermResults(cg, pp, yr, natA, partyEnthusiasm, oppEnthus
 
 // ─── Build congress history snapshot ─────────────────────────────────────────
 
-export function buildHistorySnapshot(cg, yr, houseNetChange, senateNetChange, partyEnthusiasm, oppEnthusiasm, approvalAtElection, isPresidentialYear) {
+export function buildHistorySnapshot(cg, yr, houseNetChange, senateNetChange, partyEnthusiasm, oppEnthusiasm, approvalAtElection, isPresidentialYear, options = {}) {
   const factions = {};
   Object.values(cg.factions).forEach(f => {
     factions[f.id] = {
@@ -274,6 +274,7 @@ export function buildHistorySnapshot(cg, yr, houseNetChange, senateNetChange, pa
     oppEnthusiasm: Math.round(oppEnthusiasm),
     approvalAtElection: Math.round(approvalAtElection),
     isPresidentialYear: !!isPresidentialYear,
+    isInitial: !!options.isInitial,
     factions,
   };
 }

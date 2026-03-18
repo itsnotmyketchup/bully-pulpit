@@ -10,18 +10,20 @@ export default function StatCard({ statKey, value, history, prevValue }) {
   const bad = (m.g === "up" && dn) || (m.g === "down" && up);
 
   return (
-    <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "8px 10px", minWidth: 0 }}>
-      <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.l}</div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 4 }}>
-        <div>
-          <div style={{ fontSize: 17, fontWeight: 500, color: "var(--color-text-primary)" }}>{m.f(value)}</div>
+    <div style={{ background: "rgba(255,255,255,0.55)", borderRadius: "12px", padding: "10px 12px", minWidth: 0, border: "0.5px solid var(--color-border-secondary)" }}>
+      <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 4, lineHeight: 1.3 }}>{m.l}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+          <div style={{ fontSize: 18, fontWeight: 600, color: "var(--color-text-primary)", lineHeight: 1.1 }}>{m.f(value)}</div>
           {(up || dn) && (
-            <div style={{ fontSize: 9, color: good ? "#1D9E75" : bad ? "#E24B4A" : "var(--color-text-secondary)" }}>
+            <div style={{ fontSize: 9, marginTop: 4, color: good ? "#1D9E75" : bad ? "#E24B4A" : "var(--color-text-secondary)" }}>
               {up ? "+" : ""}{d.toFixed(2)}
             </div>
           )}
         </div>
-        <MiniChart data={history} color={good ? "#1D9E75" : bad ? "#E24B4A" : "#888"} />
+        <div style={{ flex: "0 0 auto", opacity: 0.95 }}>
+          <MiniChart data={history} color={good ? "#1D9E75" : bad ? "#E24B4A" : "#888"} h={34} w={78} />
+        </div>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import MiniChart from "../MiniChart.jsx";
 const PARTY_COLORS = { DEM: "#3b7dd8", REP: "#c0392b" };
 const PARTY_NAMES = { DEM: "Democrats", REP: "Republicans" };
 
-export default function CongressTab({ allF, allyF, oppoF, pf, congressTab, setCongressTab, hovFaction, setHovFaction, billRecord, executiveOverreach, congressHistory, factionHist }) {
+export default function CongressTab({ allF, allyF, oppoF, pf, congressTab, setCongressTab, hovFaction, setHovFaction, billRecord, executiveOverreach, congressHistory, confirmationHistory, factionHist }) {
   const or = Math.round(executiveOverreach ?? 20);
   const orLevel = or > 60 ? "High" : or > 30 ? "Medium" : "Low";
   const orColor = or > 60 ? "#E24B4A" : or > 30 ? "#EF9F27" : "#1D9E75";
@@ -34,7 +34,7 @@ export default function CongressTab({ allF, allyF, oppoF, pf, congressTab, setCo
   return <>
     {/* Congress sub-tabs */}
     <div style={{ display: "flex", gap: 1, marginBottom: 10, borderBottom: "0.5px solid var(--color-border-tertiary)", paddingBottom: 4 }}>
-      {["overview", "legislation", "history"].map(ct => (
+      {["overview", "legislation", "confirmations", "history"].map(ct => (
         <button key={ct} onClick={() => setCongressTab(ct)} style={{
           padding: "3px 9px", fontSize: 11, fontWeight: congressTab === ct ? 500 : 400,
           background: congressTab === ct ? "var(--color-background-secondary)" : "transparent",
@@ -86,6 +86,8 @@ export default function CongressTab({ allF, allyF, oppoF, pf, congressTab, setCo
     </>}
 
     {congressTab === "legislation" && <LegislationRecord billRecord={billRecord} />}
+
+    {congressTab === "confirmations" && <ConfirmationHistoryPane confirmationHistory={confirmationHistory || []} />}
 
     {congressTab === "history" && <CongressHistoryPane congressHistory={congressHistory || []} />}
   </>;
@@ -145,26 +147,30 @@ function CongressHistoryPane({ congressHistory }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                  Year {entry.yr} {entry.isPresidentialYear ? "Election" : "Midterms"}
+                  {entry.isInitial ? "Starting Congress" : `Year ${entry.yr} ${entry.isPresidentialYear ? "Election" : "Midterms"}`}
                 </span>
-                {entry.isPresidentialYear && (
+                {entry.isPresidentialYear && !entry.isInitial && (
                   <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 3, background: "#EF9F2722", color: "#EF9F27", border: "0.5px solid #EF9F2744" }}>Pres. Year</span>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 8, fontSize: 10 }}>
-                <span style={{ color: houseGain ? "#1D9E75" : "#E24B4A", fontWeight: 600 }}>
-                  H: {houseGain ? "+" : ""}{entry.houseNetChange}
-                </span>
-                <span style={{ color: senateGain ? "#1D9E75" : "#E24B4A", fontWeight: 600 }}>
-                  S: {senateGain ? "+" : ""}{entry.senateNetChange}
-                </span>
+              {!entry.isInitial && (
+                <div style={{ display: "flex", gap: 8, fontSize: 10 }}>
+                  <span style={{ color: houseGain ? "#1D9E75" : "#E24B4A", fontWeight: 600 }}>
+                    H: {houseGain ? "+" : ""}{entry.houseNetChange}
+                  </span>
+                  <span style={{ color: senateGain ? "#1D9E75" : "#E24B4A", fontWeight: 600 }}>
+                    S: {senateGain ? "+" : ""}{entry.senateNetChange}
+                  </span>
+                </div>
+              )}
+            </div>
+            {!entry.isInitial && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 6, fontSize: 9, color: "var(--color-text-secondary)" }}>
+                <span>Approval: <b style={{ color: "var(--color-text-primary)" }}>{entry.approvalAtElection}%</b></span>
+                <span>Party Enthusiasm: <b style={{ color: "#378ADD" }}>{entry.partyEnthusiasm}</b></span>
+                <span>Opp: <b style={{ color: "#E24B4A" }}>{entry.oppEnthusiasm}</b></span>
               </div>
-            </div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 6, fontSize: 9, color: "var(--color-text-secondary)" }}>
-              <span>Approval: <b style={{ color: "var(--color-text-primary)" }}>{entry.approvalAtElection}%</b></span>
-              <span>Party Enthusiasm: <b style={{ color: "#378ADD" }}>{entry.partyEnthusiasm}</b></span>
-              <span>Opp: <b style={{ color: "#E24B4A" }}>{entry.oppEnthusiasm}</b></span>
-            </div>
+            )}
             <div style={{ marginBottom: 4 }}>
               <div style={{ fontSize: 8, color: "var(--color-text-secondary)", marginBottom: 2, textTransform: "uppercase", letterSpacing: "0.08em" }}>House (pre-election)</div>
               <CongressBar factions={displayFactions} chamber="House" hoveredFaction={null} setHoveredFaction={() => {}} />
@@ -176,6 +182,48 @@ function CongressHistoryPane({ congressHistory }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function ConfirmationHistoryPane({ confirmationHistory }) {
+  if (!confirmationHistory.length) {
+    return (
+      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", padding: "24px 0", textAlign: "center" }}>
+        No Senate confirmation votes have occurred yet.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {[...confirmationHistory].reverse().map(entry => (
+        <div
+          key={entry.id}
+          style={{
+            padding: "12px 14px",
+            borderRadius: "var(--border-radius-lg)",
+            border: "0.5px solid var(--color-border-tertiary)",
+            background: "var(--color-background-primary)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 4 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.nomineeName}</div>
+              <div style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{entry.officeLabel}</div>
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: entry.passed ? "#1D9E75" : "#E24B4A" }}>
+              {entry.passed ? "Confirmed" : "Rejected"}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 10, color: "var(--color-text-secondary)" }}>
+            <span>Vote: <span style={{ color: "var(--color-text-primary)" }}>{entry.senateYes}-{entry.senateNo}</span></span>
+            <span>Committee: <span style={{ color: "var(--color-text-primary)" }}>{entry.committeeYes}-{entry.committeeNo}</span></span>
+            <span>Served vote: <span style={{ color: "var(--color-text-primary)" }}>Y{entry.year} · W{entry.weekOfYear}</span></span>
+            {entry.personality && <span>Nominee type: <span style={{ color: "var(--color-text-primary)", textTransform: "capitalize" }}>{entry.personality.toLowerCase()}</span></span>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -19,6 +19,16 @@ import { generateCongress, LEADER_NAMES } from "./logic/generateCongress.js";
 import { calcStateApproval } from "./logic/calcStateApproval.js";
 import { advanceApproval } from "./logic/approvalCalc.js";
 import { calcStageAdvance } from "./logic/billProgression.js";
+import {
+  adaptLegacyEffectsToMacroImpulses,
+  advanceMacroEconomy,
+  buildFedNominationEvent,
+  createInitialMacroState,
+  deriveVisibleStats,
+  pickFedChairName,
+  resolveFedNomination,
+} from "./logic/macroEconomy.js";
+import { APPOINTMENT_STAGES, evaluateAppointment } from "./logic/appointmentProgression.js";
 import { computeBudgetReactions } from "./systems/budgetCalc.js";
 import { makeSurrogates } from "./utils/makeSurrogates.js";
 
@@ -31,6 +41,7 @@ import CrisisModal from "./components/modals/CrisisModal.jsx";
 import OverviewTab from "./components/tabs/OverviewTab.jsx";
 import CongressTab from "./components/tabs/CongressTab.jsx";
 import PartyTab from "./components/tabs/PartyTab.jsx";
+import CabinetTab from "./components/tabs/CabinetTab.jsx";
 import PolicyTab from "./components/tabs/PolicyTab.jsx";
 import ActionsTab from "./components/tabs/ActionsTab.jsx";
 import DiplomacyTab from "./components/tabs/DiplomacyTab.jsx";
@@ -72,8 +83,10 @@ export default function Game() {
   const [pp, setPP] = useState(null);
   const [pf, setPF] = useState(null);
   const [pn, setPN] = useState("Jordan Mitchell");
+  const [vpn, setVpn] = useState("Holly Barrett");
   const [cg, setCG] = useState(null);
   const [stats, setStats] = useState({ ...INITIAL_STATS });
+  const [macroState, setMacroState] = useState(() => createInitialMacroState());
   const [prev, setPrev] = useState({ ...INITIAL_STATS });
   const [hist, setHist] = useState(() => {
     const h = {};
@@ -144,6 +157,8 @@ export default function Game() {
   const [appliedAmendments, setAppliedAmendments] = useState({}); // { [billId]: [amendmentId, ...] }
   const [billFactionVotes, setBillFactionVotes] = useState(null); // factionVotes array from last calcStageAdvance
   const [pendingSignature, setPendingSignature] = useState(null); // { act, votes, factionVotes, isBudget, budgetDraft } — awaiting sign/veto
+  const [pendingAppointment, setPendingAppointment] = useState(null); // {officeId, officeLabel, nomineeName, personality, stage, stages, startedWeek, factionReactions}
+  const [confirmationHistory, setConfirmationHistory] = useState([]);
 
   // ── Election state ──────────────────────────────────────────────────────────
   const [congressHistory, setCongressHistory] = useState([]);
@@ -186,16 +201,50 @@ export default function Game() {
 
   const addLog = useCallback(msg => setLog(p => [{ week, text: msg }, ...p].slice(0, 100)), [week]);
 
+  const syncDerivedStats = useCallback((baseStats, nextMacroState) => (
+    deriveVisibleStats(baseStats, nextMacroState)
+  ), []);
+
+  const applyEffectsBundle = useCallback((currentStats, currentMacroState, effects = {}, sourceMeta = {}, mult = 1) => {
+    let nextStats = { ...currentStats };
+    let nextMacroState = adaptLegacyEffectsToMacroImpulses(currentMacroState, effects, sourceMeta, mult);
+
+    Object.entries(effects || {}).forEach(([key, rawValue]) => {
+      const value = rawValue * mult;
+      if (["gdpGrowth", "unemployment", "inflation"].includes(key)) return;
+      if (nextStats[key] !== undefined) nextStats[key] += value;
+    });
+
+    nextStats = syncDerivedStats(nextStats, nextMacroState);
+    return { stats: nextStats, macroState: nextMacroState };
+  }, [syncDerivedStats]);
+
+  const buildAppointmentProcess = useCallback((officeId, officeLabel, nomineeName, personality) => ({
+    officeId,
+    officeLabel,
+    nomineeName,
+    personality,
+    stage: "committee_hearing",
+    stages: APPOINTMENT_STAGES,
+    startedWeek: week,
+    turnsInStage: 0,
+    factionReactions: resolveFedNomination(cg, pp, personality).reactions,
+    factionVotes: [],
+    passLikelihood: 100,
+  }), [cg, pp, week]);
+
   const fireEvent = useCallback((event, nextStats, eventWeek, options = {}) => {
-    const { isSpecial = false } = options;
-    const updatedStats = { ...nextStats };
+    const { isSpecial = false, macro = macroState } = options;
+    let updatedStats = { ...nextStats };
+    let updatedMacro = macro;
     if (event.unique) setUsedEv(p => new Set([...p, event.id]));
-    Object.entries(event.effects || {}).forEach(([k, v]) => { if (updatedStats[k] !== undefined) updatedStats[k] += v; });
+    ({ stats: updatedStats, macroState: updatedMacro } = applyEffectsBundle(updatedStats, updatedMacro, event.effects || {}, event));
     setStats(updatedStats);
+    setMacroState(updatedMacro);
     setCurEv(event);
     if (isSpecial) setLastSpecialEventWeek(eventWeek);
     return updatedStats;
-  }, []);
+  }, [applyEffectsBundle, macroState]);
 
   const pickRandomEvent = useCallback((pool) => {
     if (!pool.length) return null;
@@ -205,11 +254,14 @@ export default function Game() {
   const start = () => {
     if (!pp || !pf || !pn.trim()) return;
     const c = generateCongress(pp, pf);
+    const freshMacroState = createInitialMacroState();
+    const freshStats = syncDerivedStats({ ...INITIAL_STATS }, freshMacroState);
     setCG(c);
-    setStats({ ...INITIAL_STATS });
-    setPrev({ ...INITIAL_STATS });
+    setMacroState(freshMacroState);
+    setStats(freshStats);
+    setPrev(freshStats);
     const h = {};
-    Object.keys(INITIAL_STATS).forEach(k => h[k] = [INITIAL_STATS[k]]);
+    Object.keys(freshStats).forEach(k => h[k] = [freshStats[k]]);
     setHist(h);
     setWeek(1);
     setAct(0);
@@ -255,7 +307,9 @@ export default function Game() {
     setAppliedAmendments({});
     setBillFactionVotes(null);
     setPendingSignature(null);
-    setCongressHistory([]);
+    setPendingAppointment(null);
+    setConfirmationHistory([]);
+    setCongressHistory([buildHistorySnapshot(c, 1, 0, 0, freshStats.approvalRating, 0, freshStats.approvalRating, false, { isInitial: true })]);
     setMidtermResults(null);
     setShowMidtermModal(false);
     setPendingCongressUpdate(null);
@@ -264,7 +318,7 @@ export default function Game() {
     setCampaignActivity(0);
     setPollingNoise(0);
     setIsPresidentialElection(false);
-    setLog([{ week: 1, text: `President ${pn.trim()} inaugurated. ${PARTIES[pp]} hold both chambers. Base: ${FACTION_DATA[pp].find(f => f.id === pf)?.name}.` }]);
+    setLog([{ week: 1, text: `President ${pn.trim()} and Vice President ${vpn.trim()} inaugurated. ${PARTIES[pp]} hold both chambers. Base: ${FACTION_DATA[pp].find(f => f.id === pf)?.name}.` }]);
     setScreen(2);
   };
 
@@ -294,9 +348,19 @@ export default function Game() {
 
     setVisitTypeCounts({});
     setPrev({ ...stats });
-    const ns = { ...stats };
-    ns.gdpGrowth = Math.max(-2, Math.min(6, ns.gdpGrowth + (Math.random() - 0.5) * 0.04));
-    ns.nominalGdp = (ns.nominalGdp || 28.0) * (1 + ns.gdpGrowth / 100 / 52);
+    let ns = { ...stats };
+    let nextMacroState = { ...macroState, impulses: { ...macroState.impulses } };
+    const { macroState: advancedMacroState, derived } = advanceMacroEconomy(nextMacroState, ns, week + 1);
+    nextMacroState = advancedMacroState;
+    if (Math.abs(nextMacroState.fedFundsRate - macroState.fedFundsRate) > 0.049) {
+      const rateDelta = nextMacroState.fedFundsRate - macroState.fedFundsRate;
+      addNotification({
+        type: "fed_update",
+        message: `${nextMacroState.fedChairName} ${rateDelta > 0 ? "raised" : "cut"} rates to ${nextMacroState.fedFundsRate.toFixed(2)}%.`,
+        tab: "cabinet",
+      });
+      addLog(`Federal Reserve ${rateDelta > 0 ? "raised" : "cut"} rates to ${nextMacroState.fedFundsRate.toFixed(2)}%.`);
+    }
     // Birth rate declines 1.5%/year (secular trend), 52 weeks/year
     ns.birthRate = Math.max(6, ns.birthRate * (1 - 0.015 / 52));
     // Death rate modulated by healthcare spending (baseline $1520B → 9.0/1k)
@@ -305,18 +369,20 @@ export default function Game() {
     const naturalGrowthPerWeek = (ns.birthRate - ns.deathRate) / 1000 * ns.population / 52;
     const immigrationPerWeek = ns.immigrationRate * 1e6 / 52;
     ns.population = Math.round(ns.population + naturalGrowthPerWeek + immigrationPerWeek);
-    ns.unemployment = Math.max(2.5, Math.min(12, ns.unemployment + (Math.random() - 0.5) * 0.02));
-    ns.inflation = Math.max(0.5, Math.min(8, ns.inflation + (Math.random() - 0.5) * 0.015));
+    ns.unemployment = derived.unemployment;
+    ns.inflation = derived.inflation;
     ns.gasPrice = Math.max(2, Math.min(7, ns.gasPrice + (Math.random() - 0.5) * 0.02));
     ns.crimeRate = Math.max(2, Math.min(10, ns.crimeRate + (Math.random() - 0.5) * 0.01));
-    const immEconDrift = (ns.gdpGrowth - 2.5) * 0.003 - (ns.unemployment - 5) * 0.002;
+    ns.tradeBalance = Math.max(-180, Math.min(40, ns.tradeBalance - nextMacroState.outputGap * 0.45 + nextMacroState.netExportsShare * 20 + (Math.random() - 0.5) * 0.4));
+    const immEconDrift = (nextMacroState.realGdpGrowth - 2.5) * 0.003 - (ns.unemployment - 5) * 0.002;
     ns.immigrationRate = Math.max(0.1, Math.min(3.5, ns.immigrationRate + immEconDrift + (Math.random() - 0.5) * 0.01));
 
     pFx.filter(p => p.week <= week + 1).forEach(p => {
-      Object.entries(p.effects).forEach(([k, v]) => { if (ns[k] !== undefined) ns[k] += v; });
+      ({ stats: ns, macroState: nextMacroState } = applyEffectsBundle(ns, nextMacroState, p.effects || {}, p));
       addLog(`Policy effect: ${p.name}`);
     });
     setPFx(p => p.filter(x => x.week > week + 1));
+    ns = syncDerivedStats(ns, nextMacroState);
 
     // ── Block A: Campaign season kickoff ─────────────────────────────────────
     const nwA = week + 1;
@@ -574,11 +640,95 @@ export default function Game() {
       addLog(`${faction} replaced their leader with ${leader}`);
     });
 
-    // Compute annual deficit from spending vs tax revenue
-    const taxRevenue = 2200 * (ns.incomeTaxMid / 22) + 500 * (ns.corporateTaxRate / 21) + 1300 * (ns.payrollTaxRate / 7.65);
-    const totalSpending = ns.militarySpending + ns.educationSpending + ns.healthcareSpending + ns.socialSecuritySpending + ns.infrastructureSpending + ns.otherSpending + 3200;
-    const prevDeficit = ns.nationalDeficit;
-    ns.nationalDeficit = Math.round(totalSpending - taxRevenue);
+    if (pendingAppointment) {
+      const nextAppointment = { ...pendingAppointment, turnsInStage: (pendingAppointment.turnsInStage || 0) + 1 };
+      if (pendingAppointment.stage === "committee_hearing") {
+        setPendingAppointment({ ...nextAppointment, stage: "committee_vote", turnsInStage: 0, passLikelihood: 100 });
+        addLog(`${pendingAppointment.nomineeName} completed the committee hearing for ${pendingAppointment.officeLabel}.`);
+      } else {
+        const appointmentVote = evaluateAppointment({ ...cg, factions: nf }, pendingAppointment.factionReactions);
+        if (appointmentVote.passed && pendingAppointment.stage === "committee_vote") {
+          setPendingAppointment({
+            ...nextAppointment,
+            stage: "senate_vote",
+            turnsInStage: 0,
+            factionVotes: appointmentVote.factionVotes,
+            passLikelihood: appointmentVote.passLikelihood,
+            committeeVote: appointmentVote,
+          });
+          addLog(`${pendingAppointment.nomineeName} cleared committee and is headed to the Senate floor.`);
+        } else if (appointmentVote.passed && pendingAppointment.stage === "senate_vote") {
+          setConfirmationHistory(prev => [...prev, {
+            id: `${pendingAppointment.officeId}_${week + 1}_${pendingAppointment.nomineeName}`,
+            officeId: pendingAppointment.officeId,
+            officeLabel: pendingAppointment.officeLabel,
+            nomineeName: pendingAppointment.nomineeName,
+            personality: pendingAppointment.personality,
+            passed: true,
+            committeeYes: pendingAppointment.committeeVote?.senateYes ?? 100,
+            committeeNo: pendingAppointment.committeeVote?.senateNo ?? 0,
+            senateYes: appointmentVote.senateYes,
+            senateNo: appointmentVote.senateNo,
+            year: Math.ceil((week + 1) / 52),
+            weekOfYear: (((week + 1) - 1) % 52) + 1,
+          }]);
+          if (pendingAppointment.officeId === "fed_chair") {
+            nextMacroState = {
+              ...nextMacroState,
+              fedVacant: false,
+              fedChairName: pendingAppointment.nomineeName,
+              fedChairStartWeek: week + 1,
+              governorPersonality: pendingAppointment.personality,
+              fedDecisionSummary: `${pendingAppointment.nomineeName} was confirmed as ${pendingAppointment.personality.toLowerCase()} Fed chair by the Senate ${appointmentVote.senateYes}-${appointmentVote.senateNo}.`,
+            };
+            addNotification({ type: "appointment_success", message: `Senate confirmed ${pendingAppointment.nomineeName} as Fed chair.`, tab: "cabinet" });
+            addLog(`${pendingAppointment.nomineeName} was confirmed as Federal Reserve Chair.`);
+          }
+          setPendingAppointment(null);
+        } else if (!appointmentVote.passed) {
+          setConfirmationHistory(prev => [...prev, {
+            id: `${pendingAppointment.officeId}_${week + 1}_${pendingAppointment.nomineeName}`,
+            officeId: pendingAppointment.officeId,
+            officeLabel: pendingAppointment.officeLabel,
+            nomineeName: pendingAppointment.nomineeName,
+            personality: pendingAppointment.personality,
+            passed: false,
+            committeeYes: pendingAppointment.stage === "senate_vote"
+              ? (pendingAppointment.committeeVote?.senateYes ?? 100)
+              : appointmentVote.senateYes,
+            committeeNo: pendingAppointment.stage === "senate_vote"
+              ? (pendingAppointment.committeeVote?.senateNo ?? 0)
+              : appointmentVote.senateNo,
+            senateYes: pendingAppointment.stage === "senate_vote" ? appointmentVote.senateYes : 0,
+            senateNo: pendingAppointment.stage === "senate_vote" ? appointmentVote.senateNo : 0,
+            year: Math.ceil((week + 1) / 52),
+            weekOfYear: (((week + 1) - 1) % 52) + 1,
+          }]);
+          addNotification({ type: "appointment_fail", message: `Senate rejected ${pendingAppointment.nomineeName} for ${pendingAppointment.officeLabel}.`, tab: "cabinet" });
+          addLog(`${pendingAppointment.nomineeName} was rejected for ${pendingAppointment.officeLabel}.`);
+          if (pendingAppointment.officeId === "fed_chair") {
+            const replacementName = pickFedChairName([pendingAppointment.nomineeName, nextMacroState.fedChairName]);
+            setPendingAppointment(buildAppointmentProcess(
+              "fed_chair",
+              "Federal Reserve Chair",
+              replacementName,
+              pendingAppointment.personality
+            ));
+            nextMacroState = {
+              ...nextMacroState,
+              fedVacant: true,
+              fedDecisionSummary: `${replacementName} is the new ${pendingAppointment.personality.toLowerCase()} Fed nominee after the Senate rejected ${pendingAppointment.nomineeName}.`,
+            };
+            addLog(`${replacementName} was automatically nominated to replace the rejected Fed chair nominee.`);
+          } else {
+            setPendingAppointment(null);
+          }
+        }
+      }
+    }
+
+    ns = syncDerivedStats(ns, nextMacroState);
+    const prevDeficit = stats.nationalDeficit;
     // Conservative faction relationship boost when deficit meaningfully reduced
     if (prevDeficit && ns.nationalDeficit < prevDeficit - 30) {
       ["trad_con", "freedom", "mod_rep"].forEach(fid => {
@@ -588,8 +738,10 @@ export default function Game() {
     // Debt changes by the signed weekly deficit share (B → T), so surpluses reduce it.
     ns.nationalDebt = Math.max(0, ns.nationalDebt + (ns.nationalDeficit / (52 * 1000)));
     ns.approvalRating = advanceApproval(ns, pp, week + 1);
+    ns = syncDerivedStats(ns, nextMacroState);
 
-    setStats(ns);
+    setStats(syncDerivedStats(ns, nextMacroState));
+    setMacroState(nextMacroState);
     setHist(p => {
       const h = { ...p };
       Object.keys(ns).forEach(k => { h[k] = [...(p[k] || []), ns[k]].slice(-52); });
@@ -696,7 +848,7 @@ export default function Game() {
         setEngagement(e => Math.min(50, e + 2));
         if (relGain >= 5) {
           ns.approvalRating = (ns.approvalRating || 50) + 1;
-          setStats({ ...ns });
+          setStats(syncDerivedStats({ ...ns }, macroState));
         }
         const relStr = `${relGain >= 0 ? "+" : ""}${relGain} relationship, +${trustGain} trust${relGain >= 5 ? ", +1 approval" : ""}`;
         addNotification({ type: "surrogate_done", message: `${s.name} returned from ${s.busy.countryName}: ${relStr}.` });
@@ -833,6 +985,14 @@ export default function Game() {
       setDiplomacyThresholds(t => ({ ...t, tensionHigh: false }));
     }
 
+    if (wiyPre === 1 && !nextMacroState.fedVacant && Math.random() < 0.2) {
+      const vacancyState = { ...nextMacroState, fedVacant: true, fedDecisionSummary: "Chair vacancy pending Senate confirmation." };
+      setMacroState(vacancyState);
+      setCurEv(buildFedNominationEvent());
+      addLog("Federal Reserve Chair vacancy opened. Senate confirmation is required for a new governor.");
+      return;
+    }
+
     const { normalPool, specialPool, immediatePool } = generateDynamicEvents(
       ns,
       sA,
@@ -847,13 +1007,13 @@ export default function Game() {
     const readyChain = pendingChainEvents.find(c => nw >= c.triggerAtWeek);
     if (readyChain) {
       setPendingChainEvents(prev => prev.filter(c => c !== readyChain));
-      fireEvent(readyChain.event, ns, nw);
+      fireEvent(readyChain.event, ns, nw, { macro: nextMacroState });
       return;
     }
 
     const immediateEvent = pickRandomEvent(immediatePool);
     if (immediateEvent) {
-      fireEvent(immediateEvent, ns, nw, { isSpecial: immediateEvent.category === "special" });
+      fireEvent(immediateEvent, ns, nw, { isSpecial: immediateEvent.category === "special", macro: nextMacroState });
       return;
     }
 
@@ -873,15 +1033,16 @@ export default function Game() {
 
       const chosenEvent = selectedSpecialEvent || selectedNormalEvent;
       if (chosenEvent) {
-        fireEvent(chosenEvent, ns, nw, { isSpecial: chosenEvent.category === "special" });
+        fireEvent(chosenEvent, ns, nw, { isSpecial: chosenEvent.category === "special", macro: nextMacroState });
       }
     }
   };
 
   const handleEventChoice = choice => {
     setPrev({ ...stats });
-    const ns = { ...stats };
-    Object.entries(choice.effects || {}).forEach(([k, v]) => { if (ns[k] !== undefined) ns[k] += v; });
+    let ns = { ...stats };
+    let nextMacroState = { ...macroState, impulses: { ...macroState.impulses } };
+    ({ stats: ns, macroState: nextMacroState } = applyEffectsBundle(ns, nextMacroState, choice.effects || {}, curEv));
     // Schedule chain event if this choice triggers one
     if (choice.schedulesChain) {
       const { minDelay, maxDelay, outcomes } = choice.schedulesChain;
@@ -917,7 +1078,24 @@ export default function Game() {
       curEv.affectedStates.forEach(a => { b[a] = (b[a] || 0) + choice.stateBoost; });
       setStBon(b);
     }
-    setStats(ns);
+    if (choice.fedGovernorChoice) {
+      setPendingAppointment(buildAppointmentProcess(
+        "fed_chair",
+        "Federal Reserve Chair",
+        choice.fedGovernorName || pickFedChairName([nextMacroState.fedChairName]),
+        choice.fedGovernorChoice
+      ));
+      nextMacroState = {
+        ...nextMacroState,
+        fedVacant: true,
+        fedDecisionSummary: `${choice.fedGovernorName || "The nominee"} is moving through the Senate confirmation process.`,
+      };
+      addLog(`${choice.fedGovernorName || "A nominee"} was sent to the Senate as a ${choice.fedGovernorChoice.toLowerCase()} Fed chair.`);
+      addNotification({ type: "fed_update", message: `${choice.fedGovernorName || "A nominee"} is now in the Fed confirmation process.`, tab: "cabinet" });
+      ns = syncDerivedStats(ns, nextMacroState);
+    }
+    setStats(syncDerivedStats(ns, nextMacroState));
+    setMacroState(nextMacroState);
     if (curEv.isDisaster && curEv.affectedStates) {
       setRecentDisasters(rd => {
         const nrd = { ...rd };
@@ -1098,7 +1276,7 @@ export default function Game() {
       setCG({ ...cg, factions: nf });
     }
 
-    setStats(ns);
+    setStats(syncDerivedStats(ns, macroState));
     setAct(n => n + actionCost);
     if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
     setVisitedCountries(p => ({ ...p, [countryId]: week + 52 }));
@@ -1176,7 +1354,7 @@ export default function Game() {
       });
     }
     setStBon(b);
-    setStats(ns);
+    setStats(syncDerivedStats(ns, macroState));
     setAct(n => n + 1);
     setVisitTypeCounts(prev => ({ ...prev, [visitType]: (prev[visitType] || 0) + 1 }));
     if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
@@ -1196,8 +1374,9 @@ export default function Game() {
     const outcome = buildExecutiveOrderOutcome(eo, extraData);
 
     // Immediate stat effects
-    const ns = { ...stats };
-    Object.entries(outcome.effects || {}).forEach(([k, v]) => { if (ns[k] !== undefined) ns[k] += v * mult; });
+    let ns = { ...stats };
+    let nextMacroState = { ...macroState, impulses: { ...macroState.impulses } };
+    ({ stats: ns, macroState: nextMacroState } = applyEffectsBundle(ns, nextMacroState, outcome.effects || {}, eo, mult));
 
     // Delayed effects via pFx queue
     if (outcome.delayedEffects) {
@@ -1264,10 +1443,14 @@ export default function Game() {
         nc.status = nc.relationship >= 70 ? "ALLIED" : nc.relationship >= 50 ? "FRIENDLY" : nc.relationship >= 30 ? "NEUTRAL" : nc.relationship >= 15 ? "UNFRIENDLY" : "HOSTILE";
         return nc;
       }));
-      if (extraData.targetCountryId === "china") ns.gdpGrowth = Math.max(-2, ns.gdpGrowth - 0.06);
+      if (extraData.targetCountryId === "china") {
+        nextMacroState = adaptLegacyEffectsToMacroImpulses(nextMacroState, { gdpGrowth: -0.06 }, eo);
+        ns = syncDerivedStats(ns, nextMacroState);
+      }
     }
 
-    setStats(ns);
+    setStats(syncDerivedStats(ns, nextMacroState));
+    setMacroState(nextMacroState);
 
     // Record it
     setActiveOrders(prev => [...prev, { id: eo.id, name: eo.name, issuedWeek: week, active: true, choiceData: extraData }]);
@@ -1312,22 +1495,23 @@ export default function Game() {
     // Apply stat effects
     if (isBudget) {
       const BUDGET_KEYS = ["corporateTaxRate","incomeTaxLow","incomeTaxMid","incomeTaxHigh","payrollTaxRate","militarySpending","educationSpending","healthcareSpending","socialSecuritySpending","infrastructureSpending","otherSpending"];
-      setStats(s => {
-        const ns = { ...s };
-        BUDGET_KEYS.forEach(k => { if (budgetDraft[k] != null) ns[k] = s[k] * (1 + budgetDraft[k]); });
-        ns.approvalRating = (ns.approvalRating || 50) + 1.5;
-        return ns;
-      });
+      const ns = { ...stats };
+      BUDGET_KEYS.forEach(k => { if (budgetDraft[k] != null) ns[k] = stats[k] * (1 + budgetDraft[k]); });
+      ns.approvalRating = (ns.approvalRating || 50) + 1.5;
+      setStats(syncDerivedStats(ns, macroState));
       setReconciliationCooldown(week + 52);
     } else {
-      setStats(s => {
-        const ns = { ...s };
-        Object.entries(act.effects).forEach(([k, val]) => {
-          if (!["gdpGrowth","unemployment","crimeRate"].includes(k) && ns[k] !== undefined) ns[k] += val;
-        });
-        ns.approvalRating = (ns.approvalRating || 50) + 1.5;
-        return ns;
-      });
+      let ns = { ...stats };
+      let nextMacroState = { ...macroState, impulses: { ...macroState.impulses } };
+      ({ stats: ns, macroState: nextMacroState } = applyEffectsBundle(
+        ns,
+        nextMacroState,
+        Object.fromEntries(Object.entries(act.effects).filter(([k]) => !["gdpGrowth","unemployment","crimeRate"].includes(k))),
+        act
+      ));
+      ns.approvalRating = (ns.approvalRating || 50) + 1.5;
+      setStats(syncDerivedStats(ns, nextMacroState));
+      setMacroState(nextMacroState);
       // Delayed effects
       Object.entries(act.effects).forEach(([k, val]) => {
         if (["gdpGrowth","unemployment","crimeRate"].includes(k))
@@ -1419,7 +1603,7 @@ export default function Game() {
       return { ...prev, factions: nf };
     });
 
-    setStats(s => ({ ...s, approvalRating: clampRel(s.approvalRating - 2) }));
+    setStats(syncDerivedStats({ ...stats, approvalRating: clampRel(stats.approvalRating - 2) }, macroState));
 
     // Allow re-introduction after cooldown
     if (isBudget) {
@@ -1533,7 +1717,7 @@ export default function Game() {
       allyIds.forEach(fid => { if (nf[fid]) nf[fid] = { ...nf[fid], unity: clampU(nf[fid].unity - 2) }; });
     }
     setCG({ ...cg, factions: nf });
-    setStats(ns);
+    setStats(syncDerivedStats(ns, macroState));
     setAct(n => n + 1);
     if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
     const topicName = SPEECH_TOPICS.find(t => t.id === speechTopic)?.name ?? speechTopic;
@@ -1565,7 +1749,7 @@ export default function Game() {
   if (screen === 0) return <LandingScreen onStart={() => setScreen(1)} />;
 
   if (screen === 1) return (
-    <SetupScreen pp={pp} setPP={setPP} pf={pf} setPF={setPF} pn={pn} setPN={setPN} onStart={start} />
+    <SetupScreen pp={pp} setPP={setPP} pf={pf} setPF={setPF} pn={pn} setPN={setPN} vpn={vpn} setVpn={setVpn} onStart={start} />
   );
 
   if (!cg) return null;
@@ -1634,6 +1818,7 @@ export default function Game() {
       {tab === "overview" && (
         <OverviewTab
           stats={stats} prev={prev} hist={hist}
+          macroState={macroState}
           sA={sA} stateHist={stateHist}
           hov={hov} setHov={setHov}
           activeBill={activeBill} billLikelihood={billLikelihood}
@@ -1649,6 +1834,7 @@ export default function Game() {
           billRecord={billRecord}
           executiveOverreach={executiveOverreach}
           congressHistory={congressHistory}
+          confirmationHistory={confirmationHistory}
           factionHist={factionHist}
         />
       )}
@@ -1664,6 +1850,18 @@ export default function Game() {
           act={act}
           onMakePromise={makePromise} onAssignSurrogate={assignSurrogate}
           campaignMetrics={campaignMetrics}
+        />
+      )}
+
+      {tab === "cabinet" && (
+        <CabinetTab
+          pn={pn}
+          vpn={vpn}
+          pp={pp}
+          pf={pf}
+          week={week}
+          macroState={macroState}
+          pendingAppointment={pendingAppointment}
         />
       )}
 
@@ -1727,7 +1925,7 @@ export default function Game() {
       {/* Modals */}
       <BudgetModal
         budgetDraft={showBudget ? budgetDraft : null}
-        stats={stats} factions={cg.factions}
+        stats={stats} macroState={macroState} factions={cg.factions}
         onChangeDraft={(key, val) => setBudgetDraft(p => ({ ...p, [key]: val }))}
         onSubmit={submitBudget}
         onCancel={() => { setShowBudget(false); setBudgetDraft(null); }}

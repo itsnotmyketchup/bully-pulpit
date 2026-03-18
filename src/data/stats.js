@@ -1,10 +1,16 @@
 export const INITIAL_STATS = {
   gdpGrowth: 2.2,
+  realGdpGrowth: 2.2,
+  potentialGdpGrowth: 2.1,
+  outputGap: 0,
   nominalGdp: 28.0,         // nominal GDP in $T
   unemployment: 4.4,
   inflation: 2.9,
   nationalDebt: 36.2,
   nationalDeficit: 1820,    // annual deficit in $B (~$1.8T realistic)
+  taxRevenue: 6326,
+  fedFundsRate: 4.5,
+  housingStarts: 1366900,
   approvalRating: 54,
   population: 345426571,    // total US population
   birthRate: 10.8,          // births per 1,000 people per year
@@ -32,11 +38,17 @@ export const INITIAL_STATS = {
 
 export const SM = {
   gdpGrowth:          { l: "GDP growth",         g: "up",      f: v => v.toFixed(1) + "%" },
+  realGdpGrowth:      { l: "Real GDP growth",    g: "up",      f: v => v.toFixed(1) + "%" },
+  potentialGdpGrowth: { l: "Potential growth",   g: "up",      f: v => v.toFixed(1) + "%" },
+  outputGap:          { l: "Output gap",         g: "up",      f: v => v.toFixed(1) + "%" },
   nominalGdp:         { l: "Nominal GDP",        g: "up",      f: v => "$" + v.toFixed(2) + "T" },
   unemployment:       { l: "Unemployment",       g: "down",    f: v => v.toFixed(1) + "%" },
   inflation:          { l: "Inflation",           g: "down",    f: v => v.toFixed(1) + "%" },
   nationalDebt:       { l: "National debt",      g: "down",    f: v => "$" + v.toFixed(1) + "T" },
   nationalDeficit:    { l: "Annual deficit",     g: "down",    f: v => v >= 0 ? "$" + Math.round(v) + "B deficit" : "$" + Math.abs(Math.round(v)) + "B surplus" },
+  taxRevenue:         { l: "Tax revenue",        g: "up",      f: v => "$" + Math.round(v) + "B" },
+  fedFundsRate:       { l: "Fed funds rate",     g: "down",    f: v => v.toFixed(2) + "%" },
+  housingStarts:      { l: "Housing starts",     g: "up",      f: v => Math.round(v).toLocaleString() },
   approvalRating:     { l: "Approval",           g: "up",      f: v => Math.round(v) + "%" },
   population:         { l: "Population",          g: "up",      f: v => (v / 1e6).toFixed(2) + "M" },
   birthRate:          { l: "Birth rate",          g: "neutral", f: v => v.toFixed(1) + "/1k" },

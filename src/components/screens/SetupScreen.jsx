@@ -1,7 +1,7 @@
 import { PARTIES, FACTION_DATA } from "../../data/factions.js";
 
-export default function SetupScreen({ pp, setPP, pf, setPF, pn, setPN, onStart }) {
-  const canStart = pp && pf && pn.trim();
+export default function SetupScreen({ pp, setPP, pf, setPF, pn, setPN, vpn, setVpn, onStart }) {
+  const canStart = pp && pf && pn.trim() && vpn.trim();
   return (
     <div style={{ minHeight: 440, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
       <div style={{ maxWidth: 440, width: "100%" }}>
@@ -10,6 +10,10 @@ export default function SetupScreen({ pp, setPP, pf, setPF, pn, setPN, onStart }
 
         <label style={{ fontSize: 11, color: "var(--color-text-secondary)", display: "block", marginBottom: 3 }}>Name</label>
         <input type="text" value={pn} onChange={e => setPN(e.target.value)} placeholder="Enter your name"
+          style={{ width: "100%", marginBottom: 12, boxSizing: "border-box" }} />
+
+        <label style={{ fontSize: 11, color: "var(--color-text-secondary)", display: "block", marginBottom: 3 }}>Vice President</label>
+        <input type="text" value={vpn} onChange={e => setVpn(e.target.value)} placeholder="Enter the vice president's name"
           style={{ width: "100%", marginBottom: 12, boxSizing: "border-box" }} />
 
         <label style={{ fontSize: 11, color: "var(--color-text-secondary)", display: "block", marginBottom: 6 }}>Party</label>

@@ -14,19 +14,33 @@ function unityLabel(unity) {
   return { text: "Split", color: "#E24B4A" };
 }
 
-export default function BillProgress({ bill, passLikelihood, factionVotes }) {
-  if (!bill) return null;
+export default function BillProgress({ bill, passLikelihood, factionVotes, process }) {
+  const view = process || (bill ? {
+    name: bill.act.name,
+    desc: bill.act.desc,
+    badgeLabel: "In Congress",
+    stage: bill.stage,
+    turnsInStage: bill.turnsInStage,
+    fails: bill.fails,
+    stages: BILL_STAGES,
+    factionVotes,
+    passLikelihood,
+    senateOnly: false,
+    isBudget: bill.isBudget,
+  } : null);
+  if (!view) return null;
 
-  const stageIdx = BILL_STAGES.findIndex(s => s.id === bill.stage);
-  const isChamberVote = bill.stage === "first_chamber" || bill.stage === "second_chamber";
-  const isRecon = bill.isBudget;
-  const senThreshold = (!isRecon && isChamberVote) ? 0.60 : 0.50;
+  const stages = view.stages || BILL_STAGES;
+  const stageIdx = stages.findIndex(s => s.id === view.stage);
+  const isChamberVote = view.stage === "first_chamber" || view.stage === "second_chamber";
+  const isRecon = view.isBudget;
+  const senThreshold = view.senateOnly ? 0.50 : (!isRecon && isChamberVote) ? 0.60 : 0.50;
 
   // Compute totals from factionVotes if available
-  const totalSenate = factionVotes ? factionVotes.reduce((s, f) => s + f.senateSeats, 0) : 0;
-  const totalHouse = factionVotes ? factionVotes.reduce((s, f) => s + f.houseSeats, 0) : 0;
-  const aggSenYes = factionVotes ? factionVotes.reduce((s, f) => s + f.senateYes, 0) : 0;
-  const aggHouYes = factionVotes ? factionVotes.reduce((s, f) => s + f.houseYes, 0) : 0;
+  const totalSenate = view.factionVotes ? view.factionVotes.reduce((s, f) => s + f.senateSeats, 0) : 0;
+  const totalHouse = view.factionVotes ? view.factionVotes.reduce((s, f) => s + f.houseSeats, 0) : 0;
+  const aggSenYes = view.factionVotes ? view.factionVotes.reduce((s, f) => s + f.senateYes, 0) : 0;
+  const aggHouYes = view.factionVotes ? view.factionVotes.reduce((s, f) => s + f.houseYes, 0) : 0;
   const senNeeded = Math.ceil(totalSenate * senThreshold);
   const houNeeded = Math.ceil(totalHouse * 0.50);
   const senMet = aggSenYes >= senNeeded;
@@ -42,20 +56,20 @@ export default function BillProgress({ bill, passLikelihood, factionVotes }) {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{bill.act.name}</span>
-          <Badge color="#378ADD">In Congress</Badge>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{view.name}</span>
+          <Badge color="#378ADD">{view.badgeLabel || "In Process"}</Badge>
         </div>
-        {bill.fails > 0 && (
-          <Badge color="#E24B4A">{bill.fails}/3 setback{bill.fails !== 1 ? "s" : ""}</Badge>
+        {view.fails > 0 && (
+          <Badge color="#E24B4A">{view.fails}/3 setback{view.fails !== 1 ? "s" : ""}</Badge>
         )}
       </div>
       <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>
-        {bill.act.desc}
+        {view.desc}
       </div>
 
       {/* Stage progress bar */}
       <div style={{ display: "flex", gap: 3, marginBottom: 6 }}>
-        {BILL_STAGES.map((stage, i) => {
+        {stages.map((stage, i) => {
           const passed = i < stageIdx;
           const current = i === stageIdx;
           return (
@@ -89,24 +103,26 @@ export default function BillProgress({ bill, passLikelihood, factionVotes }) {
       {/* Current status + pass likelihood */}
       <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 2 }}>
         Stage: <span style={{ fontWeight: 500, color: "var(--color-text-primary)" }}>
-          {BILL_STAGES[stageIdx]?.desc || "Unknown"}
+          {stages[stageIdx]?.desc || "Unknown"}
         </span>
-        {bill.turnsInStage > 0 && (
-          <span> — {bill.turnsInStage} turn{bill.turnsInStage !== 1 ? "s" : ""} pending</span>
+        {view.turnsInStage > 0 && (
+          <span> — {view.turnsInStage} turn{view.turnsInStage !== 1 ? "s" : ""} pending</span>
         )}
       </div>
-      {passLikelihood !== undefined && (
+      {view.passLikelihood !== undefined && (
         <div style={{ marginBottom: 8, fontSize: 10 }}>
-          Pass likelihood: <span style={{ fontWeight: 600, color: passLikelihood > 50 ? "#1D9E75" : "#E24B4A" }}>{passLikelihood}%</span>
+          Pass likelihood: <span style={{ fontWeight: 600, color: view.passLikelihood > 50 ? "#1D9E75" : "#E24B4A" }}>{view.passLikelihood}%</span>
         </div>
       )}
 
       {/* Per-faction vote breakdown */}
-      {factionVotes && factionVotes.length > 0 && (
+      {view.factionVotes && view.factionVotes.length > 0 && (
         <>
-          <div style={{ fontSize: 9, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 5 }}>Congressional Support</div>
+          <div style={{ fontSize: 9, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 5 }}>
+            {view.senateOnly ? "Senate Support" : "Congressional Support"}
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 3, marginBottom: 8 }}>
-            {factionVotes.map(fv => {
+            {view.factionVotes.map(fv => {
               const label = voteLabel(fv.voteProb);
               const ul = unityLabel(fv.unity);
               const yesPct = fv.senateSeats > 0 ? fv.senateYes / fv.senateSeats : 0;
@@ -129,7 +145,7 @@ export default function BillProgress({ bill, passLikelihood, factionVotes }) {
           <div style={{ display: "flex", gap: 8 }}>
             {[
               { label: "Senate", yes: aggSenYes, total: totalSenate, needed: senNeeded, met: senMet, threshold: senThreshold },
-              { label: "House", yes: aggHouYes, total: totalHouse, needed: houNeeded, met: houMet, threshold: 0.50 },
+              ...(!view.senateOnly ? [{ label: "House", yes: aggHouYes, total: totalHouse, needed: houNeeded, met: houMet, threshold: 0.50 }] : []),
             ].map(ch => (
               <div key={ch.label} style={{ flex: 1, background: "var(--color-background-primary)", borderRadius: "var(--border-radius-md)", padding: "5px 7px", border: `1px solid ${ch.met ? "#1D9E7540" : "#E24B4A40"}` }}>
                 <div style={{ fontSize: 9, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 3 }}>{ch.label}</div>

@@ -1,4 +1,5 @@
 import { computeBudgetReactions } from "../../systems/budgetCalc.js";
+import { computeBudgetProjection } from "../../logic/macroEconomy.js";
 
 const BUDGET_KEYS = [
   { key: "corporateTaxRate",       label: "Corporate Tax",        fmt: v => v.toFixed(0) + "%" },
@@ -13,16 +14,14 @@ const BUDGET_KEYS = [
   { key: "infrastructureSpending", label: "Infrastructure",       fmt: v => "$" + Math.round(v) + "B" },
 ];
 
-export default function BudgetModal({ budgetDraft, stats, factions, onChangeDraft, onSubmit, onCancel }) {
+export default function BudgetModal({ budgetDraft, stats, macroState, factions, onChangeDraft, onSubmit, onCancel }) {
   if (!budgetDraft) return null;
 
   const reactions = computeBudgetReactions(budgetDraft);
 
-  const ns = {};
-  BUDGET_KEYS.forEach(({ key }) => { ns[key] = stats[key] * (1 + (budgetDraft[key] || 0)); });
-  const projTaxRev  = 2200 * (ns.incomeTaxMid / 22) + 500 * (ns.corporateTaxRate / 21) + 1300 * (ns.payrollTaxRate / 7.65);
-  const projSpending = ns.militarySpending + ns.educationSpending + ns.healthcareSpending + ns.socialSecuritySpending + ns.infrastructureSpending + stats.otherSpending + 3200;
-  const projDeficit  = Math.round(projSpending - projTaxRev);
+  const projection = computeBudgetProjection(stats, macroState, budgetDraft);
+  const projTaxRev = projection.taxRevenue;
+  const projDeficit = projection.nationalDeficit;
   const deficitDelta = projDeficit - stats.nationalDeficit;
 
   return (

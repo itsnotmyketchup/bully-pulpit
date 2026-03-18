@@ -6,6 +6,9 @@ const TYPE_STYLES = {
   surrogate_done: { bg: "#1D9E7522", border: "#1D9E7566", accent: "#1D9E75", icon: "✓" },
   surrogate_fail: { bg: "#E24B4A22", border: "#E24B4A66", accent: "#E24B4A", icon: "✗" },
   election_warning: { bg: "#1a274422", border: "#1a274466", accent: "#1a2744", icon: "★" },
+  fed_update: { bg: "#2563eb1f", border: "#2563eb66", accent: "#2563eb", icon: "◎" },
+  appointment_success: { bg: "#1D9E7522", border: "#1D9E7566", accent: "#1D9E75", icon: "▲" },
+  appointment_fail: { bg: "#E24B4A22", border: "#E24B4A66", accent: "#E24B4A", icon: "■" },
 };
 
 export default function NotificationBar({ notifications, onDismiss, onTabSwitch }) {
