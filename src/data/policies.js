@@ -98,8 +98,7 @@ export const POLICY_ACTIONS = [
     engagementEffect: 10,
     powerProjectionEffect: 2,
     countryEffects: { russia: { relationship: -5, trust: -5 } },
-    stateEffects: { economy: ["government", "manufacturing"], weight: 0.015 },
-    factionReactions: { prog: -0.2, mod_dem: 0.45, blue_dog: 0.5, freedom: -0.65, mod_rep: 0.45, trad_con: 0.7 },
+    factionReactions: { prog: 0.05, mod_dem: 0.45, blue_dog: 0.5, freedom: -0.65, mod_rep: 0.45, trad_con: 0.5 },
   },
   {
     id: "taiwan_defense",
@@ -110,8 +109,7 @@ export const POLICY_ACTIONS = [
     engagementEffect: 10,
     powerProjectionEffect: 4,
     countryEffects: { china: { relationship: -5, trust: -5 } },
-    stateEffects: { economy: ["tech", "government"], minUrbanization: 0.72, weight: 0.012 },
-    factionReactions: { prog: -0.25, mod_dem: 0.3, blue_dog: 0.45, freedom: -0.55, mod_rep: 0.6, trad_con: 0.75 },
+    factionReactions: { prog: -0.07, mod_dem: 0.45, blue_dog: 0.45, freedom: 0, mod_rep: 0.6, trad_con: 0.75 },
   },
 ];
 

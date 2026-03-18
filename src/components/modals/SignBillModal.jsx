@@ -9,6 +9,8 @@ export default function SignBillModal({ pendingSignature, appliedAmendments, fac
   const billAmends = (appliedAmendments[act.id] || [])
     .map(id => (BILL_AMENDMENTS[act.id] || []).find(a => a.id === id))
     .filter(Boolean);
+  const isBudgetStat = key => key.toLowerCase().includes("spending");
+  const countryNames = { china: "China", russia: "Russia" };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1015, padding: "16px" }}>
@@ -71,13 +73,34 @@ export default function SignBillModal({ pendingSignature, appliedAmendments, fac
               {Object.entries(act.effects || {}).filter(([, v]) => v !== 0).map(([k, v]) => {
                 const meta = SM[k];
                 if (!meta) return null;
-                const good = (meta.g === "up" && v > 0) || (meta.g === "down" && v < 0);
+                const neutralBudget = isBudgetStat(k) && v > 0;
+                const good = !neutralBudget && ((meta.g === "up" && v > 0) || (meta.g === "down" && v < 0));
+                const bad = !neutralBudget && !good;
+                const bg = neutralBudget ? "#ede8e0" : good ? "#d4eedd" : "#f8d7d7";
+                const fg = neutralBudget ? "#7a6040" : good ? "#2d6a3f" : "#8b1a1a";
                 return (
-                  <div key={k} style={{ background: good ? "#d4eedd" : "#f8d7d7", borderRadius: 3, padding: "4px 8px", textAlign: "center" }}>
-                    <div style={{ fontSize: 7, color: good ? "#2d6a3f" : "#8b1a1a", textTransform: "uppercase", letterSpacing: "0.08em" }}>{meta.l}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: good ? "#2d6a3f" : "#8b1a1a" }}>{v > 0 ? "+" : ""}{v}</div>
+                  <div key={k} style={{ background: bg, borderRadius: 3, padding: "4px 8px", textAlign: "center" }}>
+                    <div style={{ fontSize: 7, color: fg, textTransform: "uppercase", letterSpacing: "0.08em" }}>{meta.l}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: fg }}>{v > 0 ? "+" : ""}{v}</div>
                   </div>
                 );
+              })}
+              {Object.entries(act.countryEffects || {}).flatMap(([countryId, effect]) => {
+                const countryName = countryNames[countryId] || countryId;
+                return [
+                  effect.relationship ? (
+                    <div key={`${countryId}-relationship`} style={{ background: effect.relationship > 0 ? "#d4eedd" : "#f8d7d7", borderRadius: 3, padding: "4px 8px", textAlign: "center" }}>
+                      <div style={{ fontSize: 7, color: effect.relationship > 0 ? "#2d6a3f" : "#8b1a1a", textTransform: "uppercase", letterSpacing: "0.08em" }}>{countryName} Relations</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: effect.relationship > 0 ? "#2d6a3f" : "#8b1a1a" }}>{effect.relationship > 0 ? "+" : ""}{effect.relationship}</div>
+                    </div>
+                  ) : null,
+                  effect.trust ? (
+                    <div key={`${countryId}-trust`} style={{ background: effect.trust > 0 ? "#d4eedd" : "#f8d7d7", borderRadius: 3, padding: "4px 8px", textAlign: "center" }}>
+                      <div style={{ fontSize: 7, color: effect.trust > 0 ? "#2d6a3f" : "#8b1a1a", textTransform: "uppercase", letterSpacing: "0.08em" }}>{countryName} Trust</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: effect.trust > 0 ? "#2d6a3f" : "#8b1a1a" }}>{effect.trust > 0 ? "+" : ""}{effect.trust}</div>
+                    </div>
+                  ) : null,
+                ];
               })}
             </div>
             <div style={{ fontSize: 7, letterSpacing: "0.08em", textTransform: "uppercase", color: "#9a8060", marginBottom: 5 }}>Faction Reactions</div>
