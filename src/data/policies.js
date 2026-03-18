@@ -58,8 +58,8 @@ export const POLICY_ACTIONS = [
     name: "Agricultural Support Package",
     desc: "Subsidies and crop insurance expansion for family farms and rural communities.",
     category: "agriculture",
-    effects: { nationalDebt: 0.08 },
-    stateEffects: { farmHeavy: true, weight: 0.04 },
+    effects: { nationalDebt: 0.08, otherSpending: 10, agricultureSpending: 10 },
+    stateEffects: { farmHeavy: true, maxUrbanization: 0.68, weight: 0.02 },
     factionReactions: { prog: 0.2, mod_dem: 0.5, blue_dog: 0.7, freedom: -0.1, mod_rep: 0.4, trad_con: 0.5 },
   },
   {
@@ -80,6 +80,39 @@ export const POLICY_ACTIONS = [
     stateEffects: { region: ["west", "northeast"], weight: 0.025 },
     factionReactions: { prog: 0.8, mod_dem: 0.6, blue_dog: -0.1, freedom: 0.3, mod_rep: -0.2, trad_con: -0.7 },
   },
+  {
+    id: "nasa_auth",
+    name: "NASA Authorization Act",
+    desc: "Expands lunar, science, and aerospace R&D programs with major new grants for federal labs, universities, and contractors.",
+    category: "science & tech",
+    effects: { nationalDebt: 0.06, otherSpending: 50, scienceTechnologySpending: 50 },
+    stateEffects: { economy: ["tech", "government"], minUrbanization: 0.75, weight: 0.015 },
+    factionReactions: { prog: 0.5, mod_dem: 0.6, blue_dog: 0.4, freedom: -0.3, mod_rep: 0.15, trad_con: 0.2 },
+  },
+  {
+    id: "ukraine_defense",
+    name: "Ukraine Defense Act",
+    desc: "Authorizes additional military aid, munitions replenishment, and training support for Ukraine while reinforcing U.S. commitments in Europe.",
+    category: "foreign policy",
+    effects: { militarySpending: 10, nationalDebt: 0.03 },
+    engagementEffect: 10,
+    powerProjectionEffect: 2,
+    countryEffects: { russia: { relationship: -5, trust: -5 } },
+    stateEffects: { economy: ["government", "manufacturing"], weight: 0.015 },
+    factionReactions: { prog: -0.2, mod_dem: 0.45, blue_dog: 0.5, freedom: -0.65, mod_rep: 0.45, trad_con: 0.7 },
+  },
+  {
+    id: "taiwan_defense",
+    name: "Taiwan Defense Act",
+    desc: "Funds accelerated weapons deliveries, regional deterrence measures, and Indo-Pacific force posture upgrades in response to Chinese pressure on Taiwan.",
+    category: "foreign policy",
+    effects: { militarySpending: 5, nationalDebt: 0.02 },
+    engagementEffect: 10,
+    powerProjectionEffect: 4,
+    countryEffects: { china: { relationship: -5, trust: -5 } },
+    stateEffects: { economy: ["tech", "government"], minUrbanization: 0.72, weight: 0.012 },
+    factionReactions: { prog: -0.25, mod_dem: 0.3, blue_dog: 0.45, freedom: -0.55, mod_rep: 0.6, trad_con: 0.75 },
+  },
 ];
 
 export const BILL_STAGES = [
@@ -89,7 +122,7 @@ export const BILL_STAGES = [
   { id: "reconciliation", label: "Reconciliation", desc: "Resolving differences" },
 ];
 
-export const POLICY_CATEGORIES = ["all", "infrastructure", "immigration", "social", "defense", "agriculture", "crime"];
+export const POLICY_CATEGORIES = ["all", "infrastructure", "immigration", "social", "defense", "agriculture", "crime", "science & tech", "foreign policy", "other"];
 
 export const BILL_LOCKS = {
   abortion_ban: ["abortion_rights"],

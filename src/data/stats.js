@@ -16,7 +16,13 @@ export const INITIAL_STATS = {
   militarySpending: 886,
   educationSpending: 102,
   healthcareSpending: 1520,
+  socialSecuritySpending: 1490,
   infrastructureSpending: 110,
+  otherSpending: 169,
+  scienceTechnologySpending: 45,
+  lawEnforcementSpending: 58,
+  agricultureSpending: 31,
+  energyEnvironmentSpending: 35,
   corporateTaxRate: 21,     // %
   incomeTaxLow: 10,         // % on income < $50k
   incomeTaxMid: 22,         // % on income $50k–$200k
@@ -42,7 +48,13 @@ export const SM = {
   militarySpending:   { l: "Defense",            g: "neutral", f: v => "$" + Math.round(v) + "B" },
   educationSpending:  { l: "Education",          g: "neutral", f: v => "$" + Math.round(v) + "B" },
   healthcareSpending: { l: "Healthcare",         g: "neutral", f: v => "$" + Math.round(v) + "B" },
+  socialSecuritySpending: { l: "Social Security", g: "neutral", f: v => "$" + Math.round(v) + "B" },
   infrastructureSpending: { l: "Infrastructure", g: "neutral", f: v => "$" + Math.round(v) + "B" },
+  otherSpending:      { l: "Other",              g: "neutral", f: v => "$" + Math.round(v) + "B" },
+  scienceTechnologySpending: { l: "Science & Technology", g: "neutral", f: v => "$" + Math.round(v) + "B" },
+  lawEnforcementSpending: { l: "Law Enforcement", g: "neutral", f: v => "$" + Math.round(v) + "B" },
+  agricultureSpending: { l: "Agriculture", g: "neutral", f: v => "$" + Math.round(v) + "B" },
+  energyEnvironmentSpending: { l: "Energy & Environment", g: "neutral", f: v => "$" + Math.round(v) + "B" },
   corporateTaxRate:   { l: "Corporate tax",      g: "neutral", f: v => v.toFixed(0) + "%" },
   incomeTaxLow:       { l: "Income tax <$50k",   g: "neutral", f: v => v.toFixed(0) + "%" },
   incomeTaxMid:       { l: "Income tax <$200k",  g: "neutral", f: v => v.toFixed(0) + "%" },

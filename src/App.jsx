@@ -243,6 +243,8 @@ export default function Game() {
     if (action.stateEffects?.farmHeavy) STATE_DATA.forEach(s => { if (s.farm > 0.15) b[s.abbr] = (b[s.abbr] || 0) + action.stateEffects.weight; });
     if (action.stateEffects?.economy) STATE_DATA.forEach(s => { if (action.stateEffects.economy.includes(s.economy)) b[s.abbr] = (b[s.abbr] || 0) + (action.stateEffects.weight || 0.02); });
     if (action.stateEffects?.region) STATE_DATA.forEach(s => { if (action.stateEffects.region.includes(s.region)) b[s.abbr] = (b[s.abbr] || 0) + (action.stateEffects.weight || 0.02); });
+    if (action.stateEffects?.minUrbanization) STATE_DATA.forEach(s => { if ((s.urbanization || 0) >= action.stateEffects.minUrbanization) b[s.abbr] = (b[s.abbr] || 0) + (action.stateEffects.weight || 0.02); });
+    if (action.stateEffects?.maxUrbanization) STATE_DATA.forEach(s => { if ((s.urbanization || 1) <= action.stateEffects.maxUrbanization) b[s.abbr] = (b[s.abbr] || 0) + (action.stateEffects.weight || 0.02); });
     setStBon(b);
   };
 
@@ -545,7 +547,7 @@ export default function Game() {
 
     // Compute annual deficit from spending vs tax revenue
     const taxRevenue = 2200 * (ns.incomeTaxMid / 22) + 500 * (ns.corporateTaxRate / 21) + 1300 * (ns.payrollTaxRate / 7.65);
-    const totalSpending = ns.militarySpending + ns.educationSpending + ns.healthcareSpending + ns.infrastructureSpending + 3200;
+    const totalSpending = ns.militarySpending + ns.educationSpending + ns.healthcareSpending + ns.socialSecuritySpending + ns.infrastructureSpending + ns.otherSpending + 3200;
     const prevDeficit = ns.nationalDeficit;
     ns.nationalDeficit = Math.round(totalSpending - taxRevenue);
     // Conservative faction relationship boost when deficit meaningfully reduced
@@ -1224,7 +1226,7 @@ export default function Game() {
 
     // Apply stat effects
     if (isBudget) {
-      const BUDGET_KEYS = ["corporateTaxRate","incomeTaxLow","incomeTaxMid","incomeTaxHigh","payrollTaxRate","militarySpending","educationSpending","healthcareSpending","infrastructureSpending"];
+      const BUDGET_KEYS = ["corporateTaxRate","incomeTaxLow","incomeTaxMid","incomeTaxHigh","payrollTaxRate","militarySpending","educationSpending","healthcareSpending","socialSecuritySpending","infrastructureSpending","otherSpending"];
       setStats(s => {
         const ns = { ...s };
         BUDGET_KEYS.forEach(k => { if (budgetDraft[k] != null) ns[k] = s[k] * (1 + budgetDraft[k]); });
@@ -1247,6 +1249,19 @@ export default function Game() {
           setPFx(p => [...p, { name: act.name, effects: { [k]: val }, week: week + 9 }]);
       });
       applyStateEffects(act);
+      if (act.engagementEffect) setEngagement(e => Math.max(0, Math.min(50, e + act.engagementEffect)));
+      if (act.powerProjectionEffect) setPowerProjection(p => Math.max(0, Math.min(50, p + act.powerProjectionEffect)));
+      if (act.countryEffects) {
+        setCountries(prev => prev.map(c => {
+          const eff = act.countryEffects[c.id];
+          if (!eff) return c;
+          const nc = { ...c };
+          if (eff.relationship) nc.relationship = Math.max(0, Math.min(100, nc.relationship + eff.relationship));
+          if (eff.trust) nc.trust = Math.max(0, Math.min(100, nc.trust + eff.trust));
+          nc.status = nc.relationship >= 70 ? "ALLIED" : nc.relationship >= 50 ? "FRIENDLY" : nc.relationship >= 30 ? "NEUTRAL" : nc.relationship >= 15 ? "UNFRIENDLY" : "HOSTILE";
+          return nc;
+        }));
+      }
     }
 
     // Apply faction effects and unity craters
@@ -1562,7 +1577,7 @@ export default function Game() {
           cg={cg}
           onOpenBudget={() => {
             if (!activeBill && (reconciliationCooldown === 0 || week >= reconciliationCooldown)) {
-              setBudgetDraft({ corporateTaxRate: 0, incomeTaxLow: 0, incomeTaxMid: 0, incomeTaxHigh: 0, payrollTaxRate: 0, militarySpending: 0, educationSpending: 0, healthcareSpending: 0, infrastructureSpending: 0 });
+              setBudgetDraft({ corporateTaxRate: 0, incomeTaxLow: 0, incomeTaxMid: 0, incomeTaxHigh: 0, payrollTaxRate: 0, militarySpending: 0, educationSpending: 0, healthcareSpending: 0, socialSecuritySpending: 0, infrastructureSpending: 0, otherSpending: 0 });
               setShowBudget(true);
             }
           }}

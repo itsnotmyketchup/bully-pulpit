@@ -15,11 +15,18 @@ const MAP_VIEWS = [
 
 export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, setHov, activeBill, billLikelihood, week }) {
   const [mapView, setMapView] = useState("approval");
+  const [otherExpanded, setOtherExpanded] = useState(false);
   const yr = Math.ceil(week / 52);
   const wiy = ((week - 1) % 52) + 1;
   const appDelta = stats.approvalRating - prev.approvalRating;
   const approvalColor = stats.approvalRating >= 55 ? "#1D9E75" : stats.approvalRating < 42 ? "#E24B4A" : "var(--color-text-primary)";
   const defColor = stats.nationalDeficit < 0 ? "#1D9E75" : stats.nationalDeficit > 2500 ? "#E24B4A" : stats.nationalDeficit > 1800 ? "#EF9F27" : "var(--color-text-primary)";
+  const otherBreakdown = [
+    ["Science & Technology", stats.scienceTechnologySpending],
+    ["Law Enforcement", stats.lawEnforcementSpending],
+    ["Agriculture", stats.agricultureSpending],
+    ["Energy & Environment", stats.energyEnvironmentSpending],
+  ];
 
   const LEGENDS = {
     approval: [["#E24B4A","<38%"],["#D85A30","38-44"],["#EF9F27","44-48"],["#9FE1CB","48-52"],["#5DCAA5","52-58"],["#1D9E75",">58%"]],
@@ -27,6 +34,53 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
     education: [["#dbeafe","<46%"],["#93c5fd","46-52"],["#60a5fa","52-58"],["#3b82f6","58-65"],["#2563eb","65-75"],["#1d4ed8",">75%"]],
     urban: [["#ede9fe","<47%"],["#c4b5fd","47-57"],["#a78bfa","57-68"],["#8b5cf6","68-78"],["#7c3aed","78-90"],["#5b21b6",">90%"]],
     religious: [["#fef9c3","<35%"],["#fde68a","35-45"],["#fbbf24","45-55"],["#f59e0b","55-65"],["#d97706","65-75"],["#b45309",">75%"]],
+  };
+
+  const renderBudgetRow = (label, val, pval, opts = {}) => {
+    const d = val - pval;
+    const chg = Math.abs(d) > 1;
+    const hasChildren = Boolean(opts.children);
+    return (
+      <div key={label} style={{ borderBottom: "0.5px solid var(--color-border-secondary)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--color-text-secondary)" }}>
+            {hasChildren && (
+              <button
+                onClick={opts.onToggle}
+                aria-label={opts.expanded ? `Collapse ${label}` : `Expand ${label}`}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--color-text-secondary)",
+                  cursor: "pointer",
+                  padding: 0,
+                  fontSize: 9,
+                  lineHeight: 1,
+                  width: 10,
+                }}
+              >
+                {opts.expanded ? "▼" : "▶"}
+              </button>
+            )}
+            <span>{label}</span>
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)" }}>
+            ${Math.round(val)}B
+            {chg && <span style={{ fontSize: 9, marginLeft: 4, color: d > 0 ? "#1D9E75" : "#E24B4A" }}>{d > 0 ? "▲" : "▼"} {Math.abs(Math.round(d))}B</span>}
+          </span>
+        </div>
+        {hasChildren && opts.expanded && (
+          <div style={{ padding: "0 0 6px 16px" }}>
+            {opts.children.map(([childLabel, childVal]) => (
+              <div key={childLabel} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "2px 0" }}>
+                <span style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>{childLabel}</span>
+                <span style={{ fontSize: 10, color: "var(--color-text-primary)" }}>${Math.round(childVal)}B</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return <>
@@ -158,25 +212,27 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
         </div>
 
         <SectionHeader label="Budget" />
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "6px 10px" }}>
-          {[
-            ["Defense",        stats.militarySpending,       prev.militarySpending],
-            ["Education",      stats.educationSpending,      prev.educationSpending],
-            ["Healthcare",     stats.healthcareSpending,     prev.healthcareSpending],
-            ["Infrastructure", stats.infrastructureSpending, prev.infrastructureSpending],
-          ].map(([label, val, pval]) => {
-            const d = val - pval;
-            const chg = Math.abs(d) > 1;
-            return (
-              <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0", borderBottom: "0.5px solid var(--color-border-secondary)" }}>
-                <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{label}</span>
-                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)" }}>
-                  ${Math.round(val)}B
-                  {chg && <span style={{ fontSize: 9, marginLeft: 4, color: d > 0 ? "#1D9E75" : "#E24B4A" }}>{d > 0 ? "▲" : "▼"} {Math.abs(Math.round(d))}B</span>}
-                </span>
-              </div>
-            );
-          })}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
+          <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "6px 10px" }}>
+            <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 4 }}>Mandatory</div>
+            {[
+              ["Healthcare", stats.healthcareSpending, prev.healthcareSpending],
+              ["Social Security", stats.socialSecuritySpending, prev.socialSecuritySpending],
+            ].map(([label, val, pval]) => renderBudgetRow(label, val, pval))}
+          </div>
+          <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "6px 10px" }}>
+            <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 4 }}>Discretionary</div>
+            {[
+              ["Defense", stats.militarySpending, prev.militarySpending],
+              ["Education", stats.educationSpending, prev.educationSpending],
+              ["Infrastructure", stats.infrastructureSpending, prev.infrastructureSpending],
+            ].map(([label, val, pval]) => renderBudgetRow(label, val, pval))}
+            {renderBudgetRow("Other", stats.otherSpending, prev.otherSpending, {
+              children: otherBreakdown,
+              expanded: otherExpanded,
+              onToggle: () => setOtherExpanded(v => !v),
+            })}
+          </div>
         </div>
       </div>
 

@@ -42,6 +42,14 @@ export const computeBudgetReactions = (draft) => {
     r.freedom = c(r.freedom - d.healthcareSpending * 2);
     r.mod_rep = c(r.mod_rep - d.healthcareSpending * 0.5);
   }
+  if (d.socialSecuritySpending != null) {
+    r.prog     = c(r.prog     + d.socialSecuritySpending * 1.2);
+    r.mod_dem  = c(r.mod_dem  + d.socialSecuritySpending * 1);
+    r.blue_dog = c(r.blue_dog + d.socialSecuritySpending * 0.3);
+    r.freedom  = c(r.freedom  - d.socialSecuritySpending * 1.3);
+    r.mod_rep  = c(r.mod_rep  - d.socialSecuritySpending * 0.5);
+    r.trad_con = c(r.trad_con - d.socialSecuritySpending * 0.3);
+  }
   if (d.militarySpending != null) {
     r.trad_con = c(r.trad_con + d.militarySpending * 1.5);
     r.freedom  = c(r.freedom  + d.militarySpending * 0.5);
@@ -61,6 +69,14 @@ export const computeBudgetReactions = (draft) => {
     r.mod_rep  = c(r.mod_rep  + d.infrastructureSpending * 0.5);
     r.blue_dog = c(r.blue_dog + d.infrastructureSpending * 0.5);
     r.freedom  = c(r.freedom  - d.infrastructureSpending * 0.5);
+  }
+  if (d.otherSpending != null) {
+    r.prog     = c(r.prog     + d.otherSpending * 0.4);
+    r.mod_dem  = c(r.mod_dem  + d.otherSpending * 0.3);
+    r.blue_dog = c(r.blue_dog + d.otherSpending * 0.2);
+    r.mod_rep  = c(r.mod_rep  + d.otherSpending * 0.1);
+    r.freedom  = c(r.freedom  - d.otherSpending * 0.4);
+    r.trad_con = c(r.trad_con - d.otherSpending * 0.1);
   }
   return r;
 };

@@ -9,6 +9,7 @@ const BUDGET_KEYS = [
   { key: "militarySpending",       label: "Defense",              fmt: v => "$" + Math.round(v) + "B" },
   { key: "educationSpending",      label: "Education",            fmt: v => "$" + Math.round(v) + "B" },
   { key: "healthcareSpending",     label: "Healthcare",           fmt: v => "$" + Math.round(v) + "B" },
+  { key: "socialSecuritySpending", label: "Social Security",      fmt: v => "$" + Math.round(v) + "B" },
   { key: "infrastructureSpending", label: "Infrastructure",       fmt: v => "$" + Math.round(v) + "B" },
 ];
 
@@ -20,7 +21,7 @@ export default function BudgetModal({ budgetDraft, stats, factions, onChangeDraf
   const ns = {};
   BUDGET_KEYS.forEach(({ key }) => { ns[key] = stats[key] * (1 + (budgetDraft[key] || 0)); });
   const projTaxRev  = 2200 * (ns.incomeTaxMid / 22) + 500 * (ns.corporateTaxRate / 21) + 1300 * (ns.payrollTaxRate / 7.65);
-  const projSpending = ns.militarySpending + ns.educationSpending + ns.healthcareSpending + ns.infrastructureSpending + 3200;
+  const projSpending = ns.militarySpending + ns.educationSpending + ns.healthcareSpending + ns.socialSecuritySpending + ns.infrastructureSpending + stats.otherSpending + 3200;
   const projDeficit  = Math.round(projSpending - projTaxRev);
   const deficitDelta = projDeficit - stats.nationalDeficit;
 
