@@ -87,11 +87,11 @@ export default function CongressTab({ allF, allyF, oppoF, pf, congressTab, setCo
 
     {congressTab === "legislation" && <LegislationRecord billRecord={billRecord} />}
 
-    {congressTab === "history" && <CongressHistoryPane congressHistory={congressHistory || []} allF={allF} />}
+    {congressTab === "history" && <CongressHistoryPane congressHistory={congressHistory || []} />}
   </>;
 }
 
-function CongressHistoryPane({ congressHistory, allF }) {
+function CongressHistoryPane({ congressHistory }) {
   const [barMode, setBarMode] = useState("faction");
 
   if (!congressHistory || congressHistory.length === 0) {

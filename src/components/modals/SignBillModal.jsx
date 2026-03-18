@@ -75,7 +75,6 @@ export default function SignBillModal({ pendingSignature, appliedAmendments, fac
                 if (!meta) return null;
                 const neutralBudget = isBudgetStat(k) && v > 0;
                 const good = !neutralBudget && ((meta.g === "up" && v > 0) || (meta.g === "down" && v < 0));
-                const bad = !neutralBudget && !good;
                 const bg = neutralBudget ? "#ede8e0" : good ? "#d4eedd" : "#f8d7d7";
                 const fg = neutralBudget ? "#7a6040" : good ? "#2d6a3f" : "#8b1a1a";
                 return (

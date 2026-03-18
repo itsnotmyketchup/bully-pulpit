@@ -95,7 +95,6 @@ export default function Game() {
   const [factionHist, setFactionHist] = useState({}); // {factionId: {trust:[], rel:[], unity:[]}}
   const [visitedCountries, setVisitedCountries] = useState({}); // {countryId: canVisitAfterWeek}
   const [lockedBills, setLockedBills] = useState(new Set());
-  const [billPassedResult, setBillPassedResult] = useState(null);
   const [reconciliationCooldown, setReconciliationCooldown] = useState(0); // week when available
   const [showBudget, setShowBudget] = useState(false);
   const [budgetDraft, setBudgetDraft] = useState(null);
@@ -202,7 +201,6 @@ export default function Game() {
     setFactionHist({});
     setVisitedCountries({});
     setLockedBills(new Set());
-    setBillPassedResult(null);
     setReconciliationCooldown(0);
     setShowBudget(false);
     setBudgetDraft(null);

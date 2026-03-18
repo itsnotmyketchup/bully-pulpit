@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { ComposableMap, Geographies, Geography } from "react-simple-maps";
 import { STATE_DATA } from "../data/states.js";
 import MiniChart from "./MiniChart.jsx";
@@ -81,7 +81,6 @@ export default function TileMap({ stateApprovals, hoveredState, setHoveredState,
                 : dataView === "urban" ? urbanColor(sd?.urbanization ?? 0.5)
                 : dataView === "religious" ? religiousColor(sd?.religiosity ?? 0.5)
                 : approvalColor(a);
-              const isH = hoveredState === abbr;
               return (
                 <Geography
                   key={geo.rsmKey}

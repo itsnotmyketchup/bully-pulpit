@@ -14,14 +14,14 @@ const STAT_LABELS = {
 const controvColor = c => c === 1 ? "#EF9F27" : c === 2 ? "#E27D27" : "#E24B4A";
 
 export default function ActionsTab({
-  act, week,
+  act,
   actionsSubTab, setActionsSubTab,
   selectedEO, setSelectedEO,
   eoChoice, setEoChoice,
   eoIssuedCount, activeOrders,
   executiveOverreach,
   pp, cg,
-  countries, visitedCountries, recentDisasters,
+  countries, recentDisasters,
   visitState, setVisitState,
   visitType, setVisitType,
   visitTypeCounts,
