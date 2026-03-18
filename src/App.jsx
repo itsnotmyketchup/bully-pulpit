@@ -25,7 +25,7 @@ import Badge from "./components/Badge.jsx";
 
 import LandingScreen from "./components/screens/LandingScreen.jsx";
 import SetupScreen from "./components/screens/SetupScreen.jsx";
-import CrisisScreen from "./components/screens/CrisisScreen.jsx";
+import CrisisModal from "./components/modals/CrisisModal.jsx";
 
 import OverviewTab from "./components/tabs/OverviewTab.jsx";
 import CongressTab from "./components/tabs/CongressTab.jsx";
@@ -189,7 +189,6 @@ export default function Game() {
     Object.entries(event.effects || {}).forEach(([k, v]) => { if (updatedStats[k] !== undefined) updatedStats[k] += v; });
     setStats(updatedStats);
     setCurEv(event);
-    setScreen(3);
     if (isSpecial) setLastSpecialEventWeek(eventWeek);
     return updatedStats;
   }, []);
@@ -441,7 +440,6 @@ export default function Game() {
             desc: `After three consecutive failures to advance, ${activeBill.act.name} has been shelved.${activeBill.isBudget ? " You may try again in 8 weeks." : " You may attempt to reintroduce it in 6 weeks."}`,
             choices: [{ text: "Accept the setback and move on", result: "Bill abandoned", effects: {} }],
           });
-          setScreen(3);
           setActiveBill(null);
           setBillLikelihood(null);
         } else {
@@ -913,7 +911,6 @@ export default function Game() {
     }
     addLog(`${curEv.name}: ${choice.result}`);
     setCurEv(null);
-    setScreen(2);
   };
 
   const propose = action => {
@@ -1508,10 +1505,6 @@ export default function Game() {
     <SetupScreen pp={pp} setPP={setPP} pf={pf} setPF={setPF} pn={pn} setPN={setPN} onStart={start} />
   );
 
-  if (screen === 3 && curEv) return (
-    <CrisisScreen curEv={curEv} wiy={wiy} yr={yr} onChoice={handleEventChoice} />
-  );
-
   if (!cg) return null;
 
   const allF = Object.values(cg.factions);
@@ -1701,6 +1694,7 @@ export default function Game() {
         results={showInaugurationModal ? midtermResults : null}
         onDismiss={() => setShowInaugurationModal(false)}
       />
+      <CrisisModal curEv={curEv} wiy={wiy} yr={yr} onChoice={handleEventChoice} />
     </div>
   );
 }
