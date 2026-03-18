@@ -554,8 +554,8 @@ export default function Game() {
         if (nf[fid]) nf[fid] = { ...nf[fid], relationship: Math.min(95, nf[fid].relationship + 1) };
       });
     }
-    // Debt increases by weekly deficit share (B → T)
-    ns.nationalDebt += Math.max(0, ns.nationalDeficit) / (52 * 1000);
+    // Debt changes by the signed weekly deficit share (B → T), so surpluses reduce it.
+    ns.nationalDebt = Math.max(0, ns.nationalDebt + (ns.nationalDeficit / (52 * 1000)));
 
     ns.approvalRating = natA + (Math.random() - 0.5) * 0.5;
     setStats(ns);
