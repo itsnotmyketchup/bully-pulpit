@@ -11,18 +11,58 @@ import {
 } from "./factionMutations.js";
 import { getPromiseLabel } from "./promiseResolution.js";
 
+function resolveDelayedWeeks(config = {}) {
+  if (config.minWeeks != null || config.maxWeeks != null) {
+    const minWeeks = config.minWeeks ?? config.weeks ?? 9;
+    const maxWeeks = config.maxWeeks ?? config.weeks ?? minWeeks;
+    return minWeeks + Math.floor(Math.random() * (Math.max(minWeeks, maxWeeks) - minWeeks + 1));
+  }
+  return config.weeks || 9;
+}
+
+function mergeNumericMaps(base = {}, delta = {}) {
+  const merged = { ...base };
+  Object.entries(delta || {}).forEach(([key, value]) => {
+    merged[key] = (merged[key] || 0) + value;
+  });
+  return merged;
+}
+
+function mergeDelayedConfig(baseConfig, amendmentConfig) {
+  if (!baseConfig && !amendmentConfig) return null;
+  const nextConfig = {
+    ...(baseConfig || {}),
+    ...(amendmentConfig || {}),
+    effects: mergeNumericMaps(baseConfig?.effects || {}, amendmentConfig?.effects || {}),
+  };
+  return nextConfig;
+}
+
+function mergeBillWithAmendments(act, amendments = []) {
+  return amendments.reduce((currentAct, amendment) => ({
+    ...currentAct,
+    effects: mergeNumericMaps(currentAct.effects || {}, amendment.effects || {}),
+    macroEffects: mergeNumericMaps(currentAct.macroEffects || {}, amendment.macroEffects || {}),
+    delayedEffects: mergeDelayedConfig(currentAct.delayedEffects, amendment.delayedEffects),
+    delayedMacroEffects: mergeDelayedConfig(currentAct.delayedMacroEffects, amendment.delayedMacroEffects),
+  }), act);
+}
+
 function queueDelayedPolicyEffects(queue, source, week, mult = 1) {
   const nextQueue = [...queue];
+  const delayedWeek = source.delayedEffects || source.delayedMacroEffects
+    ? week + resolveDelayedWeeks(source.delayedEffects || source.delayedMacroEffects)
+    : null;
   if (source.delayedEffects) {
     nextQueue.push({
-      week: week + source.delayedEffects.weeks,
+      week: delayedWeek,
       name: `${source.name} (delayed)`,
       effects: Object.fromEntries(Object.entries(source.delayedEffects.effects || {}).map(([key, value]) => [key, value * mult])),
       macroEffects: Object.fromEntries(Object.entries(source.delayedMacroEffects?.effects || {}).map(([key, value]) => [key, value * mult])),
     });
   } else if (source.delayedMacroEffects) {
     nextQueue.push({
-      week: week + source.delayedMacroEffects.weeks,
+      week: delayedWeek,
       name: `${source.name} (delayed)`,
       effects: {},
       macroEffects: Object.fromEntries(Object.entries(source.delayedMacroEffects.effects || {}).map(([key, value]) => [key, value * mult])),
@@ -292,6 +332,8 @@ export function resolveSignedBill({
   playerParty,
 }) {
   const { act, votes, isBudget, budgetDraft } = pendingSignature;
+  const amendments = (BILL_AMENDMENTS[act.id] || []).filter((amendment) => (pendingSignature.appliedAmendments || []).includes(amendment.id));
+  const enactedAct = mergeBillWithAmendments(act, amendments);
   let nextStats = { ...stats };
   let nextMacroState = macroState;
   let nextQueue = [...pFx];
@@ -306,23 +348,16 @@ export function resolveSignedBill({
     ({ stats: nextStats, macroState: nextMacroState } = applyEffectsBundle(
       nextStats,
       { ...macroState, impulses: { ...macroState.impulses } },
-      Object.fromEntries(Object.entries(act.effects).filter(([key]) => !["crimeRate"].includes(key))),
-      act
+      Object.fromEntries(Object.entries(enactedAct.effects).filter(([key]) => !["crimeRate"].includes(key))),
+      enactedAct
     ));
     nextStats.approvalRating = (nextStats.approvalRating || 50) + 1.5;
-    if (act.delayedEffects || act.delayedMacroEffects) {
-      nextQueue.push({
-        name: act.name,
-        effects: act.delayedEffects?.effects || {},
-        macroEffects: act.delayedMacroEffects?.effects || {},
-        week: week + (act.delayedEffects?.weeks || act.delayedMacroEffects?.weeks || 9),
-      });
-    }
-    Object.entries(act.effects).forEach(([key, value]) => {
+    nextQueue = queueDelayedPolicyEffects(nextQueue, enactedAct, week);
+    Object.entries(enactedAct.effects).forEach(([key, value]) => {
       if (key === "crimeRate") nextQueue.push({ name: act.name, effects: { [key]: value }, macroEffects: {}, week: week + 9 });
     });
-    nextStateBonuses = applyStateActionEffects(nextStateBonuses, act, STATE_DATA);
-    if (act.countryEffects) nextCountries = applyCountryEffects(nextCountries, act.countryEffects);
+    nextStateBonuses = applyStateActionEffects(nextStateBonuses, enactedAct, STATE_DATA);
+    if (enactedAct.countryEffects) nextCountries = applyCountryEffects(nextCountries, enactedAct.countryEffects);
   }
 
   const nextFactions = cloneFactions(factions);
@@ -340,7 +375,6 @@ export function resolveSignedBill({
     allyOpposers.forEach((factionId) => adjustFaction(nextFactions, factionId, { unity: -5, relationship: -3 }));
   }
 
-  const amendments = (BILL_AMENDMENTS[act.id] || []).filter((amendment) => (pendingSignature.appliedAmendments || []).includes(amendment.id));
   return {
     stats: syncDerivedStats(nextStats, nextMacroState),
     macroState: nextMacroState,

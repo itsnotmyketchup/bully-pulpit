@@ -3,6 +3,24 @@ import { FACTION_DATA } from "../data/factions.js";
 import { clamp } from "../utils/clamp.js";
 
 const randInt = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
+const DIFFICULTY_SEAT_RANGES = {
+  easy: {
+    senate: [60, 65],
+    house: [290, 325],
+  },
+  normal: {
+    senate: [52, 54],
+    house: [222, 231],
+  },
+  hard: {
+    senate: [46, 49],
+    house: [204, 217],
+  },
+  very_hard: {
+    senate: [35, 40],
+    house: [110, 145],
+  },
+};
 
 function makeLeader(nameRegistry) {
   return {
@@ -18,10 +36,11 @@ function initUnity(leader, isOpposition) {
   return clamp(base - (isOpposition ? 5 : 0), 40, 80);
 }
 
-export function generateCongress(playerParty, playerFaction, nameRegistry) {
+export function generateCongress(playerParty, playerFaction, nameRegistry, difficulty = "normal") {
   const op = playerParty === "DEM" ? "REP" : "DEM";
-  const sm = 52 + Math.floor(Math.random() * 3);
-  const hm = 222 + Math.floor(Math.random() * 10);
+  const seatRange = DIFFICULTY_SEAT_RANGES[difficulty] || DIFFICULTY_SEAT_RANGES.normal;
+  const sm = randInt(...seatRange.senate);
+  const hm = randInt(...seatRange.house);
   const factions = {};
 
   FACTION_DATA[playerParty].forEach((f, i) => {

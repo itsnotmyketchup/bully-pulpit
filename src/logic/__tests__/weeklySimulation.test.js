@@ -142,4 +142,40 @@ describe("runWeeklySimulation", () => {
 
     mathRandomSpy.mockRestore();
   });
+
+  it("accelerates environmental transition when technology and energy spending are higher", () => {
+    const highSnapshot = buildSnapshot({
+      stats: {
+        ...INITIAL_STATS,
+        energyEnvironmentSpending: 80,
+      },
+      macroState: {
+        ...createInitialMacroState("Test Chair"),
+        technologicalAdvancement: 80,
+      },
+      pendingCongressUpdate: null,
+      pFx: [],
+    });
+    const lowSnapshot = buildSnapshot({
+      stats: {
+        ...INITIAL_STATS,
+        energyEnvironmentSpending: 10,
+      },
+      macroState: {
+        ...createInitialMacroState("Test Chair"),
+        technologicalAdvancement: 25,
+      },
+      pendingCongressUpdate: null,
+      pFx: [],
+    });
+
+    const highResult = runWeeklySimulation(highSnapshot, buildDeps(highSnapshot));
+    const lowResult = runWeeklySimulation(lowSnapshot, buildDeps(lowSnapshot));
+
+    expect(highResult.stats.powerSolarShare - INITIAL_STATS.powerSolarShare).toBeGreaterThan(lowResult.stats.powerSolarShare - INITIAL_STATS.powerSolarShare);
+    expect(highResult.stats.powerWindShare - INITIAL_STATS.powerWindShare).toBeGreaterThan(lowResult.stats.powerWindShare - INITIAL_STATS.powerWindShare);
+    expect(INITIAL_STATS.powerCoalShare - highResult.stats.powerCoalShare).toBeGreaterThan(INITIAL_STATS.powerCoalShare - lowResult.stats.powerCoalShare);
+    expect(highResult.stats.evShareNewCars - INITIAL_STATS.evShareNewCars).toBeGreaterThan(lowResult.stats.evShareNewCars - INITIAL_STATS.evShareNewCars);
+    expect(INITIAL_STATS.carbonEmissionsPerCapita - highResult.stats.carbonEmissionsPerCapita).toBeGreaterThan(INITIAL_STATS.carbonEmissionsPerCapita - lowResult.stats.carbonEmissionsPerCapita);
+  });
 });

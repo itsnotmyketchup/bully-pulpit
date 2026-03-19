@@ -1,6 +1,6 @@
 import { SM } from "../data/stats.js";
 
-const HIDDEN_LEGACY_KEYS = new Set(["gdpGrowth", "unemployment", "inflation"]);
+const HIDDEN_LEGACY_KEYS = new Set(["gdpGrowth", "unemployment", "inflation", "evAdoptionIncentive"]);
 
 const MACRO_LABELS = {
   demand: "Demand",
@@ -38,6 +38,14 @@ function formatMacroText(value) {
 
 export function buildEffectPreview(source = {}) {
   const items = [];
+  const formatDelayWindow = (config = {}) => {
+    if (config.minWeeks != null || config.maxWeeks != null) {
+      const minWeeks = config.minWeeks ?? config.weeks ?? 0;
+      const maxWeeks = config.maxWeeks ?? config.weeks ?? minWeeks;
+      return `${minWeeks}-${maxWeeks}w`;
+    }
+    return `${config.weeks}w`;
+  };
 
   Object.entries(source.effects || {}).forEach(([key, value]) => {
     if (!value || HIDDEN_LEGACY_KEYS.has(key)) return;
@@ -73,7 +81,7 @@ export function buildEffectPreview(source = {}) {
       items.push({
         id: `delayed_effect_${key}`,
         label: meta?.l || key,
-        valueText: `${formatDirectValue(value)} in ${source.delayedEffects.weeks}w`,
+        valueText: `${formatDirectValue(value)} in ${formatDelayWindow(source.delayedEffects)}`,
         positive,
         delayed: true,
         isMacro: false,
@@ -87,7 +95,7 @@ export function buildEffectPreview(source = {}) {
       items.push({
         id: `delayed_macro_${key}`,
         label: MACRO_LABELS[key] || key,
-        valueText: `${formatMacroText(value)} in ${source.delayedMacroEffects.weeks}w`,
+        valueText: `${formatMacroText(value)} in ${formatDelayWindow(source.delayedMacroEffects)}`,
         positive: value > 0,
         delayed: true,
         isMacro: true,

@@ -7,7 +7,12 @@ import { INITIAL_STATS } from "./data/stats.js";
 import { VISIT_TYPES } from "./data/visits.js";
 import { SPEECH_TOPICS } from "./data/speeches.js";
 import { POLICY_ACTIONS, BILL_LOCKS, BILL_AMENDMENTS } from "./data/policies.js";
-import { getSeasonLabel } from "./data/events.js";
+import {
+  CHINA_SANCTIONS_RETALIATION_EVENT,
+  PROGRESSIVE_HECKLER_EVENT,
+  getSeasonLabel,
+  shouldTriggerProgressiveHeckling,
+} from "./data/events.js";
 import {
   EXECUTIVE_ORDERS,
   buildExecutiveOrderOutcome,
@@ -159,6 +164,7 @@ export default function Game() {
   const [pf, setPF] = useState(null);
   const [pn, setPN] = useState("Jordan Mitchell");
   const [vpn, setVpn] = useState("Holly Barrett");
+  const [difficulty, setDifficulty] = useState("normal");
   const [cg, setCG] = useState(null);
   const [stats, setStats] = useState({ ...INITIAL_STATS });
   const [macroState, setMacroState] = useState(() => createInitialMacroState());
@@ -616,7 +622,7 @@ export default function Game() {
     if (!pp || !pf || !pn.trim()) return;
     nameRegistryRef.current = createNameRegistry();
     const freshFedChairName = nameRegistryRef.current.drawName("Fed Chair");
-    const c = generateCongress(pp, pf, nameRegistryRef.current);
+    const c = generateCongress(pp, pf, nameRegistryRef.current, difficulty);
     const freshMacroState = createInitialMacroState(freshFedChairName);
     const freshStats = syncDerivedStats({ ...INITIAL_STATS }, freshMacroState);
     setCG(c);
@@ -1095,6 +1101,10 @@ export default function Game() {
     setVisitTypeCounts(prev => ({ ...prev, [visitType]: (prev[visitType] || 0) + 1 }));
     if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
     addLog(`Visited ${st.name}: ${vt.name}${count > 0 ? ` (${Math.round(mult * 100)}% effectiveness)` : ""}`);
+    if (shouldTriggerProgressiveHeckling(visitType, visitState, visitNF.prog?.relationship ?? 50, usedEv, Math.random)) {
+      setUsedEv(prev => new Set([...prev, PROGRESSIVE_HECKLER_EVENT.id]));
+      setCurEv(PROGRESSIVE_HECKLER_EVENT);
+    }
     setVisitState("");
     setVisitType("");
   };
@@ -1136,6 +1146,9 @@ export default function Game() {
     setExecutiveOverreach(result.overreach);
     setOverreachLastIncreasedWeek(week);
     setOverreachLowSinceWeek(result.overreach <= 31 ? week : 0);
+    if (eo.id === "sanctions" && extraData.targetCountryId === "china") {
+      setPendingChainEvents(prev => [...prev, { triggerAtWeek: week + 1, event: CHINA_SANCTIONS_RETALIATION_EVENT }]);
+    }
     setAct(n => n + 2);
     setSelectedEO(null);
     setEoChoice({});
@@ -1306,7 +1319,19 @@ export default function Game() {
   if (screen === 0) return <LandingScreen onStart={() => setScreen(1)} />;
 
   if (screen === 1) return (
-    <SetupScreen pp={pp} setPP={setPP} pf={pf} setPF={setPF} pn={pn} setPN={setPN} vpn={vpn} setVpn={setVpn} onStart={start} />
+    <SetupScreen
+      pp={pp}
+      setPP={setPP}
+      pf={pf}
+      setPF={setPF}
+      pn={pn}
+      setPN={setPN}
+      vpn={vpn}
+      setVpn={setVpn}
+      difficulty={difficulty}
+      setDifficulty={setDifficulty}
+      onStart={start}
+    />
   );
 
   if (!cg) return null;

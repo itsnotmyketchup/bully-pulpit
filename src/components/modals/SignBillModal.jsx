@@ -10,7 +10,24 @@ export default function SignBillModal({ pendingSignature, appliedAmendments, fac
     .map(id => (BILL_AMENDMENTS[act.id] || []).find(a => a.id === id))
     .filter(Boolean);
   const countryNames = { china: "China", russia: "Russia" };
-  const effectItems = buildEffectPreview(act);
+  const enactedAct = billAmends.reduce((currentAct, amendment) => ({
+    ...currentAct,
+    effects: Object.entries(amendment.effects || {}).reduce((nextEffects, [key, value]) => ({
+      ...nextEffects,
+      [key]: (nextEffects[key] || 0) + value,
+    }), { ...(currentAct.effects || {}) }),
+    delayedEffects: amendment.delayedEffects
+      ? {
+        ...(currentAct.delayedEffects || {}),
+        ...amendment.delayedEffects,
+        effects: Object.entries(amendment.delayedEffects.effects || {}).reduce((nextEffects, [key, value]) => ({
+          ...nextEffects,
+          [key]: (nextEffects[key] || 0) + value,
+        }), { ...(currentAct.delayedEffects?.effects || {}) }),
+      }
+      : currentAct.delayedEffects,
+  }), act);
+  const effectItems = buildEffectPreview(enactedAct);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1015, padding: "16px" }}>
@@ -26,7 +43,7 @@ export default function SignBillModal({ pendingSignature, appliedAmendments, fac
             <div style={{ height: 1, flex: 1, background: "rgba(255,255,255,0.25)" }} />
           </div>
           <div style={{ textAlign: "center", fontSize: 8, color: "rgba(255,255,255,0.5)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-            One Hundred Nineteenth Congress · {isBudget ? "Budget Reconciliation Act" : "Enrolled Bill"}
+            United States Congress · {isBudget ? "Budget Reconciliation Act" : "Enrolled Bill"}
           </div>
         </div>
 

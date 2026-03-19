@@ -94,6 +94,18 @@ export const POLICY_ACTIONS = [
     factionReactions: { prog: 0.5, mod_dem: 0.6, blue_dog: 0.4, freedom: -0.3, mod_rep: 0.15, trad_con: 0.2 },
   },
   {
+    id: "ev_acceleration",
+    name: "Electric Vehicle Acceleration Act",
+    desc: "Creates federal tax credits for EV purchases and funds grants for public charging stations, domestic supply chains, and local buildout.",
+    category: "energy & environment",
+    effects: { energyEnvironmentSpending: 20, cleanVehicleTaxCreditCost: 12 },
+    macroEffects: { technologicalAdvancement: 0.5, technology: 0.08, investment: 0.05, productivity: 0.03 },
+    delayedEffects: { minWeeks: 24, maxWeeks: 48, effects: { evAdoptionIncentive: 0.9 } },
+    specialEffects: [{ id: "ev_rollout", label: "EV Adoption", valueText: "Faster in 24-48w", positive: true }],
+    stateEffects: { economy: ["tech", "manufacturing", "energy"], minUrbanization: 0.45, weight: 0.018 },
+    factionReactions: { prog: 0.78, mod_dem: 0.7, blue_dog: 0.22, freedom: -0.7, mod_rep: -0.08, trad_con: -0.28 },
+  },
+  {
     id: "ukraine_defense",
     name: "Ukraine Defense Act",
     desc: "Authorizes additional military aid, munitions replenishment, and training support for Ukraine while reinforcing U.S. commitments in Europe.",
@@ -124,7 +136,7 @@ export const BILL_STAGES = [
   { id: "reconciliation", label: "Reconciliation", desc: "Resolving differences" },
 ];
 
-export const POLICY_CATEGORIES = ["all", "infrastructure", "immigration", "social", "defense", "agriculture", "crime", "science & tech", "foreign policy", "other"];
+export const POLICY_CATEGORIES = ["all", "infrastructure", "immigration", "social", "defense", "agriculture", "crime", "science & tech", "energy & environment", "foreign policy", "other"];
 
 export const BILL_LOCKS = {
   abortion_ban: ["abortion_rights"],
@@ -142,12 +154,15 @@ export const BILL_AMENDMENTS = {
       label: "Add pathway to citizenship",
       desc: "Include a limited legalization pathway for long-term residents, gaining moderate Democratic support.",
       factionMod: { prog: 0.2, mod_dem: 0.15, blue_dog: 0.05, freedom: -0.1 },
+      effects: { immigrationRate: 0.08 },
+      macroEffects: { labor: -0.01, demand: 0.01, productivity: 0.01 },
     },
     {
       id: "border_civil_lib",
       label: "Add civil liberties protections",
       desc: "Include explicit due-process protections for all detainees, softening progressive opposition.",
       factionMod: { prog: 0.25, mod_dem: 0.1, freedom: -0.05 },
+      effects: { immigrationRate: 0.04 },
     },
   ],
   infra_boost: [
@@ -156,12 +171,15 @@ export const BILL_AMENDMENTS = {
       label: "Offset with discretionary cuts",
       desc: "Partially offset infrastructure costs with discretionary spending reductions, reducing fiscal concerns.",
       factionMod: { freedom: 0.2, mod_rep: 0.15, trad_con: 0.1 },
+      effects: { otherSpending: -8, nationalDebt: -0.04 },
     },
     {
       id: "infra_private_match",
       label: "Add private investment matching",
       desc: "Require 25% private sector co-investment for major projects, increasing conservative appeal.",
       factionMod: { freedom: 0.15, mod_rep: 0.2, trad_con: 0.05 },
+      effects: { infrastructureSpending: -10, nationalDebt: -0.03 },
+      macroEffects: { investment: 0.04 },
     },
   ],
   crime_bill: [
@@ -170,12 +188,15 @@ export const BILL_AMENDMENTS = {
       label: "Add rehabilitation funding",
       desc: "Include prison rehabilitation and reentry programs alongside enforcement measures.",
       factionMod: { prog: 0.2, mod_dem: 0.15 },
+      effects: { otherSpending: 4, crimeRate: -0.08 },
+      macroEffects: { labor: -0.01 },
     },
     {
       id: "crime_body_cam",
       label: "Require federal officer body cameras",
       desc: "Mandate body cameras for all federally-funded law enforcement officers.",
       factionMod: { prog: 0.15, mod_dem: 0.1, blue_dog: 0.05 },
+      effects: { lawEnforcementSpending: 3 },
     },
   ],
   immigration_exp: [
@@ -184,12 +205,16 @@ export const BILL_AMENDMENTS = {
       label: "Limit to merit-based visas only",
       desc: "Restrict expansion to high-skill and STEM workers only.",
       factionMod: { freedom: 0.2, mod_rep: 0.15, trad_con: 0.1 },
+      effects: { immigrationRate: 0.06 },
+      macroEffects: { productivity: 0.02, businessConfidence: 0.3, labor: 0.01 },
     },
     {
       id: "immig_border_secure",
       label: "Include border security provisions",
       desc: "Pair visa expansion with enhanced border security measures.",
       factionMod: { blue_dog: 0.15, mod_rep: 0.1, freedom: 0.05 },
+      effects: { immigrationRate: -0.04, nationalDebt: 0.01 },
+      macroEffects: { labor: 0.01 },
     },
   ],
   marijuana_fed: [
@@ -198,12 +223,32 @@ export const BILL_AMENDMENTS = {
       label: "Limit to expungements only",
       desc: "Remove full federal legalization — only expunge prior convictions, reducing social conservative opposition.",
       factionMod: { trad_con: 0.3, mod_rep: 0.25, freedom: 0.1 },
+      effects: { crimeRate: 0.06 },
+      macroEffects: { demand: -0.03, businessConfidence: -0.55 },
     },
     {
       id: "mj_state_opt_out",
       label: "Allow state opt-out",
       desc: "Let states opt out of federal legalization, preserving conservative states' prerogative.",
       factionMod: { trad_con: 0.25, mod_rep: 0.2, blue_dog: 0.1 },
+      macroEffects: { demand: -0.02, businessConfidence: -0.35 },
+    },
+  ],
+  ev_acceleration: [
+    {
+      id: "ev_credit_trim",
+      label: "Decrease the EV tax credit",
+      desc: "Scale back the consumer tax credit to reduce federal revenue loss while keeping charger grants intact.",
+      factionMod: { blue_dog: 0.15, freedom: 0.2, mod_rep: 0.2, trad_con: 0.15, prog: -0.08, mod_dem: -0.04 },
+      effects: { cleanVehicleTaxCreditCost: -6 },
+      delayedEffects: { effects: { evAdoptionIncentive: -0.25 } },
+    },
+    {
+      id: "ev_infra_earmarks",
+      label: "Add infrastructure earmarks",
+      desc: "Attach district-level infrastructure earmarks to broaden support and route more funding into general public works.",
+      factionMod: { prog: 0.05, mod_dem: 0.08, blue_dog: 0.2, mod_rep: 0.18, trad_con: 0.12, freedom: -0.05 },
+      effects: { infrastructureSpending: 10 },
     },
   ],
 };

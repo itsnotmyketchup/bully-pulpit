@@ -45,6 +45,16 @@ function makeStats(overrides = {}) {
     lawEnforcementSpending: 58,
     agricultureSpending: 31,
     energyEnvironmentSpending: 35,
+    powerHydroShare: 6,
+    powerSolarShare: 7,
+    powerWindShare: 10,
+    powerCoalShare: 15,
+    powerNuclearShare: 18,
+    powerNaturalGasShare: 44,
+    evShareNewCars: 18,
+    carbonEmissionsPerCapita: 13.8,
+    cleanVehicleTaxCreditCost: 0,
+    evAdoptionIncentive: 0,
     corporateTaxRate: 21,
     incomeTaxLow: 10,
     incomeTaxMid: 22,
@@ -71,6 +81,14 @@ describe("computeFiscalState", () => {
     const slack = computeFiscalState(makeStats({ unemployment: 7.1 }), createInitialMacroState());
 
     expect(slack.taxRevenue).toBeLessThan(employed.taxRevenue);
+  });
+
+  it("reduces net tax revenue when EV tax credits are larger", () => {
+    const base = computeFiscalState(makeStats({ cleanVehicleTaxCreditCost: 0 }), createInitialMacroState());
+    const credited = computeFiscalState(makeStats({ cleanVehicleTaxCreditCost: 12 }), createInitialMacroState());
+
+    expect(credited.taxRevenue).toBe(base.taxRevenue - 12);
+    expect(credited.nationalDeficit).toBe(base.nationalDeficit + 12);
   });
 });
 

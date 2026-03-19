@@ -14,6 +14,81 @@ import { getPromiseLabel, settleSecStatePromises } from "./promiseResolution.js"
 const RANDOM_EVENT_CHECKS_PER_YEAR = 13;
 const DISASTER_EVENT_CHECKS_PER_YEAR = 8;
 const SPECIAL_COOLDOWN_WEEKS = 4;
+const BASELINE_TECHNOLOGY = 50;
+const BASELINE_ENERGY_ENVIRONMENT_SPENDING = 35;
+const POWER_SOURCE_LIMITS = {
+  solarMax: 34,
+  windMax: 32,
+  coalMin: 1.5,
+  naturalGasMin: 10,
+  naturalGasMax: 44,
+  carbonFloor: 5.5,
+  evCap: 92,
+};
+
+function getEnvironmentProgressMultiplier(stats, macroState) {
+  const techFactor = ((macroState.technologicalAdvancement ?? BASELINE_TECHNOLOGY) - BASELINE_TECHNOLOGY) / 50;
+  const spendingFactor = ((stats.energyEnvironmentSpending ?? BASELINE_ENERGY_ENVIRONMENT_SPENDING) - BASELINE_ENERGY_ENVIRONMENT_SPENDING) / BASELINE_ENERGY_ENVIRONMENT_SPENDING;
+  return clamp(1 + techFactor * 0.85 + spendingFactor * 0.75, 0.3, 2.6);
+}
+
+function advanceEnvironmentStats(stats, macroState) {
+  const progressMultiplier = getEnvironmentProgressMultiplier(stats, macroState);
+  const cleanAllocationToSolar = clamp(0.52 + ((macroState.technologicalAdvancement ?? BASELINE_TECHNOLOGY) - BASELINE_TECHNOLOGY) / 250, 0.45, 0.62);
+  const evPolicyBoost = 1 + Math.max(0, stats.evAdoptionIncentive || 0) * 0.65;
+
+  const desiredCoalLoss = Math.max(0, 0.03 * progressMultiplier);
+  const desiredNaturalGasLoss = Math.max(0, 0.01 * progressMultiplier);
+  const maxCoalLoss = Math.max(0, (stats.powerCoalShare ?? 15) - POWER_SOURCE_LIMITS.coalMin);
+  const maxNaturalGasLoss = Math.max(0, (stats.powerNaturalGasShare ?? 44) - POWER_SOURCE_LIMITS.naturalGasMin);
+  const totalDesiredLoss = Math.min(desiredCoalLoss, maxCoalLoss) + Math.min(desiredNaturalGasLoss, maxNaturalGasLoss);
+
+  const solarRoom = Math.max(0, POWER_SOURCE_LIMITS.solarMax - (stats.powerSolarShare ?? 7));
+  const windRoom = Math.max(0, POWER_SOURCE_LIMITS.windMax - (stats.powerWindShare ?? 10));
+  const totalCleanRoom = solarRoom + windRoom;
+  const totalShift = Math.min(totalDesiredLoss, totalCleanRoom);
+
+  const desiredLossWeight = desiredCoalLoss + desiredNaturalGasLoss || 1;
+  const coalLoss = Math.min(maxCoalLoss, totalShift * (desiredCoalLoss / desiredLossWeight));
+  const naturalGasLoss = Math.min(maxNaturalGasLoss, totalShift - coalLoss);
+  const solarGain = Math.min(solarRoom, totalShift * cleanAllocationToSolar);
+  const windGain = Math.min(windRoom, totalShift - solarGain);
+  const cleanShift = solarGain + windGain;
+
+  stats.powerCoalShare = Number(Math.max(POWER_SOURCE_LIMITS.coalMin, (stats.powerCoalShare ?? 15) - coalLoss).toFixed(2));
+  stats.powerNaturalGasShare = Number(Math.max(POWER_SOURCE_LIMITS.naturalGasMin, (stats.powerNaturalGasShare ?? 44) - naturalGasLoss).toFixed(2));
+  stats.powerSolarShare = Number(Math.min(POWER_SOURCE_LIMITS.solarMax, (stats.powerSolarShare ?? 7) + solarGain).toFixed(2));
+  stats.powerWindShare = Number(Math.min(POWER_SOURCE_LIMITS.windMax, (stats.powerWindShare ?? 10) + windGain).toFixed(2));
+  stats.powerHydroShare = Number((stats.powerHydroShare ?? 6).toFixed(2));
+  stats.powerNuclearShare = Number((stats.powerNuclearShare ?? 18).toFixed(2));
+
+  const powerMixTotal = (stats.powerHydroShare || 0)
+    + (stats.powerSolarShare || 0)
+    + (stats.powerWindShare || 0)
+    + (stats.powerCoalShare || 0)
+    + (stats.powerNuclearShare || 0)
+    + (stats.powerNaturalGasShare || 0);
+  const shareGap = Number((100 - powerMixTotal).toFixed(2));
+  if (Math.abs(shareGap) > 0.001) {
+    stats.powerNaturalGasShare = Number(clamp(stats.powerNaturalGasShare + shareGap, POWER_SOURCE_LIMITS.naturalGasMin, POWER_SOURCE_LIMITS.naturalGasMax).toFixed(2));
+  }
+
+  const evGap = Math.max(0, POWER_SOURCE_LIMITS.evCap - (stats.evShareNewCars ?? 18));
+  const evIncrease = evGap * 0.00125 * progressMultiplier * evPolicyBoost;
+  stats.evShareNewCars = Number(Math.min(POWER_SOURCE_LIMITS.evCap, (stats.evShareNewCars ?? 18) + evIncrease).toFixed(2));
+
+  const currentRenewables = (stats.powerHydroShare || 0) + (stats.powerSolarShare || 0) + (stats.powerWindShare || 0);
+  const cleanGridGain = Math.max(0, currentRenewables - (6 + 7 + 10));
+  const carbonReduction = (
+    0.01
+    + cleanShift * 0.12
+    + evIncrease * 0.05
+    + cleanGridGain * 0.002
+  ) * (0.9 + progressMultiplier * 0.1);
+  stats.carbonEmissionsPerCapita = Number(
+    Math.max(POWER_SOURCE_LIMITS.carbonFloor, (stats.carbonEmissionsPerCapita ?? 13.8) - carbonReduction).toFixed(2)
+  );
+}
 
 function chooseHighestPriorityEvent(events, rng = Math.random) {
   if (events.length === 0) return null;
@@ -140,6 +215,7 @@ export function advanceEconomyPhase(context) {
   state.stats.tradeBalance = Math.max(-180, Math.min(40, state.stats.tradeBalance - state.macroState.outputGap * 0.45 + state.macroState.netExportsShare * 20 + (Math.random() - 0.5) * 0.4));
   const immEconDrift = (state.macroState.realGdpGrowth - 2.5) * 0.003 - (state.stats.unemployment - 5) * 0.002;
   state.stats.immigrationRate = Math.max(0.1, Math.min(3.5, state.stats.immigrationRate + immEconDrift + (Math.random() - 0.5) * 0.01));
+  advanceEnvironmentStats(state.stats, state.macroState);
 
   const queuedEffects = [];
   state.pFx.forEach((policyEffect) => {

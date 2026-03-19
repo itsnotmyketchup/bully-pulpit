@@ -1,6 +1,33 @@
 import { PARTIES, FACTION_DATA } from "../../data/factions.js";
 
-export default function SetupScreen({ pp, setPP, pf, setPF, pn, setPN, vpn, setVpn, onStart }) {
+const DIFFICULTY_OPTIONS = [
+  {
+    id: "easy",
+    label: "Easy",
+    summary: "Your party starts with supermajorities in both chambers.",
+    detail: "Expect roughly 60-65 seats in the Senate and a commanding House majority.",
+  },
+  {
+    id: "normal",
+    label: "Normal",
+    summary: "Your party starts with slight majorities in the House and Senate.",
+    detail: "This is the current baseline setup and the default experience.",
+  },
+  {
+    id: "hard",
+    label: "Hard",
+    summary: "The opposition starts with slight majorities in both chambers.",
+    detail: "You can still govern, but legislation will require tighter coalition management.",
+  },
+  {
+    id: "very_hard",
+    label: "Very Hard",
+    summary: "The opposition starts with supermajorities in the House and Senate.",
+    detail: "You will be governing deep in the minority and leaning hard on persuasion and timing.",
+  },
+];
+
+export default function SetupScreen({ pp, setPP, pf, setPF, pn, setPN, vpn, setVpn, difficulty, setDifficulty, onStart }) {
   const canStart = pp && pf && pn.trim() && vpn.trim();
   return (
     <div style={{ minHeight: 440, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
@@ -53,6 +80,35 @@ export default function SetupScreen({ pp, setPP, pf, setPF, pn, setPN, vpn, setV
             ))}
           </div>
         </>}
+
+        <label style={{ fontSize: 11, color: "var(--color-text-secondary)", display: "block", marginBottom: 6 }}>Difficulty</label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+          {DIFFICULTY_OPTIONS.map(option => (
+            <button
+              key={option.id}
+              onClick={() => setDifficulty(option.id)}
+              style={{
+                textAlign: "left",
+                padding: "11px 12px",
+                borderRadius: "var(--border-radius-lg)",
+                border: difficulty === option.id ? "2px solid var(--color-text-primary)" : "0.5px solid var(--color-border-tertiary)",
+                background: difficulty === option.id ? "var(--color-background-secondary)" : "var(--color-background-primary)",
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 3 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>{option.label}</span>
+                {option.id === "normal" && (
+                  <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 8, background: "var(--color-background-tertiary)", color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Default
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--color-text-primary)", marginBottom: 3 }}>{option.summary}</div>
+              <div style={{ fontSize: 10, color: "var(--color-text-secondary)", lineHeight: 1.4 }}>{option.detail}</div>
+            </button>
+          ))}
+        </div>
 
         <button onClick={onStart} disabled={!canStart} style={{
           width: "100%", padding: "10px", fontSize: 14, fontWeight: 500,

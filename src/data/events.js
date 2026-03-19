@@ -373,10 +373,13 @@ export function generateDynamicEvents(
     ]},
 
     // National security and foreign affairs
-    {id:"terror_foiled",name:"FBI foils major terror plot",desc:"Federal agents disrupted a plot targeting a metropolitan area.",unique:true,effects:{approvalRating:2},choices:[
+    {id:"terror_foiled",
+      name:"FBI foils major terror plot",
+      desc:`Federal authorities have disrupted a coordinated terror plot targeting ${city}, following weeks of surveillance and intelligence-sharing. While no attack occurred, officials warn the threat environment remains elevated.`,
+      unique:true,effects:{approvalRating:2},choices:[
       {text:"Press conference: emphasize security",effects:{approvalRating:3},result:"Confidence rises."},
       {text:"Quietly brief Congress",effects:{approvalRating:1},result:"Restrained approach noted."},
-      {text:"Push expanded surveillance",effects:{approvalRating:-1,crimeRate:-0.2},factionEffects:{prog:-0.4,freedom:0.3},result:"Privacy debate erupts."},
+      {text:"Push expanded surveillance",effects:{approvalRating:-1,crimeRate:-0.1},factionEffects:{prog:-0.4,freedom:0.3},result:"Privacy debate erupts."},
     ]},
     {id:"oil_spike",name:"Global oil price surge",desc:"Mideast conflict spikes crude prices 30%.",unique:true,effects:{gasPrice:0.85,approvalRating:-2},macroEffects:{ price:0.18, confidence:-0.06 },choices:[
       {text:"Release petroleum reserves",effects:{gasPrice:-0.4,approvalRating:1},result:"Prices ease slightly."},
@@ -393,8 +396,8 @@ export function generateDynamicEvents(
       {text:"Push AI regulation",effects:{approvalRating:0},macroEffects:{ investment:-0.04, confidence:-0.02 },result:"Balanced. Lobbies grumble."},
       {text:"Retrain displaced workers",effects:{educationSpending:10,approvalRating:1},result:"Forward-thinking support."},
     ]},
-    {id:"cyber",name:"Major cyberattack hits federal agencies",desc:"State-sponsored attack compromises federal databases.",unique:true,effects:{approvalRating:-3},annualChanceMultiplier: passedLegislation.cybersecurity_strategy ? 0.1 : 1,choices:[
-      {text:"Publicly attribute and sanction",effects:{approvalRating:2},countryEffects:{russia:{relationship:-5,trust:-3}},result:"Strong response. Tensions rise."},
+    {id:"cyber",name:"Major cyberattack hits federal agencies",desc:"A sophisticated cyberattack, believed to be state-sponsored, has breached multiple federal databases, compromising sensitive data and exposing vulnerabilities in government infrastructure.",unique:true,effects:{approvalRating:-3},annualChanceMultiplier: passedLegislation.cybersecurity_strategy ? 0.1 : 1,choices:[
+      {text:"Publicly attribute and sanction",effects:{approvalRating:2},countryEffects:{russia:{relationship:-2,trust:-4}},result:"Strong response. Tensions rise."},
       {text:"Covert cyber response",effects:{approvalRating:1},result:"Quiet action debated."},
       {text:"Focus on defense upgrades",effects:{approvalRating:0,nationalDebt:0.03},result:"Cautious approach."},
     ]},
@@ -408,11 +411,11 @@ export function generateDynamicEvents(
 
     // Disasters and infrastructure failures
     {id:"bridge",name:"Major bridge collapse",
-      desc:`Interstate bridge collapses during rush hour in ${bridgeStateName}. Dozens killed.`,
-      repeatable:true,isDisaster:true,affectedStates:[bridgeState],effects:{approvalRating:-2,infrastructureSpending:5},choices:[
-        {text:"Push emergency infrastructure bill",effects:{approvalRating:3,nationalDebt:0.1,infrastructureSpending:30},stateBoost:0.04,result:"Galvanizing moment."},
-        {text:"Order nationwide inspections",effects:{approvalRating:1},result:"Methodical. Public wants faster."},
-        {text:"Blame predecessors' underfunding",effects:{approvalRating:-1},result:"Blame game doesn't help victims."},
+      desc:`An interstate bridge collapsed today during peak rush hour traffic in ${bridgeStateName}. Search and rescue teams are still clearing out the rubble, but dozens are feared dead.`,
+      repeatable:true,isDisaster:true,affectedStates:[bridgeState],effects:{approvalRating:-2},choices:[
+        {text:"Push emergency funds from the FHWA",effects:{approvalRating:3,nationalDebt:0.1,infrastructureSpending:5},stateBoost:0.04,result:"Galvanizing moment."},
+        {text:"Order nationwide inspections",effects:{approvalRating:1},result:"The public wants faster results."},
+        {text:"Blame predecessors' underfunding",effects:{approvalRating:-1},result:"The blame game doesn't help victims."},
     ]},
     {id:"midwest_tornado",
       name:`Tornado outbreak tears through ${tornadoStateName}`,
@@ -739,7 +742,7 @@ export function generateDynamicEvents(
   if (week >= 53 && !passedLegislation.infra_boost && !usedEvents.has("amtrak_cuts")) {
     addEvent("special", {
       id: "amtrak_cuts",
-      annualChance: 0.70,
+      annualChance: 0.60,
       name: "Amtrak Announces Major Route Cuts and Service Reductions",
       desc: "Facing a shrinking federal budget and no new infrastructure investment, Amtrak has announced the elimination of several long-distance routes and a 30% reduction in service frequency, leaving rural and mid-sized communities without passenger rail access.",
       triggeredByAbsence: "Infrastructure Investment Package",

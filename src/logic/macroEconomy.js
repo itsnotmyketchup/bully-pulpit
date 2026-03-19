@@ -100,6 +100,7 @@ export function computeFiscalState(stats, macroState) {
   const effectiveIncomeTaxRate = getEffectiveIncomeTaxRate(stats);
   const payrollRate = (stats.payrollTaxRate || 0) / 100;
   const corporateRate = (stats.corporateTaxRate || 0) / 100;
+  const cleanVehicleTaxCreditCost = Math.max(0, stats.cleanVehicleTaxCreditCost || 0);
   const unemployment = stats.unemployment ?? NATURAL_UNEMPLOYMENT;
 
   const employmentAdjustment = clamp(1 - Math.max(0, unemployment - 4) * 0.045, 0.72, 1.03);
@@ -120,7 +121,7 @@ export function computeFiscalState(stats, macroState) {
   const payrollRevenue = payrollBase * payrollRate * payrollCompliance;
   const corporateRevenue = corporateProfitBase * corporateRate * corporateCompliance;
 
-  const taxRevenue = personalIncomeRevenue + payrollRevenue + corporateRevenue;
+  const taxRevenue = personalIncomeRevenue + payrollRevenue + corporateRevenue - cleanVehicleTaxCreditCost;
   const totalSpending = getTotalFederalSpending(stats);
   const nationalDeficit = Math.round(totalSpending - taxRevenue);
 
