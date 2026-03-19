@@ -2,6 +2,7 @@ import { STATE_DATA } from "../data/states.js";
 import { POLICY_ACTIONS, BILL_AMENDMENTS, BILL_STAGES } from "../data/policies.js";
 import {
   generateDynamicEvents,
+  isDisasterCheckWeek,
   rollEligibleSpecialEvents,
 } from "../data/events.js";
 import { clamp, clampUni } from "../utils/clamp.js";
@@ -10,10 +11,16 @@ import { cloneCountries } from "./countryMutations.js";
 import { applyEffectsBundle, syncDerivedStats } from "./effectResolution.js";
 import { getPromiseLabel, settleSecStatePromises } from "./promiseResolution.js";
 
-const NORMAL_EVENT_CHANCE = 0.65;
-const SPECIAL_EVENT_GATE_CHANCE = 0.35;
-const SPECIAL_EFFECTIVE_CHECKS_PER_YEAR = 13 * SPECIAL_EVENT_GATE_CHANCE;
+const RANDOM_EVENT_CHECKS_PER_YEAR = 13;
+const DISASTER_EVENT_CHECKS_PER_YEAR = 8;
 const SPECIAL_COOLDOWN_WEEKS = 4;
+
+function chooseHighestPriorityEvent(events, rng = Math.random) {
+  if (events.length === 0) return null;
+  const topPriority = Math.max(...events.map((event) => event.priority || 0));
+  const contenders = events.filter((event) => (event.priority || 0) === topPriority);
+  return contenders[Math.floor(rng() * contenders.length)];
+}
 
 function cloneSnapshot(snapshot) {
   return {
@@ -709,19 +716,18 @@ export function advanceEventPhase(context) {
     return;
   }
 
-  if (runtime.nextWeek % 4 !== 0) return;
-  const selectedNormalEvent = Math.random() < NORMAL_EVENT_CHANCE && pools.normalPool.length > 0
-    ? pools.normalPool[Math.floor(Math.random() * pools.normalPool.length)]
-    : null;
-  let selectedSpecialEvent = null;
-  const specialCooldownActive = state.lastSpecialEventWeek > 0 && (runtime.nextWeek - state.lastSpecialEventWeek) <= SPECIAL_COOLDOWN_WEEKS;
-  if (!specialCooldownActive && Math.random() < SPECIAL_EVENT_GATE_CHANCE) {
-    const passedSpecialEvents = rollEligibleSpecialEvents(pools.specialPool, SPECIAL_EFFECTIVE_CHECKS_PER_YEAR, Math.random);
-    if (passedSpecialEvents.length > 0) {
-      selectedSpecialEvent = passedSpecialEvents[Math.floor(Math.random() * passedSpecialEvents.length)];
-    }
+  const rolledEvents = [];
+  if (runtime.nextWeek % 4 === 0) {
+    const specialCooldownActive = state.lastSpecialEventWeek > 0 && (runtime.nextWeek - state.lastSpecialEventWeek) <= SPECIAL_COOLDOWN_WEEKS;
+    const eligibleRandomEvents = specialCooldownActive
+      ? pools.randomPool.filter((event) => event.category !== "special")
+      : pools.randomPool;
+    rolledEvents.push(...rollEligibleSpecialEvents(eligibleRandomEvents, RANDOM_EVENT_CHECKS_PER_YEAR, Math.random));
   }
-  const chosenEvent = selectedSpecialEvent || selectedNormalEvent;
+  if (isDisasterCheckWeek(runtime.nextWeek)) {
+    rolledEvents.push(...rollEligibleSpecialEvents(pools.disasterPool, DISASTER_EVENT_CHECKS_PER_YEAR, Math.random));
+  }
+  const chosenEvent = chooseHighestPriorityEvent(rolledEvents, Math.random);
   if (!chosenEvent) return;
   if (chosenEvent.unique) state.usedEv.add(chosenEvent.id);
   const applied = applyEffectsBundle(state.stats, state.macroState, chosenEvent.effects || {}, chosenEvent);

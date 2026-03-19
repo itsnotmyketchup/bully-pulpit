@@ -12,11 +12,67 @@ const TORNADO_STATES      = ["KS","MO","NE","IA","IL","IN","OK","AR","TN","MS"];
 const RUST_BELT_STATES    = ["OH","MI","PA","IN","IL","WI","MO"];
 const RARE_EARTH_METALS   = ["lithium","cobalt","neodymium","dysprosium","europium","terbium","lanthanum"];
 
+const GENERAL_EVENT_CHECKS_PER_YEAR = 13;
+const GENERAL_EVENT_ACTIVATION_CHANCE = 0.65;
+const DISASTER_CHECK_WEEKS = new Set([4, 8, 12, 18, 25, 31, 39, 45]);
+const DISASTER_EVENT_CHECKS_PER_YEAR = DISASTER_CHECK_WEEKS.size;
+const DISASTER_EVENT_ACTIVATION_CHANCE = 0.5;
+
 function pickOne(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 function pickN(arr, n) {
   return [...arr].sort(() => Math.random() - 0.5).slice(0, Math.min(n, arr.length));
+}
+
+function getStateName(abbr) {
+  return STATE_DATA.find((state) => state.abbr === abbr)?.name || abbr;
+}
+
+function getStateNames(abbrs = []) {
+  return abbrs.map(getStateName);
+}
+
+function clampChance(chance) {
+  return Math.max(0, Math.min(0.99, chance || 0));
+}
+
+function perCheckChanceToAnnualChance(perCheckChance, effectiveChecksPerYear) {
+  if (perCheckChance <= 0 || effectiveChecksPerYear <= 0) return 0;
+  if (perCheckChance >= 1) return 1;
+  return 1 - ((1 - perCheckChance) ** effectiveChecksPerYear);
+}
+
+function estimateLaneAnnualChance(event, lanePool, activationChance, checksPerYear) {
+  if (event.annualChance != null) {
+    return clampChance(event.annualChance * (event.annualChanceMultiplier ?? 1));
+  }
+  const totalWeight = lanePool.reduce((sum, entry) => sum + (entry.selectionWeight || 1), 0);
+  if (totalWeight <= 0) return 0;
+  const perCheckChance = activationChance * ((event.selectionWeight || 1) / totalWeight);
+  return clampChance(perCheckChanceToAnnualChance(perCheckChance, checksPerYear) * (event.annualChanceMultiplier ?? 1));
+}
+
+function finalizeLaneAnnualChances(eventPool, activationChance, checksPerYear) {
+  return eventPool.map((event) => ({
+    ...event,
+    annualChance: estimateLaneAnnualChance(event, eventPool, activationChance, checksPerYear),
+  }));
+}
+
+function finalizeRandomAnnualChances(randomPool) {
+  const estimatedEvents = randomPool.filter((event) => event.annualChance == null);
+  return randomPool.map((event) => ({
+    ...event,
+    annualChance: event.annualChance != null
+      ? clampChance(event.annualChance * (event.annualChanceMultiplier ?? 1))
+      : estimateLaneAnnualChance(event, estimatedEvents, GENERAL_EVENT_ACTIVATION_CHANCE, GENERAL_EVENT_CHECKS_PER_YEAR),
+  }));
+}
+
+export function isDisasterCheckWeek(week) {
+  const weekOfYear = ((week - 1) % 52) + 1;
+  return DISASTER_CHECK_WEEKS.has(weekOfYear);
 }
 
 // ─── Event chain definitions ───────────────────────────────────────────────
@@ -50,6 +106,65 @@ export const LIBERAL_STATES_COURT_LOSS = {
   ],
 };
 
+export const CHINA_SANCTIONS_RETALIATION_EVENT = {
+  id: "china_sanctions_retaliation",
+  category: "immediate",
+  lane: "immediate",
+  priority: 3,
+  name: "China Retaliates Against U.S. Firms",
+  desc: "Beijing has responded to the new U.S. sanctions by adding several American companies to its Unreliable Entities List and expanding export controls on dual-use goods. Markets fear tighter restrictions on U.S.-China commercial ties.",
+  triggeredBy: "Economic Sanctions",
+  effects: {},
+  macroEffects: { investment: -0.02, technology: -0.02 },
+  choices: [
+    {
+      text: "Dig in and threaten broader trade restrictions",
+      effects: { approvalRating: 1 },
+      factionEffects: { freedom: 0.3, trad_con: 0.2, mod_rep: 0.1, prog: -0.2, mod_dem: -0.1 },
+      countryEffects: { china: { relationship: -6, trust: -4 } },
+      result: "Beijing hardens its stance. Supply chain nerves worsen.",
+    },
+    {
+      text: "Stay the course and keep existing sanctions in place",
+      effects: { approvalRating: 0 },
+      factionEffects: { trad_con: 0.1, mod_rep: 0.1, mod_dem: -0.05 },
+      countryEffects: { china: { relationship: -3, trust: -2 } },
+      result: "Both sides dig in, but markets avoid outright panic.",
+    },
+    {
+      text: "Try to defuse the situation through quiet diplomacy",
+      effects: { approvalRating: -1 },
+      factionEffects: { prog: 0.2, mod_dem: 0.15, freedom: -0.2, trad_con: -0.2 },
+      countryEffects: { china: { relationship: 2, trust: 1 } },
+      result: "Tensions ease slightly, though hawks accuse you of blinking.",
+    },
+  ],
+};
+
+export const PROGRESSIVE_HECKLER_EVENT = {
+  id: "progressive_heckled_university",
+  category: "immediate",
+  lane: "immediate",
+  priority: 3,
+  unique: true,
+  name: "You Are Heckled at a University Speech",
+  desc: "As you begin speaking on campus, a progressive student loudly denounces your administration and disrupts the event. The confrontation is captured on video and spreads immediately online.",
+  choices: [
+    {
+      text: "Denounce the heckler and have them removed",
+      effects: { approvalRating: 0 },
+      factionEffects: { trad_con: 0.2, freedom: 0.1, prog: -0.4, mod_dem: -0.1 },
+      result: "Order is restored, but progressives accuse you of silencing dissent.",
+    },
+    {
+      text: "Defend their free speech rights and continue",
+      effects: { approvalRating: 1 },
+      factionEffects: { prog: 0.2, mod_dem: 0.1, freedom: 0.1, trad_con: -0.1 },
+      result: "The room settles. Even critics admit the response was measured.",
+    },
+  ],
+};
+
 // ──────────────────────────────────────────────────────────────────────────
 
 export function getSeason(week) {
@@ -63,6 +178,32 @@ export function getSeason(week) {
 export function getSeasonLabel(week) {
   const s = getSeason(week);
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+export function getProgressiveHecklingChance(relationship) {
+  if (relationship < 10) return 0.30;
+  if (relationship < 20) return 0.20;
+  if (relationship < 30) return 0.10;
+  return 0;
+}
+
+export function isSolidBlueState(stateAbbr) {
+  const state = STATE_DATA.find((entry) => entry.abbr === stateAbbr);
+  return !!state && state.lean <= 0.40;
+}
+
+export function shouldTriggerProgressiveHeckling(
+  visitTypeId,
+  stateAbbr,
+  progressiveRelationship,
+  usedEvents = new Set(),
+  rng = Math.random
+) {
+  if (visitTypeId !== "university") return false;
+  if (usedEvents.has(PROGRESSIVE_HECKLER_EVENT.id)) return false;
+  if (!isSolidBlueState(stateAbbr)) return false;
+  const chance = getProgressiveHecklingChance(progressiveRelationship);
+  return chance > 0 && rng() < chance;
 }
 
 export function annualChanceToPerCheckChance(annualChance, effectiveChecksPerYear) {
@@ -85,16 +226,25 @@ export function generateDynamicEvents(
   passedLegislation = {},
   countries = []
 ) {
-  const normalPool = [];
-  const specialPool = [];
+  let randomPool = [];
+  const disasterPool = [];
   const immediatePool = [];
   const addEvent = (category, event) => {
-    const targetPool = category === "special"
-      ? specialPool
-      : category === "immediate"
-        ? immediatePool
-        : normalPool;
-    targetPool.push({ category, ...event });
+    const lane = category === "immediate"
+      ? "immediate"
+      : event.isDisaster
+        ? "disaster"
+        : "random";
+    const nextEvent = {
+      selectionWeight: event.selectionWeight || 1,
+      priority: event.priority || (category === "special" ? 3 : lane === "disaster" ? 2 : 1),
+      category,
+      lane,
+      ...event,
+    };
+    if (lane === "disaster") disasterPool.push(nextEvent);
+    else if (lane === "immediate") immediatePool.push(nextEvent);
+    else randomPool.push(nextEvent);
   };
   const season = getSeason(week);
   const pick = () => CITIES[Math.floor(Math.random() * CITIES.length)];
@@ -112,7 +262,7 @@ export function generateDynamicEvents(
     ? "Liberal base energized. Conservative opposition mobilizes."
     : "Conservative base energized. Progressive opposition mobilizes.";
 
-  // ── Stat-triggered events ──────────────────────────────────────────────
+  // ── Random events: stat-triggered / public mood ────────────────────────
   if (stats.inflation > 3.5) addEvent("normal", {
     id:"infl_"+Math.random(),
     name:"Grocery prices spark protests",
@@ -194,7 +344,7 @@ export function generateDynamicEvents(
     ]
   });
 
-  // ── Randomised state picks for disaster events ─────────────────────────
+  // ── Shared random picks for categorized events ─────────────────────────
   const hurricaneState  = pickOne(GULF_EAST_STATES);
   const wildfireState   = pickOne(WEST_STATES);
   const powerGridState  = pickOne(SOUTHWEST_STATES);
@@ -202,17 +352,27 @@ export function generateDynamicEvents(
   const bridgeState     = pickOne(BRIDGE_STATES);
   const winterStorm     = pickN(WINTER_STORM_STATES, 3);
   const tornadoState    = pickOne(TORNADO_STATES);
+  const hurricaneStateName = getStateName(hurricaneState);
+  const wildfireStateName = getStateName(wildfireState);
+  const powerGridStateName = getStateName(powerGridState);
+  const overdoseStateNames = getStateNames(overdoseStates);
+  const bridgeStateName = getStateName(bridgeState);
+  const winterStormNames = getStateNames(winterStorm);
+  const tornadoStateName = getStateName(tornadoState);
 
-  // ── Base event pool ────────────────────────────────────────────────────
+  // ── Random events: base pool ───────────────────────────────────────────
   const base = [
+    // Disasters and emergency response
     {id:"hurricane",season:"summer",
-      name:`Category 4 hurricane strikes ${hurricaneState}`,
-      desc:`A devastating hurricane makes landfall near the Gulf/Atlantic coast. Catastrophic flooding reported in ${hurricaneState}.`,
+      name:`Category 4 hurricane strikes ${hurricaneStateName}`,
+      desc:`A devastating hurricane makes landfall near the Gulf/Atlantic coast. Catastrophic flooding reported in ${hurricaneStateName}.`,
       repeatable:true,isDisaster:true,affectedStates:[hurricaneState],effects:{nationalDebt:0.05},macroEffects:{ demand:-0.12, investment:-0.08, infrastructureQuality:-0.25 },choices:[
         {text:"Declare emergency, full federal resources",effects:{approvalRating:4,nationalDebt:0.1},stateBoost:0.05,result:"Swift response praised."},
         {text:"Measured federal assistance",effects:{approvalRating:0},stateBoost:0.01,result:"Some say insufficient."},
         {text:"Delegate to states",effects:{approvalRating:-5},stateBoost:-0.04,result:"Accused of abandoning the coast."},
     ]},
+
+    // National security and foreign affairs
     {id:"terror_foiled",name:"FBI foils major terror plot",desc:"Federal agents disrupted a plot targeting a metropolitan area.",unique:true,effects:{approvalRating:2},choices:[
       {text:"Press conference: emphasize security",effects:{approvalRating:3},result:"Confidence rises."},
       {text:"Quietly brief Congress",effects:{approvalRating:1},result:"Restrained approach noted."},
@@ -228,36 +388,42 @@ export function generateDynamicEvents(
       {text:"Monitor and prepare",effects:{approvalRating:0},result:"Measured. Critics divided."},
       {text:"Downplay the threat",effects:{approvalRating:-3},macroEffects:{ confidence:0.03 },result:"Risky bet."},
     ]},
-    {id:"tech_boom",name:"AI industry creates 500K jobs",desc:"Tech sector booming in CA, WA, TX, NY.",unique:true,affectedStates:["CA","WA","TX","NY"],effects:{approvalRating:2},macroEffects:{ technology:0.18, investment:0.18, labor:-0.1, businessConfidence:1.5 },choices:[
+    {id:"tech_boom",name:"AI industry creates 500K jobs",desc:"Tech sector booming in California, Washington, Texas, and New York.",unique:true,affectedStates:["CA","WA","TX","NY"],effects:{approvalRating:2},macroEffects:{ technology:0.18, investment:0.18, labor:-0.1, businessConfidence:1.5 },choices:[
       {text:"Claim credit, tech-friendly policies",effects:{approvalRating:2},result:"Silicon Valley applauds."},
       {text:"Push AI regulation",effects:{approvalRating:0},macroEffects:{ investment:-0.04, confidence:-0.02 },result:"Balanced. Lobbies grumble."},
       {text:"Retrain displaced workers",effects:{educationSpending:10,approvalRating:1},result:"Forward-thinking support."},
     ]},
-    {id:"cyber",name:"Major cyberattack hits federal agencies",desc:"State-sponsored attack compromises federal databases.",unique:true,effects:{approvalRating:-3},choices:[
+    {id:"cyber",name:"Major cyberattack hits federal agencies",desc:"State-sponsored attack compromises federal databases.",unique:true,effects:{approvalRating:-3},annualChanceMultiplier: passedLegislation.cybersecurity_strategy ? 0.1 : 1,choices:[
       {text:"Publicly attribute and sanction",effects:{approvalRating:2},countryEffects:{russia:{relationship:-5,trust:-3}},result:"Strong response. Tensions rise."},
       {text:"Covert cyber response",effects:{approvalRating:1},result:"Quiet action debated."},
       {text:"Focus on defense upgrades",effects:{approvalRating:0,nationalDebt:0.03},result:"Cautious approach."},
     ]},
+
+    // Institutions, courts, and governance
     {id:"scotus",name:"Supreme Court Justice retires",desc:"A pivotal Justice steps down. Nomination opportunity.",unique:true,effects:{approvalRating:1},choices:[
       {text:"Nominate strong ideological ally",effects:{approvalRating:1},factionEffects:scotusStrongAllyFx,result:scotusStrongAllyResult},
       {text:"Nominate moderate consensus builder",effects:{approvalRating:2},factionEffects:{mod_dem:0.3,mod_rep:0.2,prog:-0.2,freedom:-0.2},result:"Bipartisan nod."},
       {text:"Nominate young rising star",effects:{approvalRating:0},result:"Strategic long-term play."},
     ]},
+
+    // Disasters and infrastructure failures
     {id:"bridge",name:"Major bridge collapse",
-      desc:`Interstate bridge collapses during rush hour in ${bridgeState}. Dozens killed.`,
+      desc:`Interstate bridge collapses during rush hour in ${bridgeStateName}. Dozens killed.`,
       repeatable:true,isDisaster:true,affectedStates:[bridgeState],effects:{approvalRating:-2,infrastructureSpending:5},choices:[
         {text:"Push emergency infrastructure bill",effects:{approvalRating:3,nationalDebt:0.1,infrastructureSpending:30},stateBoost:0.04,result:"Galvanizing moment."},
         {text:"Order nationwide inspections",effects:{approvalRating:1},result:"Methodical. Public wants faster."},
         {text:"Blame predecessors' underfunding",effects:{approvalRating:-1},result:"Blame game doesn't help victims."},
     ]},
     {id:"midwest_tornado",
-      name:`Tornado outbreak tears through ${tornadoState}`,
-      desc:`A series of EF-4 tornadoes devastates rural communities in ${tornadoState}.`,
+      name:`Tornado outbreak tears through ${tornadoStateName}`,
+      desc:`A series of EF-4 tornadoes devastates rural communities in ${tornadoStateName}.`,
       repeatable:true,isDisaster:true,affectedStates:[tornadoState],effects:{approvalRating:-1,infrastructureSpending:5},choices:[
         {text:"Deploy FEMA and National Guard immediately",effects:{approvalRating:3,nationalDebt:0.06},stateBoost:0.05,result:"Swift federal response wins praise in the region."},
         {text:"Approve disaster declaration, coordinate with governor",effects:{approvalRating:1},stateBoost:0.02,result:"Measured response. Locals appreciate the coordination."},
         {text:"Urge states to handle recovery independently",effects:{approvalRating:-2},stateBoost:-0.02,result:"Farmers and mayors feel abandoned."},
     ]},
+
+    // Economy, labor, and social policy
     {id:"student_loan",name:"Student loan default rate hits record high",desc:"Over 8 million borrowers are in default as interest accumulates. College graduates protest.",unique:true,effects:{approvalRating:-2},choices:[
       {text:"Expand income-based repayment options",effects:{approvalRating:2,nationalDebt:0.04},factionEffects:{prog:0.3,mod_dem:0.2,freedom:-0.3},result:"Young voters energized. Fiscal hawks grumble."},
       {text:"Push for targeted forgiveness for low-income borrowers",effects:{approvalRating:1,nationalDebt:0.08},factionEffects:{prog:0.5,mod_dem:0.1,freedom:-0.5,trad_con:-0.3},result:"Divisive but popular with graduates."},
@@ -268,27 +434,29 @@ export function generateDynamicEvents(
       {text:"Convene economic advisers, signal calm",effects:{approvalRating:1},result:"Steady-hand messaging helps sentiment slightly."},
       {text:"Blame the Federal Reserve",effects:{approvalRating:-2},result:"Finger-pointing deepens investor anxiety."},
     ]},
-    {id:"border_surge",name:"Record border crossings strain resources",desc:"Migrant arrivals hit an all-time monthly high. Facilities in TX and AZ are overwhelmed.",unique:true,affectedStates:["TX","AZ","NM","CA"],effects:{immigrationRate:0.2,approvalRating:-2},choices:[
+    {id:"border_surge",name:"Record border crossings strain resources",desc:"Migrant arrivals hit an all-time monthly high. Facilities in Texas and Arizona are overwhelmed.",unique:true,affectedStates:["TX","AZ","NM","CA"],effects:{immigrationRate:0.2,approvalRating:-2},choices:[
       {text:"Request emergency supplemental border funding",effects:{approvalRating:1,nationalDebt:0.04},factionEffects:{blue_dog:0.3,mod_rep:0.2,freedom:0.3,prog:-0.2},result:"Congress moves quickly. Tensions ease."},
       {text:"Announce expanded asylum processing",effects:{approvalRating:0},factionEffects:{prog:0.3,freedom:-0.4},result:"Humanitarian groups approve. Border-state officials frustrated."},
       {text:"Tighten entry restrictions via executive order",effects:{approvalRating:1},factionEffects:{freedom:0.5,mod_rep:0.3,prog:-0.5},stateBoost:0.03,result:"Crossings slow. Legal challenges follow."},
     ]},
-    {id:"teacher_strike",name:"National teachers union calls for general strike",desc:"Teachers in 18 states walk out demanding higher pay and smaller class sizes.",unique:true,affectedStates:["OH","PA","IL","TX","GA"],effects:{approvalRating:-1,educationSpending:5},choices:[
+    {id:"teacher_strike",name:"National teachers union calls for general strike",desc:"Teachers in Ohio, Pennsylvania, Illinois, Texas, Georgia, and 13 other states walk out demanding higher pay and smaller class sizes.",unique:true,affectedStates:["OH","PA","IL","TX","GA"],effects:{approvalRating:-1,educationSpending:5},choices:[
       {text:"Announce $15B federal education funding increase",effects:{approvalRating:2,educationSpending:20,nationalDebt:0.05},factionEffects:{prog:0.4,mod_dem:0.2,freedom:-0.4},result:"Strikes end. Teachers call it a victory."},
       {text:"Urge states to negotiate directly with unions",effects:{approvalRating:-1},result:"Strikes continue. You're seen as indifferent."},
       {text:"Express sympathy, propose federal pay commission",effects:{approvalRating:1},result:"Slow but avoids a fiscal fight."},
     ]},
     {id:"overdose_crisis",
       name:"Fentanyl overdose deaths spike",
-      desc:`Overdose deaths hit 120,000 in the past year, highest on record. ${overdoseStates.join(", ")} among the hardest hit.`,
+      desc:`Overdose deaths hit 120,000 in the past year, highest on record. ${overdoseStateNames.join(", ")} among the hardest hit.`,
       unique:true,affectedStates:overdoseStates,effects:{crimeRate:0.2,approvalRating:-2},choices:[
         {text:"Declare national public health emergency",effects:{approvalRating:2,healthcareSpending:10,nationalDebt:0.03},stateBoost:0.04,result:"Affected communities feel heard."},
         {text:"Crack down on cartel supply chains",effects:{approvalRating:1,crimeRate:-0.1},factionEffects:{trad_con:0.3,freedom:0.2,prog:-0.1},result:"Law enforcement focus wins rural support."},
         {text:"Expand naloxone access and safe use sites",effects:{approvalRating:0},factionEffects:{prog:0.4,mod_dem:0.2,trad_con:-0.4},result:"Public health advocates cheer. Social conservatives push back."},
     ]},
+
+    // Disasters and utility disruptions
     {id:"power_grid",season:"summer",
-      name:`Summer heatwave triggers rolling blackouts in ${powerGridState}`,
-      desc:`A record heat dome causes cascading grid failures in ${powerGridState}. Millions lose power.`,
+      name:`Summer heatwave triggers rolling blackouts in ${powerGridStateName}`,
+      desc:`A record heat dome causes cascading grid failures in ${powerGridStateName}. Millions lose power.`,
       repeatable:true,isDisaster:true,affectedStates:[powerGridState],effects:{approvalRating:-2,infrastructureSpending:5},choices:[
         {text:"Emergency grid modernization funding",effects:{approvalRating:2,infrastructureSpending:25,nationalDebt:0.07},stateBoost:0.04,result:"Governor thanks you. Long-term fix in motion."},
         {text:"Press utilities to implement demand-response programs",effects:{approvalRating:0},result:"Modest improvement. Critics say it's not enough."},
@@ -299,22 +467,26 @@ export function generateDynamicEvents(
       {text:"Emphasize job creation and opportunity programs",effects:{approvalRating:1,nationalDebt:0.03},result:"Bipartisan optics. Doesn't satisfy critics."},
       {text:"Dispute the methodology of the report",effects:{approvalRating:-2},result:"Looks tone-deaf. Goes viral for wrong reasons."},
     ]},
+
+    // Disasters and climate-linked emergencies
     {id:"wildfire_west",season:"summer",
-      name:`Wildfire tears across ${wildfireState}`,
-      desc:`Over 2 million acres ablaze in ${wildfireState}. Air quality alerts issued statewide.`,
+      name:`Wildfire tears across ${wildfireStateName}`,
+      desc:`Over 2 million acres ablaze in ${wildfireStateName}. Air quality alerts issued statewide.`,
       repeatable:true,isDisaster:true,affectedStates:[wildfireState],effects:{approvalRating:-1},macroEffects:{ demand:-0.04, infrastructureQuality:-0.08 },choices:[
         {text:"Deploy federal firefighting resources and declare emergency",effects:{approvalRating:3,nationalDebt:0.05},stateBoost:0.04,result:"Rapid federal response praised."},
         {text:"Partner with states on long-term forest management",effects:{approvalRating:1},factionEffects:{mod_rep:0.2,blue_dog:0.2,prog:0.1},result:"Bipartisan approach. Slower to show results."},
         {text:"Link to climate change, push green energy agenda",effects:{approvalRating:0},factionEffects:{prog:0.4,freedom:-0.5},result:"Base energized. Rural communities skeptical."},
     ]},
     {id:"winter_storm",season:"winter",
-      name:`Severe winter storm paralyzes ${winterStorm[0]} and neighbors`,
-      desc:`A historic blizzard brings record snowfall and ice to ${winterStorm.join(", ")}, knocking out power to millions and closing highways.`,
+      name:`Severe winter storm paralyzes ${winterStormNames[0]} and neighbors`,
+      desc:`A historic blizzard brings record snowfall and ice to ${winterStormNames.join(", ")}, knocking out power to millions and closing highways.`,
       repeatable:true,isDisaster:true,affectedStates:winterStorm,effects:{approvalRating:-1,infrastructureSpending:3},macroEffects:{ demand:-0.04, infrastructureQuality:-0.06 },choices:[
         {text:"Issue emergency declaration, mobilize National Guard",effects:{approvalRating:3,nationalDebt:0.04},stateBoost:0.04,result:"Rapid federal response praised by governors."},
         {text:"Coordinate with state emergency managers",effects:{approvalRating:1},stateBoost:0.02,result:"Steady, methodical response."},
         {text:"Urge residents to shelter in place, minimal federal role",effects:{approvalRating:-2},stateBoost:-0.03,result:"Critics say the federal government was missing in action."},
     ]},
+
+    // Trade and international economic agreements
     {id:"trade_deal",name:"Historic trade deal with Pacific partners",desc:"A new multilateral trade agreement with 10 Pacific nations is ready for congressional approval.",unique:true,engagementEffect:3,effects:{tradeBalance:8,approvalRating:1},macroEffects:{ nx:0.18, investment:0.06, businessConfidence:0.8 },choices:[
       {text:"Sign and push Congress hard for ratification",effects:{approvalRating:2,tradeBalance:5},factionEffects:{mod_dem:0.3,mod_rep:0.4,prog:-0.3,blue_dog:0.2},result:"Business community celebrates."},
       {text:"Sign with stronger labor protections",effects:{approvalRating:1},factionEffects:{prog:0.2,blue_dog:0.3,mod_rep:0.1,freedom:-0.2},result:"Labor unions back it. Some partners grumble."},
@@ -325,11 +497,10 @@ export function generateDynamicEvents(
   base.forEach(e => {
     if (!e.repeatable && usedEvents.has(e.id)) return;
     if (e.season && e.season !== season) return;
-    if (e.id === "cyber" && passedLegislation.cybersecurity_strategy && Math.random() < 0.9) return;
     addEvent("normal", e);
   });
 
-  // ── Post-legislation triggered events ─────────────────────────────────
+  // ── Consequence events: post-legislation / EO fallout ─────────────────
 
   if (passedLegislation.immigration_enforcement) {
     const elapsed = week - passedLegislation.immigration_enforcement;
@@ -386,11 +557,8 @@ export function generateDynamicEvents(
     }
   }
 
-  // ── Absence-triggered events ───────────────────────────────────────────
+  // ── Consequence events: country-relation fallout ──────────────────────
 
-  // ── Country-relation triggered events ─────────────────────────────────────
-
-  // 1. Anti-Israel protests if friendly/allied with Israel (40%/yr ≈ 0.06/tick)
   const israelRel = (countries.find(c => c.id === "israel") || {}).relationship || 0;
   if (israelRel >= 60 && !usedEvents.has("anti_israel_protests")) {
     addEvent("special", {
@@ -408,7 +576,6 @@ export function generateDynamicEvents(
     });
   }
 
-  // 2. Russia imprisons American tourist if hostile relations (20%/yr ≈ 0.03/tick)
   const russiaRel = (countries.find(c => c.id === "russia") || {}).relationship || 50;
   if (russiaRel < 30 && !usedEvents.has("russia_hostage")) {
     addEvent("special", {
@@ -426,9 +593,8 @@ export function generateDynamicEvents(
     });
   }
 
-  // ── Stat-condition triggered events ────────────────────────────────────────
+  // ── Consequence events: stat-condition fallout ────────────────────────
 
-  // 4. Record corporate profits if corporate tax below default (50%/yr ≈ 0.08/tick)
   if (stats.corporateTaxRate < 21 && !usedEvents.has("corp_profits_surge")) {
     addEvent("special", {
       id: "corp_profits_surge",
@@ -445,7 +611,6 @@ export function generateDynamicEvents(
     });
   }
 
-  // 5. Literacy crisis if education spending below default (50%/yr ≈ 0.08/tick)
   if (stats.educationSpending < 102 && !usedEvents.has("literacy_crisis")) {
     addEvent("special", {
       id: "literacy_crisis",
@@ -462,9 +627,8 @@ export function generateDynamicEvents(
     });
   }
 
-  // ── Always-available repeatable events ────────────────────────────────────
+  // ── Consequence events: post-legislation upside / backlash ────────────
 
-  // 3. Weed industry boom if marijuana_fed passed (50%/yr ≈ 0.08/tick)
   if (passedLegislation.marijuana_fed) {
     const mjelapsed = week - passedLegislation.marijuana_fed;
     if (mjelapsed >= 4 && mjelapsed <= 52 && !usedEvents.has("weed_industry_boom")) {
@@ -486,13 +650,13 @@ export function generateDynamicEvents(
     }
   }
 
-  // 6. Car factory closure in rust belt state
   const rustBeltState = pickOne(RUST_BELT_STATES);
+  const rustBeltStateName = getStateName(rustBeltState);
   addEvent("normal", {
     id: "factory_closure_" + Math.random(),
     repeatable: true,
-    name: `Major Auto Plant Announces Closure in ${rustBeltState}`,
-    desc: `A major automobile manufacturer has announced the permanent closure of its ${rustBeltState} assembly plant, eliminating 8,500 union jobs. Workers are demanding federal intervention.`,
+    name: `Major Auto Plant Announces Closure in ${rustBeltStateName}`,
+    desc: `A major automobile manufacturer has announced the permanent closure of its ${rustBeltStateName} assembly plant, eliminating 8,500 union jobs. Workers are demanding federal intervention.`,
     affectedStates: [rustBeltState],
     effects: { approvalRating: -2 },
     macroEffects: { labor: 0.08, confidence: -0.05 },
@@ -503,15 +667,15 @@ export function generateDynamicEvents(
     ],
   });
 
-  // 7. Rare earth metal deposit in a western state
   const rareEarthMetal = pickOne(RARE_EARTH_METALS);
   const rareEarthState = pickOne(WEST_STATES);
+  const rareEarthStateName = getStateName(rareEarthState);
   const rareLabel = rareEarthMetal.charAt(0).toUpperCase() + rareEarthMetal.slice(1);
   addEvent("normal", {
     id: "rare_earth_" + Math.random(),
     repeatable: true,
-    name: `Major ${rareLabel} Deposit Discovered in ${rareEarthState}`,
-    desc: `Geological surveys have confirmed one of the largest ${rareEarthMetal} deposits ever found in ${rareEarthState}. The discovery could reshape U.S. strategic mineral independence — but mining would require federal permitting on protected land.`,
+    name: `Major ${rareLabel} Deposit Discovered in ${rareEarthStateName}`,
+    desc: `Geological surveys have confirmed one of the largest ${rareEarthMetal} deposits ever found in ${rareEarthStateName}. The discovery could reshape U.S. strategic mineral independence — but mining would require federal permitting on protected land.`,
     affectedStates: [rareEarthState],
     effects: { approvalRating: 1 },
     macroEffects: { investment: 0.08, productivity: 0.03, nx: 0.04 },
@@ -522,7 +686,6 @@ export function generateDynamicEvents(
     ],
   });
 
-  // 8. Prominent base faction member arrested for domestic abuse
   const scandalFactionId = pickOne(allyIds);
   const FACTION_DISPLAY = { prog: "Progressive Caucus", mod_dem: "New Democrats", blue_dog: "Blue Dog Coalition", freedom: "Freedom Caucus", mod_rep: "Main Street Republicans", trad_con: "Traditional Conservatives" };
   const scandalFactionName = FACTION_DISPLAY[scandalFactionId] || scandalFactionId;
@@ -539,7 +702,6 @@ export function generateDynamicEvents(
     ],
   });
 
-  // 10. FDA food recall
   const FOOD_ITEMS = ["romaine lettuce","ground beef","frozen chicken nuggets","peanut butter","baby spinach","frozen strawberries","deli meat","canned tuna","shredded cheese","raw oysters"];
   const recalledFood = pickOne(FOOD_ITEMS);
   const foodLabel = recalledFood.charAt(0).toUpperCase() + recalledFood.slice(1);
@@ -556,10 +718,8 @@ export function generateDynamicEvents(
     ],
   });
 
-  // ── Absence-triggered events ───────────────────────────────────────────────
-
-  // 9. Detention camp report if neither border nor immigration_exp passed (50%/yr ≈ 0.08/tick)
-  if (!passedLegislation.border && !passedLegislation.immigration_exp && !usedEvents.has("detention_conditions")) {
+  // ── Consequence events: omitted-legislation fallout (Year 2+) ─────────
+  if (week >= 53 && !passedLegislation.border && !passedLegislation.immigration_exp && !usedEvents.has("detention_conditions")) {
     addEvent("special", {
       id: "detention_conditions",
       annualChance: 0.50,
@@ -576,8 +736,7 @@ export function generateDynamicEvents(
     });
   }
 
-  // Amtrak cuts if Infrastructure Investment Package never passed (20% chance per check)
-  if (!passedLegislation.infra_boost && !usedEvents.has("amtrak_cuts")) {
+  if (week >= 53 && !passedLegislation.infra_boost && !usedEvents.has("amtrak_cuts")) {
     addEvent("special", {
       id: "amtrak_cuts",
       annualChance: 0.70,
@@ -594,5 +753,12 @@ export function generateDynamicEvents(
     });
   }
 
-  return { normalPool, specialPool, immediatePool };
+  randomPool = finalizeRandomAnnualChances(randomPool);
+  const finalizedDisasterPool = finalizeLaneAnnualChances(disasterPool, DISASTER_EVENT_ACTIVATION_CHANCE, DISASTER_EVENT_CHECKS_PER_YEAR);
+
+  return {
+    randomPool,
+    disasterPool: finalizedDisasterPool,
+    immediatePool,
+  };
 }

@@ -122,4 +122,24 @@ describe("runWeeklySimulation", () => {
     expect(result.stats.approvalRating).toBeGreaterThan(snapshot.stats.approvalRating);
     expect(result.log.some(entry => entry.text.includes("New Congress sworn in"))).toBe(true);
   });
+
+  it("prefers higher-priority consequence events when multiple event lanes roll in the same week", () => {
+    const snapshot = buildSnapshot({
+      week: 11,
+      pendingCongressUpdate: null,
+      passedLegislation: {
+        immigration_enforcement: 1,
+        marijuana_fed: 1,
+      },
+      countries: [{ id: "russia", relationship: 20, trust: 40, status: "HOSTILE", name: "Russia" }],
+    });
+    const mathRandomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+
+    const result = runWeeklySimulation(snapshot, buildDeps(snapshot));
+
+    expect(result.week).toBe(12);
+    expect(result.curEv?.category).toBe("special");
+
+    mathRandomSpy.mockRestore();
+  });
 });
