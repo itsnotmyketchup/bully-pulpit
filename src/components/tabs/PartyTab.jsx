@@ -8,7 +8,7 @@ export default function PartyTab({
   allF, allyF, cg, pf,
   factionHist, promises, promiseOffers, passedLegislation, week,
   surrogates, surrogateUI, setSurrogateUI,
-  coachCooldown, countries, visitedCountries, act,
+  coachCooldown, countries, visitedCountries, act, maxActions,
   onMakePromise, onAssignSurrogate,
   campaignMetrics,
 }) {
@@ -127,8 +127,8 @@ export default function PartyTab({
               {ui.tab === "visit" && (
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
                   <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>Visits a random state</span>
-                  <button onClick={() => onAssignSurrogate(s.id, { type: "visit" })} disabled={act >= 4}
-                    style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "none", cursor: act >= 4 ? "not-allowed" : "pointer", background: "var(--color-text-primary)", color: "var(--color-background-primary)", opacity: act >= 4 ? 0.5 : 1 }}>
+                  <button onClick={() => onAssignSurrogate(s.id, { type: "visit" })} disabled={act >= maxActions}
+                    style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "none", cursor: act >= maxActions ? "not-allowed" : "pointer", background: "var(--color-text-primary)", color: "var(--color-background-primary)", opacity: act >= maxActions ? 0.5 : 1 }}>
                     Send (1 action)
                   </button>
                 </div>
@@ -145,12 +145,12 @@ export default function PartyTab({
                     ))}
                   </div>
                   <button onClick={() => {
-                    if (!ui.factionId || act >= 4) return;
+                    if (!ui.factionId || act >= maxActions) return;
                     const f = cg.factions[ui.factionId];
                     const relBonus = 5 + Math.floor(Math.random() * 11);
                     onAssignSurrogate(s.id, { type: "faction_rel", factionId: ui.factionId, factionName: f?.name, relBonus, description: `Improving relations with ${f?.name}`, weeksLeft: 4 });
-                  }} disabled={!ui.factionId || act >= 4}
-                    style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "none", cursor: (!ui.factionId || act >= 4) ? "not-allowed" : "pointer", background: "var(--color-text-primary)", color: "var(--color-background-primary)", opacity: (!ui.factionId || act >= 4) ? 0.5 : 1 }}>
+                  }} disabled={!ui.factionId || act >= maxActions}
+                    style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "none", cursor: (!ui.factionId || act >= maxActions) ? "not-allowed" : "pointer", background: "var(--color-text-primary)", color: "var(--color-background-primary)", opacity: (!ui.factionId || act >= maxActions) ? 0.5 : 1 }}>
                     Assign (1 action, 4 wks)
                   </button>
                 </div>
@@ -167,11 +167,11 @@ export default function PartyTab({
                     ))}
                   </div>
                   <button onClick={() => {
-                    if (!ui.countryId || act >= 4) return;
+                    if (!ui.countryId || act >= maxActions) return;
                     const c = countries.find(ct => ct.id === ui.countryId);
                     onAssignSurrogate(s.id, { type: "foreign_visit", countryId: ui.countryId, countryName: c?.name, description: `Foreign visit to ${c?.name}`, weeksLeft: 1 });
-                  }} disabled={!ui.countryId || act >= 4}
-                    style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "none", cursor: (!ui.countryId || act >= 4) ? "not-allowed" : "pointer", background: "var(--color-text-primary)", color: "var(--color-background-primary)", opacity: (!ui.countryId || act >= 4) ? 0.5 : 1 }}>
+                  }} disabled={!ui.countryId || act >= maxActions}
+                    style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "none", cursor: (!ui.countryId || act >= maxActions) ? "not-allowed" : "pointer", background: "var(--color-text-primary)", color: "var(--color-background-primary)", opacity: (!ui.countryId || act >= maxActions) ? 0.5 : 1 }}>
                     Send (1 action)
                   </button>
                 </div>
@@ -201,11 +201,11 @@ export default function PartyTab({
                         ))}
                       </div>
                       <button onClick={() => {
-                        if (!ui.coachFactionId || !ui.coachSkill || act >= 4) return;
+                        if (!ui.coachFactionId || !ui.coachSkill || act >= maxActions) return;
                         const f = cg.factions[ui.coachFactionId];
                         onAssignSurrogate(s.id, { type: "coach", factionId: ui.coachFactionId, factionName: f?.name, skill: ui.coachSkill, description: `Coaching ${f?.name} leader's ${ui.coachSkill}`, weeksLeft: 4 });
-                      }} disabled={!ui.coachFactionId || !ui.coachSkill || act >= 4}
-                        style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "none", cursor: (!ui.coachFactionId || !ui.coachSkill || act >= 4) ? "not-allowed" : "pointer", background: "var(--color-text-primary)", color: "var(--color-background-primary)", opacity: (!ui.coachFactionId || !ui.coachSkill || act >= 4) ? 0.5 : 1 }}>
+                      }} disabled={!ui.coachFactionId || !ui.coachSkill || act >= maxActions}
+                        style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "none", cursor: (!ui.coachFactionId || !ui.coachSkill || act >= maxActions) ? "not-allowed" : "pointer", background: "var(--color-text-primary)", color: "var(--color-background-primary)", opacity: (!ui.coachFactionId || !ui.coachSkill || act >= maxActions) ? 0.5 : 1 }}>
                         Coach (1 action, 4 wks, 66%)
                       </button>
                     </div>

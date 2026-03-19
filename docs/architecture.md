@@ -61,7 +61,7 @@ The game is weekly, but content events mainly resolve on a 4-week rhythm.
 
 ### Player-facing rhythm
 
-- Each week has 4 actions.
+- Each week starts with 4 actions unless a permanent gameplay effect increases the weekly cap.
 - Bills and executive orders cost 2 actions.
 - Speeches, domestic visits, and most surrogate actions cost 1.
 - Presidential foreign visits cost 2-3.

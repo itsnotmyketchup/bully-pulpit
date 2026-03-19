@@ -6,6 +6,7 @@ import {
   MIN_REFUGEE_CAP,
   MAX_REFUGEE_CAP,
   buildExecutiveOrderOutcome,
+  getVisibleExecutiveOrders,
 } from "../../data/executiveOrders.js";
 import { VISIT_TYPES } from "../../data/visits.js";
 import { SPEECH_TOPICS } from "../../data/speeches.js";
@@ -14,10 +15,11 @@ import { OPPOSITION_FACTIONS } from "../../data/constants.js";
 import { buildEffectPreview } from "../../utils/effectDisplay.js";
 import VisitMap from "../VisitMap.jsx";
 
-const controvColor = c => c === 1 ? "#EF9F27" : c === 2 ? "#E27D27" : "#E24B4A";
+const controvColor = c => c === 0 ? "#2563eb" : c === 1 ? "#EF9F27" : c === 2 ? "#E27D27" : "#E24B4A";
 
 export default function ActionsTab({
   act,
+  maxActions,
   week,
   actionsSubTab, setActionsSubTab,
   selectedEO, setSelectedEO,
@@ -35,8 +37,9 @@ export default function ActionsTab({
   onIssueEO, onRescindEO, onDoVisit, onDoSpeech,
 }) {
   const oppIds = OPPOSITION_FACTIONS[pp] || [];
+  const visibleExecutiveOrders = useMemo(() => getVisibleExecutiveOrders(week), [week]);
 
-  const eo = selectedEO ? EXECUTIVE_ORDERS.find(e => e.id === selectedEO) : null;
+  const eo = selectedEO ? visibleExecutiveOrders.find(e => e.id === selectedEO) : null;
   const eoExtraData = eo ? {
     targetCountryId: eoChoice.countryId,
     factionOverride: eo?.choiceType === "declassify" && eoChoice.declassifyId
@@ -56,7 +59,7 @@ export default function ActionsTab({
   const repeatableCooldownRemaining = eo?.repeatable && lastIssuedOrder
     ? Math.max(0, lastIssuedOrder.issuedWeek + 52 - week)
     : 0;
-  const canIssue = eo && act + 2 <= 4 && (eo.repeatable || !(eoIssuedCount[eo.id] > 0))
+  const canIssue = eo && act + 2 <= maxActions && (eo.repeatable || !(eoIssuedCount[eo.id] > 0))
     && repeatableCooldownRemaining === 0
     && (eo.choiceType !== "country" || eoChoice.countryId)
     && (eo.choiceType !== "declassify" || eoChoice.declassifyId)
@@ -75,9 +78,10 @@ export default function ActionsTab({
     if (vt.stateRestriction === "tribal") return new Set(STATE_DATA.filter(s => !s.tribal).map(s => s.abbr));
     return new Set();
   }, [visitType, recentDisasters]);
+  const overreachIncrease = eo ? (eo.controversy === 0 ? 0 : 3 + 5 * eo.controversy) : 0;
 
   return <>
-    <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>{4 - act} action{4 - act !== 1 ? "s" : ""} left this week.</div>
+    <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>{maxActions - act} action{maxActions - act !== 1 ? "s" : ""} left this week.</div>
 
     {/* Sub-tab bar */}
     <div style={{ display: "flex", gap: 2, marginBottom: 14, borderBottom: "1px solid var(--color-border-tertiary)", paddingBottom: 8 }}>
@@ -123,7 +127,7 @@ export default function ActionsTab({
         );
       })()}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 6, marginBottom: 12 }}>
-        {EXECUTIVE_ORDERS.map(e => {
+        {visibleExecutiveOrders.map(e => {
           const isSelected = selectedEO === e.id;
           const issued = eoIssuedCount[e.id] || 0;
           const exhausted = !e.repeatable && issued > 0;
@@ -164,11 +168,11 @@ export default function ActionsTab({
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{eo.name}</div>
-              <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginTop: 1 }}>{eo.category} · Controversy {["Low", "Moderate", "High"][eo.controversy - 1]}</div>
+              <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginTop: 1 }}>{eo.category} · Controversy {eo.controversy === 0 ? "None" : ["Low", "Moderate", "High"][eo.controversy - 1]}</div>
             </div>
             <div style={{ display: "flex", gap: 5 }}>
               <div style={{ fontSize: 10, color: "var(--color-text-secondary)", background: "var(--color-background-tertiary)", padding: "2px 8px", borderRadius: 6 }}>2 actions</div>
-              <div style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: "#E24B4A22", color: "#E24B4A" }}>+{3 + 5 * eo.controversy} overreach</div>
+              <div style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: overreachIncrease > 0 ? "#E24B4A22" : "#1D9E7522", color: overreachIncrease > 0 ? "#E24B4A" : "#1D9E75" }}>{overreachIncrease > 0 ? `+${overreachIncrease} overreach` : "No overreach"}</div>
             </div>
           </div>
           <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 8, lineHeight: 1.5 }}>{eo.desc}</div>
@@ -192,7 +196,7 @@ export default function ActionsTab({
               {Object.entries(previewReactions || {}).map(([fid, v]) => {
                 const f = cg?.factions[fid]; if (!f) return null;
                 const rel = Math.round(v * 8); const isOpp = oppIds.includes(fid);
-                return <span key={fid} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: rel > 0 ? "#1D9E7522" : "#E24B4A22", color: rel > 0 ? "#1D9E75" : "#E24B4A" }}>{f.name.split(" ")[0]}: {rel > 0 ? "+" : ""}{rel} rel{isOpp ? " (opp)" : ""}</span>;
+                return <span key={fid} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: rel > 0 ? "#1D9E7522" : rel < 0 ? "#E24B4A22" : "var(--color-background-tertiary)", color: rel > 0 ? "#1D9E75" : rel < 0 ? "#E24B4A" : "var(--color-text-secondary)" }}>{f.name.split(" ")[0]}: {rel > 0 ? "+" : ""}{rel} rel{isOpp ? " (opp)" : ""}</span>;
               })}
               {oppIds.filter(fid => !previewReactions || previewReactions[fid] == null || previewReactions[fid] >= 0).map(fid => {
                 const f = cg?.factions[fid]; if (!f || (previewReactions && previewReactions[fid] != null)) return null;
@@ -307,7 +311,7 @@ export default function ActionsTab({
             color: !canIssue ? "var(--color-text-secondary)" : "#fff",
             cursor: !canIssue ? "not-allowed" : "pointer",
           }}>
-            {act + 2 > 4
+            {act + 2 > maxActions
               ? "Not enough actions"
               : repeatableCooldownRemaining > 0
                 ? `Available in ${repeatableCooldownRemaining} weeks`
@@ -431,12 +435,12 @@ export default function ActionsTab({
             </div>
           )}
         </div>
-        <button onClick={onDoVisit} disabled={!visitType || !visitState || act >= 4} style={{
+        <button onClick={onDoVisit} disabled={!visitType || !visitState || act >= maxActions} style={{
           padding: "6px 16px", fontSize: 11, fontWeight: 500, whiteSpace: "nowrap", flexShrink: 0,
-          background: visitType && visitState && act < 4 ? "var(--color-text-primary)" : "var(--color-background-tertiary)",
-          color: visitType && visitState && act < 4 ? "var(--color-background-primary)" : "var(--color-text-secondary)",
+          background: visitType && visitState && act < maxActions ? "var(--color-text-primary)" : "var(--color-background-tertiary)",
+          color: visitType && visitState && act < maxActions ? "var(--color-background-primary)" : "var(--color-text-secondary)",
           border: "none", borderRadius: "var(--border-radius-md)",
-          cursor: visitType && visitState && act < 4 ? "pointer" : "not-allowed",
+          cursor: visitType && visitState && act < maxActions ? "pointer" : "not-allowed",
         }}>Go visit</button>
       </div>
 
@@ -558,11 +562,11 @@ export default function ActionsTab({
                     </div>
                   </div>
                 )}
-                <button onClick={() => onDoSpeech(pos)} disabled={act >= 4} style={{
+                <button onClick={() => onDoSpeech(pos)} disabled={act >= maxActions} style={{
                   padding: "5px 14px", fontSize: 11, fontWeight: 500,
-                  background: act >= 4 ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
-                  color: act >= 4 ? "var(--color-text-secondary)" : "var(--color-background-primary)",
-                  border: "none", borderRadius: "var(--border-radius-md)", cursor: act >= 4 ? "not-allowed" : "pointer",
+                  background: act >= maxActions ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
+                  color: act >= maxActions ? "var(--color-text-secondary)" : "var(--color-background-primary)",
+                  border: "none", borderRadius: "var(--border-radius-md)", cursor: act >= maxActions ? "not-allowed" : "pointer",
                 }}>Deliver this speech (1 action)</button>
               </div>
             );

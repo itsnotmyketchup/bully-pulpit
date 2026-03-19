@@ -4,7 +4,7 @@ import BillProgress from "../BillProgress.jsx";
 
 export default function PolicyTab({
   activeBill, billLikelihood, billFactionVotes,
-  pendingNegotiation, act, week,
+  pendingNegotiation, act, maxActions, week,
   reconciliationCooldown, policyFilter, setPolicyFilter,
   lockedBills, billCooldowns, usedPol, cg,
   onOpenBudget, onPropose, onWalkAway, onAcceptAmendment,
@@ -50,7 +50,7 @@ export default function PolicyTab({
 
     {!activeBill && (
       <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>
-        {4 - act} action{4 - act !== 1 ? "s" : ""} remaining. Choose a bill to introduce. Only one bill may be in Congress at a time.
+        {maxActions - act} action{maxActions - act !== 1 ? "s" : ""} remaining. Choose a bill to introduce. Only one bill may be in Congress at a time.
       </div>
     )}
     {activeBill && (
@@ -91,7 +91,7 @@ export default function PolicyTab({
       const u = usedPol.has(a.id);
       const inCooldown = billCooldowns[a.id] && week < billCooldowns[a.id];
       const isLocked = lockedBills.has(a.id);
-      const d = act + 2 > 4 || u || !!activeBill || inCooldown || isLocked;
+      const d = act + 2 > maxActions || u || !!activeBill || inCooldown || isLocked;
       const supporters = Object.entries(a.factionReactions).filter(([, v]) => v > 0.2).map(([fid]) => cg?.factions[fid]?.name?.split(" ")[0]).filter(Boolean);
       const opposers = Object.entries(a.factionReactions).filter(([, v]) => v < -0.2).map(([fid]) => cg?.factions[fid]?.name?.split(" ")[0]).filter(Boolean);
       return (

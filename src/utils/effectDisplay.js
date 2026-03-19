@@ -95,5 +95,17 @@ export function buildEffectPreview(source = {}) {
     });
   }
 
+  (source.specialEffects || []).forEach((effect) => {
+    if (!effect?.id || !effect?.label || !effect?.valueText) return;
+    items.push({
+      id: `special_${effect.id}`,
+      label: effect.label,
+      valueText: effect.valueText,
+      positive: effect.positive !== false,
+      delayed: false,
+      isMacro: false,
+    });
+  });
+
   return items;
 }

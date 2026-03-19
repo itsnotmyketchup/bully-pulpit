@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 
 import { PARTIES, FACTION_DATA } from "./data/factions.js";
 import { STATE_DATA } from "./data/states.js";
@@ -12,7 +12,11 @@ import {
   getSeasonLabel,
   rollEligibleSpecialEvents,
 } from "./data/events.js";
-import { EXECUTIVE_ORDERS, buildExecutiveOrderOutcome } from "./data/executiveOrders.js";
+import {
+  EXECUTIVE_ORDERS,
+  buildExecutiveOrderOutcome,
+  isExecutiveOrderVisible,
+} from "./data/executiveOrders.js";
 import { TABS, ALLIED_FACTIONS, OPPOSITION_FACTIONS, COUNTRY_FACTION_EFFECTS } from "./data/constants.js";
 
 import { generateCongress } from "./logic/generateCongress.js";
@@ -173,6 +177,7 @@ export default function Game() {
   const [curEv, setCurEv] = useState(null);
   const [log, setLog] = useState([]);
   const [act, setAct] = useState(0);
+  const [maxActions, setMaxActions] = useState(4);
   const [usedPol, setUsedPol] = useState(new Set());
   const [usedEv, setUsedEv] = useState(new Set());
   const [activeBill, setActiveBill] = useState(null); // { act, stage, fails, turnsInStage, consecutiveFails }
@@ -210,6 +215,7 @@ export default function Game() {
   const [coachCooldown, setCoachCooldown] = useState(0); // week when coaching is available again
   const [recentDisasters, setRecentDisasters] = useState({}); // {[stateAbbr]: weekOccurred}
   const [activeOrders, setActiveOrders] = useState([]); // [{id, issuedWeek, active, choiceData}]
+  const [discoveredHiddenOrders, setDiscoveredHiddenOrders] = useState([]);
   const [eoIssuedCount, setEoIssuedCount] = useState({}); // {[eoId]: count}
   const [passedLegislation, setPassedLegislation] = useState({}); // {[billOrEoId]: weekPassed}
   const [executiveOverreach, setExecutiveOverreach] = useState(20); // 0-100
@@ -278,6 +284,25 @@ export default function Game() {
   }, [cg, pp, natA, executiveOverreach, passedLegislation, promises, campaignActivity, pollingNoise, isPresidentialElection, wiy, yr]);
 
   const addLog = useCallback(msg => setLog(p => [{ week, text: msg }, ...p].slice(0, 100)), [week]);
+
+  useEffect(() => {
+    const newlyVisible = EXECUTIVE_ORDERS.filter(order => (
+      order.class === "hidden"
+      && isExecutiveOrderVisible(order, week)
+      && !discoveredHiddenOrders.includes(order.id)
+    ));
+
+    if (!newlyVisible.length) return;
+
+    setDiscoveredHiddenOrders(prev => [...prev, ...newlyVisible.map(order => order.id)]);
+    newlyVisible.forEach((order) => {
+      addNotification({
+        type: "eo_unlock",
+        message: `New executive order available: ${order.name}.`,
+        tab: "actions",
+      });
+    });
+  }, [addNotification, discoveredHiddenOrders, week]);
 
   const syncDerivedStats = useCallback((baseStats, nextMacroState) => (
     deriveVisibleStats(baseStats, nextMacroState)
@@ -386,7 +411,7 @@ export default function Game() {
   }, [promises]);
 
   const beginSecStateAppointment = useCallback(() => {
-    if (act >= 4 || pendingAppointment) return;
+    if (act >= maxActions || pendingAppointment) return;
     const candidates = generateSecStateCandidates(pp, nameRegistryRef.current);
     setCabinet(prev => ({
       ...prev,
@@ -397,7 +422,7 @@ export default function Game() {
       },
     }));
     setAct(prev => prev + 1);
-  }, [act, pendingAppointment, pp]);
+  }, [act, maxActions, pendingAppointment, pp]);
 
   const selectSecStateCandidate = useCallback((candidateId) => {
     setCabinet(prev => ({
@@ -686,6 +711,7 @@ export default function Game() {
     setHist(h);
     setWeek(1);
     setAct(0);
+    setMaxActions(4);
     setUsedPol(new Set());
     setUsedEv(new Set());
     setActiveBill(null);
@@ -722,6 +748,7 @@ export default function Game() {
     setCoachCooldown(0);
     setRecentDisasters({});
     setActiveOrders([]);
+    setDiscoveredHiddenOrders([]);
     setEoIssuedCount({});
     setPassedLegislation({});
     setLastSpecialEventWeek(0);
@@ -1553,7 +1580,7 @@ export default function Game() {
   };
 
   const propose = action => {
-    if (act >= 4 || usedPol.has(action.id) || activeBill) return;
+    if (act >= maxActions || usedPol.has(action.id) || activeBill) return;
     if (billCooldowns[action.id] && week < billCooldowns[action.id]) return;
     if (lockedBills.has(action.id)) return;
     const nf = { ...cg.factions };
@@ -1614,7 +1641,7 @@ export default function Game() {
   };
 
   const assignSurrogate = (surrogateId, task) => {
-    if (act >= 4) return;
+    if (act >= maxActions) return;
     const surrogateName = surrogates.find(s => s.id === surrogateId)?.name;
 
     if (task.type === "visit") {
@@ -1682,7 +1709,7 @@ export default function Game() {
     const country = countries.find(c => c.id === countryId);
     const presidentialCost = country?.region === "Americas" ? 2 : 3;
     const actionCost = isSurrogate ? 1 : presidentialCost;
-    if (act + actionCost > 4) return;
+    if (act + actionCost > maxActions) return;
     if (!country || country.status === "HOSTILE") return;
 
     if (isSurrogate && surrogateId) {
@@ -1744,7 +1771,7 @@ export default function Game() {
   };
 
   const doVisit = () => {
-    if (act >= 4 || !visitState || !visitType) return;
+    if (act >= maxActions || !visitState || !visitType) return;
     const vt = VISIT_TYPES.find(v => v.id === visitType);
     const st = STATE_DATA.find(s => s.abbr === visitState);
     if (!vt || !st) return;
@@ -1810,7 +1837,7 @@ export default function Game() {
   };
 
   const issueEO = (eo, extraData = {}) => {
-    if (act + 2 > 4) return;
+    if (act + 2 > maxActions) return;
     const lastIssued = activeOrders
       .filter(order => order.id === eo.id)
       .sort((a, b) => b.issuedWeek - a.issuedWeek)[0];
@@ -1909,12 +1936,14 @@ export default function Game() {
 
     setStats(syncDerivedStats(ns, nextMacroState));
     setMacroState(nextMacroState);
+    if (eo.id === "executive_office_optimization") setMaxActions(5);
 
     // Record it
     setActiveOrders(prev => [...prev, { id: eo.id, name: eo.name, issuedWeek: week, active: true, choiceData: extraData }]);
     setEoIssuedCount(prev => ({ ...prev, [eo.id]: count + 1 }));
     setPassedLegislation(prev => ({ ...prev, [eo.id]: week }));
-    const nextOverreach = Math.min(100, executiveOverreach + 3 + 5 * eo.controversy);
+    const overreachIncrease = eo.controversy === 0 ? 0 : 3 + 5 * eo.controversy;
+    const nextOverreach = Math.min(100, executiveOverreach + overreachIncrease);
     setExecutiveOverreach(nextOverreach);
     setOverreachLastIncreasedWeek(week);
     setOverreachLowSinceWeek(nextOverreach <= 31 ? week : 0);
@@ -1926,7 +1955,7 @@ export default function Game() {
     // Build result payload
     const factionLines = Object.entries(reactions).map(([fid, v]) => {
       const f = nf[fid]; const actual = Math.round(v * 8 * mult);
-      return f ? { name: f.name, val: actual } : null;
+      return f && actual !== 0 ? { name: f.name, val: actual } : null;
     }).filter(Boolean);
     const oppLines = oppositionIds.filter(fid => reactions[fid] == null || reactions[fid] >= 0).map(fid => {
       const f = nf[fid]; return f ? { name: f.name, val: Math.round(controversyPenalty) } : null;
@@ -2163,7 +2192,7 @@ export default function Game() {
   };
 
   const doSpeech = pos => {
-    if (act >= 4) return;
+    if (act >= maxActions) return;
     const ns = { ...stats };
     if (pos.approvalSwing) ns.approvalRating += pos.approvalSwing;
     const allyIds = ALLIED_FACTIONS[pp] || [];
@@ -2242,7 +2271,7 @@ export default function Game() {
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>Actions</div>
-            <div style={{ fontSize: 18, fontWeight: 500, color: act >= 4 ? "#E24B4A" : act >= 3 ? "#EF9F27" : "#1D9E75" }}>{4 - act}<span style={{ fontSize: 10, fontWeight: 400, color: "var(--color-text-secondary)" }}>/4</span></div>
+            <div style={{ fontSize: 18, fontWeight: 500, color: act >= maxActions ? "#E24B4A" : act >= maxActions - 1 ? "#EF9F27" : "#1D9E75" }}>{maxActions - act}<span style={{ fontSize: 10, fontWeight: 400, color: "var(--color-text-secondary)" }}>/{maxActions}</span></div>
           </div>
           {activeBill && <Badge color="#378ADD">Bill in Congress</Badge>}
           <button onClick={advance} style={{ padding: "7px 14px", fontSize: 12, fontWeight: 500, background: "var(--color-text-primary)", color: "var(--color-background-primary)", border: "none", borderRadius: "var(--border-radius-md)", cursor: "pointer" }}>Next week</button>
@@ -2316,7 +2345,7 @@ export default function Game() {
           surrogates={surrogates} surrogateUI={surrogateUI} setSurrogateUI={setSurrogateUI}
           coachCooldown={coachCooldown}
           countries={countries} visitedCountries={visitedCountries}
-          act={act}
+          act={act} maxActions={maxActions}
           onMakePromise={makePromise} onAssignSurrogate={assignSurrogate}
           campaignMetrics={campaignMetrics}
         />
@@ -2332,6 +2361,7 @@ export default function Game() {
           macroState={macroState}
           cabinet={cabinet}
           act={act}
+          maxActions={maxActions}
           pendingAppointment={pendingAppointment}
           surrogates={surrogates}
           onStartSecStateSelection={beginSecStateAppointment}
@@ -2346,7 +2376,7 @@ export default function Game() {
         <PolicyTab
           activeBill={activeBill} billLikelihood={billLikelihood} billFactionVotes={billFactionVotes}
           pendingNegotiation={pendingNegotiation}
-          act={act} week={week}
+          act={act} maxActions={maxActions} week={week}
           reconciliationCooldown={reconciliationCooldown}
           policyFilter={policyFilter} setPolicyFilter={setPolicyFilter}
           lockedBills={lockedBills} billCooldowns={billCooldowns} usedPol={usedPol}
@@ -2365,7 +2395,7 @@ export default function Game() {
 
       {tab === "actions" && (
         <ActionsTab
-          act={act} week={week}
+          act={act} maxActions={maxActions} week={week}
           actionsSubTab={actionsSubTab} setActionsSubTab={setActionsSubTab}
           selectedEO={selectedEO} setSelectedEO={setSelectedEO}
           eoChoice={eoChoice} setEoChoice={setEoChoice}
@@ -2388,7 +2418,7 @@ export default function Game() {
       {tab === "diplomacy" && (
         <DiplomacyTab
           countries={countries} visitedCountries={visitedCountries}
-          act={act} week={week}
+          act={act} maxActions={maxActions} week={week}
           factions={cg.factions}
           onForeignVisit={doForeignVisit}
           engagement={engagement}

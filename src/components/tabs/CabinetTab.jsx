@@ -65,7 +65,7 @@ function ExecutiveRow({ title, name, subtitle, startWeek, currentWeek, metadata,
   );
 }
 
-function SecStateRow({ secState, allFactions, act, currentWeek, pendingAppointment, onStartSelection, onSelectCandidate, onConfirmCandidate }) {
+function SecStateRow({ secState, allFactions, act, maxActions, currentWeek, pendingAppointment, onStartSelection, onSelectCandidate, onConfirmCandidate }) {
   const factionMap = Object.fromEntries(allFactions.map(faction => [faction.id, faction]));
   const isPending = pendingAppointment?.officeId === "sec_state";
   const selectedCandidate = secState.candidates.find(candidate => candidate.id === secState.selectedCandidateId);
@@ -101,17 +101,17 @@ function SecStateRow({ secState, allFactions, act, currentWeek, pendingAppointme
         {!secState.occupantName && secState.candidates.length === 0 && !isPending && (
           <button
             onClick={onStartSelection}
-            disabled={act >= 4}
+            disabled={act >= maxActions}
             style={{
               padding: "8px 12px",
               fontSize: 11,
               fontWeight: 600,
               border: "none",
               borderRadius: "var(--border-radius-md)",
-              cursor: act >= 4 ? "not-allowed" : "pointer",
+              cursor: act >= maxActions ? "not-allowed" : "pointer",
               background: "var(--color-text-primary)",
               color: "var(--color-background-primary)",
-              opacity: act >= 4 ? 0.5 : 1,
+              opacity: act >= maxActions ? 0.5 : 1,
             }}
           >
             Nominate
@@ -211,6 +211,7 @@ export default function CabinetTab({
   macroState,
   cabinet,
   act,
+  maxActions,
   pendingAppointment,
   surrogates,
   onStartSecStateSelection,
@@ -252,11 +253,12 @@ export default function CabinetTab({
         />
       </div>
 
-      <SecStateRow
-        secState={cabinet.secState}
-        allFactions={allFactions}
-        act={act}
-        currentWeek={week}
+        <SecStateRow
+          secState={cabinet.secState}
+          allFactions={allFactions}
+          act={act}
+          maxActions={maxActions}
+          currentWeek={week}
         pendingAppointment={pendingAppointment}
         onStartSelection={onStartSecStateSelection}
         onSelectCandidate={onSelectSecStateCandidate}

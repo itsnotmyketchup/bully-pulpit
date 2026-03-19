@@ -46,6 +46,7 @@ Typical fields:
 - `controversy`
 - `repeatable`
 - `reversible`
+- optional `class` and `unlock` for hidden/gated orders
 - `effects`
 - `macroEffects`
 - `delayedEffects`
@@ -53,6 +54,7 @@ Typical fields:
 - `factionReactions`
 - `stateEffects`
 - optional `choiceType`
+- optional `specialEffects` for UI-only previews of non-stat rewards
 
 Supported dynamic choice patterns already in the code:
 
@@ -64,9 +66,10 @@ Supported dynamic choice patterns already in the code:
 Important behavior:
 
 - issuing an EO costs 2 actions
-- overreach increase is `3 + 5 * controversy`
+- overreach increase is `3 + 5 * controversy`, except `controversy: 0` orders add none
 - opposition can take additional relationship penalties even if not explicitly listed in `factionReactions`
 - repeatable EOs are scaled down with a multiplier on repeated use
+- hidden EOs stay out of the UI until their authored unlock condition is met
 
 If you need a parameterized EO, add the authoring surface in `EXECUTIVE_ORDERS` and the outcome builder logic in `buildExecutiveOrderOutcome()`.
 

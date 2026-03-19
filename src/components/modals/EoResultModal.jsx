@@ -39,13 +39,17 @@ export default function EoResultModal({ eoResult, pn, week, onDismiss }) {
           )}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 7, letterSpacing: "0.1em", textTransform: "uppercase", color: "#9a8060", marginBottom: 6 }}>Faction Impact</div>
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {factionLines.map((fl, i) => (
-                <span key={i} style={{ fontSize: 9, padding: "3px 7px", borderRadius: 3, background: fl.val > 0 ? "#d4eedd" : "#f8d7d7", color: fl.val > 0 ? "#2d6a3f" : "#8b1a1a", fontWeight: 500 }}>
-                  {fl.name.split(" ")[0]}: {fl.val > 0 ? "+" : ""}{fl.val} rel
-                </span>
-              ))}
-            </div>
+            {factionLines.length > 0 ? (
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {factionLines.map((fl, i) => (
+                  <span key={i} style={{ fontSize: 9, padding: "3px 7px", borderRadius: 3, background: fl.val > 0 ? "#d4eedd" : "#f8d7d7", color: fl.val > 0 ? "#2d6a3f" : "#8b1a1a", fontWeight: 500 }}>
+                    {fl.name.split(" ")[0]}: {fl.val > 0 ? "+" : ""}{fl.val} rel
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 9, color: "#7a6040" }}>No faction relationship changes.</div>
+            )}
           </div>
           <div style={{ borderTop: "1px solid #d4c4a8", paddingTop: 12, marginBottom: 14 }}>
             <div style={{ fontSize: 8, color: "#9a8060", marginBottom: 3 }}>Signed and ordered,</div>

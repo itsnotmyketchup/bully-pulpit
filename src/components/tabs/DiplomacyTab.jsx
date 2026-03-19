@@ -158,7 +158,7 @@ function MetricBar({ value, color, label, sentence }) {
   );
 }
 
-export default function DiplomacyTab({ countries, visitedCountries, act, week, factions, onForeignVisit, engagement, powerProjection, globalTension }) {
+export default function DiplomacyTab({ countries, visitedCountries, act, maxActions, week, factions, onForeignVisit, engagement, powerProjection, globalTension }) {
   const [mapMode, setMapMode] = useState("relations");
 
   const alliedCountries = countries.filter(c => c.status === "ALLIED");
@@ -290,7 +290,7 @@ export default function DiplomacyTab({ countries, visitedCountries, act, week, f
                   {!isHostile && (() => {
                     const onCooldown = visitedCountries[c.id] && week < visitedCountries[c.id];
                     const cooldownWeeks = onCooldown ? Math.max(0, visitedCountries[c.id] - week) : 0;
-                    const visitDisabled = act + actionCost > 4 || onCooldown;
+                    const visitDisabled = act + actionCost > maxActions || onCooldown;
                     return (
                       <div style={{ display: "flex", gap: 3, marginTop: 5, flexWrap: "wrap" }}>
                         <button onClick={() => onForeignVisit(c.id)} disabled={visitDisabled} style={{

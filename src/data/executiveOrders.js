@@ -16,6 +16,20 @@ export const DRILLING_REGION_OPTIONS = [
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+export function isExecutiveOrderVisible(order, week) {
+  if (!order) return false;
+  if (order.class !== "hidden") return true;
+
+  const minWeek = order.unlock?.minWeek;
+  if (!minWeek) return false;
+
+  return week >= minWeek;
+}
+
+export function getVisibleExecutiveOrders(week) {
+  return EXECUTIVE_ORDERS.filter(order => isExecutiveOrderVisible(order, week));
+}
+
 export function getRefugeeCapConfig(rawCap) {
   const cap = clamp(Number(rawCap) || DEFAULT_REFUGEE_CAP, MIN_REFUGEE_CAP, MAX_REFUGEE_CAP);
   const mood = (cap - DEFAULT_REFUGEE_CAP) / (DEFAULT_REFUGEE_CAP - MIN_REFUGEE_CAP);
@@ -248,6 +262,24 @@ export const EXECUTIVE_ORDERS = [
     stateEffects: null,
     requiresChoice: true,
     choiceType: "drilling_regions",
+  },
+  {
+    id: "executive_office_optimization",
+    name: "Executive Office Optimization Initiative",
+    desc: "Reorganize White House operations, streamline staff workflows, and tighten internal decision routing. The initiative is administratively quiet but permanently expands your weekly governing capacity.",
+    category: "Administration",
+    class: "hidden",
+    unlock: { minWeek: 105 },
+    controversy: 0,
+    repeatable: false,
+    reversible: false,
+    effects: {},
+    approvalEffect: 0,
+    factionReactions: { freedom: 0, trad_con: 0, mod_rep: 0, blue_dog: 0, mod_dem: 0, prog: 0 },
+    stateEffects: null,
+    specialEffects: [
+      { id: "weekly_actions", label: "Actions per week", valueText: "5 permanently", positive: true },
+    ],
   },
   {
     id: "cybersecurity_strategy",
