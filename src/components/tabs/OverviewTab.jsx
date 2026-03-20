@@ -21,6 +21,8 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
   const appDelta = stats.approvalRating - prev.approvalRating;
   const approvalColor = stats.approvalRating >= 55 ? "#1D9E75" : stats.approvalRating < 42 ? "#E24B4A" : "var(--color-text-primary)";
   const defColor = stats.nationalDeficit < 0 ? "#1D9E75" : stats.nationalDeficit > 2500 ? "#E24B4A" : stats.nationalDeficit > 1800 ? "#EF9F27" : "var(--color-text-primary)";
+  const successColor = "#1D9E75";
+  const dangerColor = "#E24B4A";
   const otherBreakdown = [
     ["Science & Technology", stats.scienceTechnologySpending],
     ["Law Enforcement", stats.lawEnforcementSpending],
@@ -40,7 +42,14 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
     background: "var(--color-background-secondary)",
     borderRadius: "var(--border-radius-lg)",
     padding: "12px",
-    border: "0.5px solid var(--color-border-secondary)",
+    border: "1px solid var(--color-border-secondary)",
+    boxShadow: "var(--shadow-sm)",
+  };
+
+  const insetPanelStyle = {
+    background: "var(--color-background-tertiary)",
+    borderRadius: "var(--border-radius-md)",
+    border: "1px solid var(--color-border-tertiary)",
   };
 
   const cardGridStyle = {
@@ -97,7 +106,7 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
           </span>
           <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)" }}>
             ${Math.round(val)}B
-            {chg && <span style={{ fontSize: 9, marginLeft: 4, color: d > 0 ? "#1D9E75" : "#E24B4A" }}>{d > 0 ? "▲" : "▼"} {Math.abs(Math.round(d))}B</span>}
+            {chg && <span style={{ fontSize: 9, marginLeft: 4, color: d > 0 ? successColor : dangerColor }}>{d > 0 ? "▲" : "▼"} {Math.abs(Math.round(d))}B</span>}
           </span>
         </div>
         {hasChildren && opts.expanded && (
@@ -135,11 +144,11 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
 
   return <>
     {/* Approval Hero */}
-    <div style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "12px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div style={{ ...panelStyle, borderRadius: "var(--border-radius-md)", padding: "12px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
       <div>
         <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--color-text-secondary)", marginBottom: 4 }}>Approval Rating</div>
         <div style={{ fontSize: 36, fontWeight: 700, lineHeight: 1, color: approvalColor }}>{Math.round(stats.approvalRating)}%</div>
-        <div style={{ fontSize: 9, marginTop: 4, color: Math.abs(appDelta) < 0.05 ? "var(--color-text-secondary)" : appDelta > 0 ? "#1D9E75" : "#E24B4A" }}>
+        <div style={{ fontSize: 9, marginTop: 4, color: Math.abs(appDelta) < 0.05 ? "var(--color-text-secondary)" : appDelta > 0 ? successColor : dangerColor }}>
           {Math.abs(appDelta) < 0.05 ? "No change" : (appDelta > 0 ? "▲ +" : "▼ ") + appDelta.toFixed(1) + " pts this week"}
         </div>
       </div>
@@ -158,9 +167,9 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
               <button key={v.id} onClick={() => setMapView(v.id)} style={{
                 padding: "3px 10px", fontSize: 10, borderRadius: "var(--border-radius-md)", cursor: "pointer",
                 fontWeight: mapView === v.id ? 600 : 400,
-                background: mapView === v.id ? "var(--color-background-primary)" : "transparent",
+                background: mapView === v.id ? "var(--color-background-tertiary)" : "transparent",
                 color: mapView === v.id ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-                border: mapView === v.id ? "0.5px solid var(--color-border-secondary)" : "0.5px solid transparent",
+                border: mapView === v.id ? "1px solid var(--color-border-secondary)" : "1px solid transparent",
               }}>{v.label}</button>
             ))}
           </div>
@@ -190,7 +199,7 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 10 }}>
                   <div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: "var(--color-text-primary)" }}>${Math.round(gpc).toLocaleString()}</div>
-                    {chg && <div style={{ fontSize: 10, marginTop: 4, color: d > 0 ? "#1D9E75" : "#E24B4A" }}>{d > 0 ? "+" : ""}{Math.round(d).toLocaleString()} this week</div>}
+                    {chg && <div style={{ fontSize: 10, marginTop: 4, color: d > 0 ? successColor : dangerColor }}>{d > 0 ? "+" : ""}{Math.round(d).toLocaleString()} this week</div>}
                   </div>
                   <div style={{ fontSize: 10, color: "var(--color-text-secondary)", textAlign: "right" }}>
                     <div>Nominal GDP scaled by population</div>
@@ -211,7 +220,7 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
               <div>
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 2 }}>Total Population</div>
                 <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: "var(--color-text-primary)" }}>{stats.population.toLocaleString()}</div>
-                {chg && <div style={{ fontSize: 9, marginTop: 3, color: "#1D9E75" }}>▲ +{popDelta.toLocaleString()} this period</div>}
+                {chg && <div style={{ fontSize: 9, marginTop: 3, color: successColor }}>▲ +{popDelta.toLocaleString()} this period</div>}
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>({(stats.population / 1e6).toFixed(2)}M)</div>
@@ -232,7 +241,7 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
             <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 8 }}>U.S. power generation by source</div>
             <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
               <div style={{ width: 124, height: 124, borderRadius: "50%", background: powerMixGradient, position: "relative", flex: "0 0 auto" }}>
-                <div style={{ position: "absolute", inset: 22, borderRadius: "50%", background: "var(--color-background-secondary)", border: "0.5px solid var(--color-border-secondary)", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 8 }}>
+                <div style={{ position: "absolute", inset: 22, borderRadius: "50%", background: "var(--color-background-primary)", border: "1px solid var(--color-border-secondary)", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 8, boxShadow: "var(--shadow-sm)" }}>
                   <div>
                     <div style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)" }}>Clean power</div>
                     <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.1, color: "var(--color-text-primary)" }}>{Math.round(stats.powerHydroShare + stats.powerSolarShare + stats.powerWindShare)}%</div>
@@ -251,7 +260,7 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
                       <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)" }}>
                         {value.toFixed(1)}%
                         {Math.abs(delta) > 0.01 && (
-                          <span style={{ fontSize: 9, marginLeft: 4, color: delta > 0 ? "#1D9E75" : "#E24B4A" }}>
+                          <span style={{ fontSize: 9, marginLeft: 4, color: delta > 0 ? successColor : dangerColor }}>
                             {delta > 0 ? "+" : ""}{delta.toFixed(2)}
                           </span>
                         )}
@@ -278,7 +287,7 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
               <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)" }}>Federal Reserve Chair</div>
               <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>{macroState.fedChairName}</div>
               <div style={{ marginTop: 5 }}>
-                <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 600, border: "0.5px solid var(--color-border-secondary)", background: "var(--color-background-primary)", color: "var(--color-text-secondary)", textTransform: "capitalize" }}>
+                <span style={{ ...insetPanelStyle, display: "inline-block", padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "capitalize" }}>
                   {macroState.governorPersonality.toLowerCase()}
                 </span>
               </div>
@@ -305,7 +314,7 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
             <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 1 }}>Annual deficit</div>
             <div style={{ fontSize: 18, fontWeight: 600, color: defColor }}>{SM.nationalDeficit.f(stats.nationalDeficit)}</div>
             {Math.abs((stats.nationalDeficit || 0) - (prev.nationalDeficit || 0)) > 1 && (
-              <div style={{ fontSize: 10, marginTop: 4, color: stats.nationalDeficit < prev.nationalDeficit ? "#1D9E75" : "#E24B4A" }}>
+              <div style={{ fontSize: 10, marginTop: 4, color: stats.nationalDeficit < prev.nationalDeficit ? successColor : dangerColor }}>
                 {stats.nationalDeficit < prev.nationalDeficit ? "↓" : "↑"} {Math.abs(Math.round(stats.nationalDeficit - prev.nationalDeficit))}B
               </div>
             )}
@@ -330,7 +339,7 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
                   <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{label}</span>
                   <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)" }}>
                     {val.toFixed(val % 1 === 0 ? 0 : 2)}%
-                    {chg && <span style={{ fontSize: 9, marginLeft: 4, color: d > 0 ? "#E24B4A" : "#1D9E75" }}>{d > 0 ? "▲" : "▼"}</span>}
+                    {chg && <span style={{ fontSize: 9, marginLeft: 4, color: d > 0 ? dangerColor : successColor }}>{d > 0 ? "▲" : "▼"}</span>}
                   </span>
                 </div>
               );

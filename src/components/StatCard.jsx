@@ -10,7 +10,7 @@ export default function StatCard({ statKey, value, history, prevValue }) {
   const bad = (m.g === "up" && dn) || (m.g === "down" && up);
 
   return (
-    <div style={{ background: "rgba(255,255,255,0.55)", borderRadius: "12px", padding: "10px 12px", minWidth: 0, border: "0.5px solid var(--color-border-secondary)" }}>
+    <div style={{ background: "var(--color-background-tertiary)", borderRadius: "12px", padding: "10px 12px", minWidth: 0, border: "1px solid var(--color-border-tertiary)", boxShadow: "var(--shadow-sm)" }}>
       <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 4, lineHeight: 1.3 }}>{m.l}</div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div style={{ minWidth: 0, flex: "1 1 auto" }}>
