@@ -5,6 +5,7 @@ import {
   isDisasterCheckWeek,
   rollEligibleSpecialEvents,
 } from "../data/events.js";
+import { VISIT_REPEAT_WINDOW_TURNS } from "../data/visits.js";
 import { clamp, clampUni } from "../utils/clamp.js";
 import { cloneFactions, adjustFaction, pushFactionHistory } from "./factionMutations.js";
 import { cloneCountries } from "./countryMutations.js";
@@ -124,7 +125,9 @@ function cloneSnapshot(snapshot) {
     countryStatusSnapshot: { ...snapshot.countryStatusSnapshot },
     diplomacyThresholds: { ...snapshot.diplomacyThresholds },
     pendingChainEvents: [...(snapshot.pendingChainEvents || [])],
-    visitTypeCounts: {},
+    visitTypeCounts: Object.fromEntries(
+      Object.entries(snapshot.visitTypeCounts || {}).map(([visitId, visitWeeks]) => [visitId, [...normalizeVisitWeeks(visitWeeks)]])
+    ),
     billRecord: [...(snapshot.billRecord || [])],
     appliedAmendments: { ...snapshot.appliedAmendments },
     factionHist: { ...snapshot.factionHist },
@@ -164,6 +167,19 @@ function createContext(snapshot, deps) {
   };
 }
 
+function normalizeVisitWeeks(visitValue) {
+  if (Array.isArray(visitValue)) return visitValue;
+  return Array.from({ length: visitValue || 0 }, () => 0);
+}
+
+function pruneVisitTypeCounts(visitTypeCounts, currentWeek) {
+  return Object.fromEntries(
+    Object.entries(visitTypeCounts || {})
+      .map(([visitId, visitWeeks]) => [visitId, normalizeVisitWeeks(visitWeeks).filter(usedWeek => currentWeek - usedWeek < VISIT_REPEAT_WINDOW_TURNS)])
+      .filter(([, visitWeeks]) => visitWeeks.length > 0)
+  );
+}
+
 function pushLog(context, text) {
   context.sideEffects.logs.push({ week: context.state.week, text });
 }
@@ -180,6 +196,8 @@ export function advanceEconomyPhase(context) {
   const { state, deps, runtime } = context;
   const nextWeek = runtime.nextWeek;
   const weekOfYearPre = ((nextWeek - 1) % 52) + 1;
+
+  state.visitTypeCounts = pruneVisitTypeCounts(state.visitTypeCounts, nextWeek);
 
   if (weekOfYearPre === 1 && state.pendingCongressUpdate) {
     runtime.inauguratedFactions = state.pendingCongressUpdate.newFactions;

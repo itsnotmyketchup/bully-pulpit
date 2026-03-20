@@ -147,7 +147,7 @@ export const PROGRESSIVE_HECKLER_EVENT = {
   lane: "immediate",
   priority: 3,
   unique: true,
-  name: "You Are Heckled at a University Speech",
+  name: "President Heckled at a University Speech",
   desc: "As you begin speaking on campus, a progressive student loudly denounces your administration and disrupts the event. The confrontation is captured on video and spreads immediately online.",
   choices: [
     {
@@ -161,6 +161,30 @@ export const PROGRESSIVE_HECKLER_EVENT = {
       effects: { approvalRating: 1 },
       factionEffects: { prog: 0.2, mod_dem: 0.1, freedom: 0.1, trad_con: -0.1 },
       result: "The room settles. Even critics admit the response was measured.",
+    },
+  ],
+};
+
+export const WORSHIP_SERVICE_DENUNCIATION_EVENT = {
+  id: "worship_service_denunciation",
+  category: "immediate",
+  lane: "immediate",
+  priority: 3,
+  unique: true,
+  name: "Policies Denounced at Community Worship Service",
+  desc: "After passage of the National Abortion Rights Act, a local pastor uses part of the sermon to denounce your abortion policies while you sit in the pews. Congregants turn to watch your reaction, and the moment quickly becomes the story of the visit.",
+  choices: [
+    {
+      text: "Stay quiet about the incident",
+      effects: { approvalRating: -1 },
+      factionEffects: { trad_con: -0.3, blue_dog: -0.2, prog: 0.1, mod_dem: 0.05 },
+      result: "You avoid a scene, but critics say you looked rattled and unwelcome in the room.",
+    },
+    {
+      text: "Defend yourself when it's your turn to speak",
+      effects: { approvalRating: 0 },
+      factionEffects: { trad_con: -0.2, blue_dog: -0.1, prog: -0.05, freedom: 0.05 },
+      result: "You answer directly from the pulpit. Supporters call it firm, while opponents say it deepened the clash.",
     },
   ],
 };
@@ -222,6 +246,18 @@ export function shouldTriggerProgressiveHeckling(
   if (!isSolidBlueState(stateAbbr)) return false;
   const chance = getProgressiveHecklingChance(progressiveRelationship);
   return chance > 0 && rng() < chance;
+}
+
+export function shouldTriggerWorshipServiceDenunciation(
+  visitTypeId,
+  hasPassedAbortionRights,
+  usedEvents = new Set(),
+  rng = Math.random
+) {
+  if (visitTypeId !== "church") return false;
+  if (!hasPassedAbortionRights) return false;
+  if (usedEvents.has(WORSHIP_SERVICE_DENUNCIATION_EVENT.id)) return false;
+  return rng() < 0.2;
 }
 
 export function annualChanceToPerCheckChance(annualChance, effectiveChecksPerYear) {

@@ -1,3 +1,5 @@
+export const VISIT_REPEAT_WINDOW_TURNS = 4;
+
 export const VISIT_TYPES = [
   {
     id:"factory",name:"Tour manufacturing plant",icon:"Factory",effects:{industry:0.04},demo:"blue-collar",

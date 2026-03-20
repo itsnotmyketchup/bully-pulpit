@@ -8,14 +8,28 @@ import {
   buildExecutiveOrderOutcome,
   getVisibleExecutiveOrders,
 } from "../../data/executiveOrders.js";
-import { VISIT_TYPES } from "../../data/visits.js";
+import { VISIT_REPEAT_WINDOW_TURNS, VISIT_TYPES } from "../../data/visits.js";
 import { SPEECH_TOPICS } from "../../data/speeches.js";
 import { STATE_DATA } from "../../data/states.js";
 import { OPPOSITION_FACTIONS } from "../../data/constants.js";
 import { buildEffectPreview } from "../../utils/effectDisplay.js";
+import SectionHeader from "../SectionHeader.jsx";
 import VisitMap from "../VisitMap.jsx";
 
 const controvColor = c => c === 0 ? "#2563eb" : c === 1 ? "#EF9F27" : c === 2 ? "#E27D27" : "#E24B4A";
+const panelStyle = {
+  background: "var(--color-background-secondary)",
+  border: "0.5px solid var(--color-border-secondary)",
+  borderRadius: "var(--border-radius-lg)",
+  overflow: "hidden",
+};
+
+const sectionLabelStyle = {
+  fontSize: 9,
+  textTransform: "uppercase",
+  letterSpacing: "0.1em",
+  color: "var(--color-text-secondary)",
+};
 
 export default function ActionsTab({
   act,
@@ -82,13 +96,13 @@ export default function ActionsTab({
 
   return <>
     {/* Sub-tab bar */}
-    <div style={{ display: "flex", gap: 2, marginBottom: 14, borderBottom: "1px solid var(--color-border-tertiary)", paddingBottom: 8 }}>
+    <div style={{ display: "flex", gap: 2, marginBottom: 14, background: "var(--color-background-tertiary)", borderRadius: "var(--border-radius-md)", padding: 2, width: "fit-content", flexWrap: "wrap" }}>
       {[["orders", "Executive Orders"], ["visits", "State Visits"], ["speeches", "Speeches"]].map(([st, label]) => (
         <button key={st} onClick={() => setActionsSubTab(st)} style={{
-          padding: "5px 12px", fontSize: 11, fontWeight: actionsSubTab === st ? 600 : 400,
+          padding: "4px 11px", fontSize: 9, fontWeight: actionsSubTab === st ? 600 : 400,
           background: actionsSubTab === st ? "var(--color-background-secondary)" : "transparent",
           color: actionsSubTab === st ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-          border: actionsSubTab === st ? "0.5px solid var(--color-border-secondary)" : "0.5px solid transparent",
+          border: "none",
           borderRadius: "var(--border-radius-md)", cursor: "pointer",
         }}>{label}</button>
       ))}
@@ -101,29 +115,35 @@ export default function ActionsTab({
         const orLevel = or > 60 ? "High" : or > 30 ? "Medium" : "Low";
         const orColor = or > 60 ? "#E24B4A" : or > 30 ? "#EF9F27" : "#1D9E75";
         return (
-          <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: "var(--border-radius-lg)", background: "var(--color-background-secondary)", border: `0.5px solid ${orColor}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-primary)" }}>Executive Overreach</span>
-                <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: `${orColor}22`, color: orColor, fontWeight: 600 }}>{orLevel}</span>
+          <div style={{ ...panelStyle, marginBottom: 12, borderColor: orColor }}>
+            <div style={{ padding: "12px 14px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <div>
+                  <div style={sectionLabelStyle}>Executive Authority</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>Executive Overreach</span>
+                    <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: `${orColor}22`, color: orColor, fontWeight: 600 }}>{orLevel}</span>
+                  </div>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: orColor }}>{or}</span>
               </div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: orColor }}>{or}</span>
-            </div>
-            <div style={{ height: 5, borderRadius: 3, background: "var(--color-background-tertiary)", overflow: "hidden", marginBottom: 5 }}>
-              <div style={{ height: "100%", width: `${or}%`, background: orColor, borderRadius: 3, transition: "width 0.3s" }} />
-            </div>
-            <div style={{ fontSize: 9, color: "var(--color-text-secondary)", lineHeight: 1.45 }}>
-              How much Congress perceives you as governing through executive power rather than legislation.
-              Increases when you sign EOs or walk away from negotiations; decreases when bills pass or you negotiate.{" "}
-              {or > 60
-                ? "HIGH: Faction relationships are actively deteriorating each period."
-                : or > 30
-                  ? "MEDIUM: Faction relationships decline slightly each period."
-                  : "LOW: No passive faction penalties."}
+              <div style={{ height: 5, borderRadius: 3, background: "var(--color-background-tertiary)", overflow: "hidden", marginBottom: 5 }}>
+                <div style={{ height: "100%", width: `${or}%`, background: orColor, borderRadius: 3, transition: "width 0.3s" }} />
+              </div>
+              <div style={{ fontSize: 9, color: "var(--color-text-secondary)", lineHeight: 1.45 }}>
+                How much Congress perceives you as governing through executive power rather than legislation.
+                Increases when you sign EOs or walk away from negotiations; decreases when bills pass or you negotiate.{" "}
+                {or > 60
+                  ? "HIGH: Faction relationships are actively deteriorating each period."
+                  : or > 30
+                    ? "MEDIUM: Faction relationships decline slightly each period."
+                    : "LOW: No passive faction penalties."}
+              </div>
             </div>
           </div>
         );
       })()}
+      <SectionHeader label="Available Orders" />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 6, marginBottom: 12 }}>
         {visibleExecutiveOrders.map(e => {
           const isSelected = selectedEO === e.id;
@@ -139,8 +159,8 @@ export default function ActionsTab({
           return (
             <button key={e.id} onClick={() => setSelectedEO(isSelected ? null : e.id)} disabled={exhausted || cooldownRemaining > 0} style={{
               textAlign: "left", padding: "9px 11px", borderRadius: "var(--border-radius-lg)",
-              border: isSelected ? "1px solid var(--color-border-secondary)" : "0.5px solid var(--color-border-tertiary)",
-              background: isSelected ? "var(--color-background-secondary)" : exhausted ? "var(--color-background-tertiary)" : "var(--color-background-primary)",
+              border: isSelected ? "1px solid var(--color-border-secondary)" : "0.5px solid var(--color-border-secondary)",
+              background: isSelected ? "linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0))" : exhausted ? "var(--color-background-tertiary)" : "var(--color-background-secondary)",
               cursor: exhausted || cooldownRemaining > 0 ? "not-allowed" : "pointer", opacity: exhausted || cooldownRemaining > 0 ? 0.6 : 1,
             }}>
               <div style={{ fontSize: 10, fontWeight: 600, color: "var(--color-text-primary)", lineHeight: 1.3, marginBottom: 3 }}>{e.name}</div>
@@ -162,9 +182,11 @@ export default function ActionsTab({
       </div>
 
       {eo && (
-        <div style={{ padding: "12px 14px", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-lg)", marginBottom: 12, border: "0.5px solid var(--color-border-tertiary)" }}>
+        <div style={{ ...panelStyle, marginBottom: 12 }}>
+          <div style={{ padding: "12px 14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
             <div>
+              <div style={{ ...sectionLabelStyle, marginBottom: 3 }}>Selected Order</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{eo.name}</div>
               <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginTop: 1 }}>{eo.category} · Controversy {eo.controversy === 0 ? "None" : ["Low", "Moderate", "High"][eo.controversy - 1]}</div>
             </div>
@@ -319,12 +341,13 @@ export default function ActionsTab({
                   ? "Select at least one region"
                   : "Sign Executive Order (2 actions)"}
           </button>
+          </div>
         </div>
       )}
 
       {activeOrders.filter(o => o.active).length > 0 && (
         <div style={{ marginTop: 4 }}>
-          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 6 }}>Active Orders</div>
+          <SectionHeader label="Active Orders" />
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {activeOrders.filter(o => o.active).map((o, i) => {
               const eoData = EXECUTIVE_ORDERS.find(e => e.id === o.id);
@@ -340,8 +363,10 @@ export default function ActionsTab({
                         .join(", ")
                     : "";
               return (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", borderRadius: "var(--border-radius-md)", background: "var(--color-background-secondary)", border: "0.5px solid var(--color-border-tertiary)" }}>
+                <div key={i} style={panelStyle}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 11px", gap: 8, flexWrap: "wrap" }}>
                   <div>
+                    <div style={{ ...sectionLabelStyle, marginBottom: 2 }}>In Force</div>
                     <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)" }}>{o.name}</div>
                     <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>Signed Wk {o.issuedWeek}{detail ? ` · ${detail}` : ""}</div>
                   </div>
@@ -363,6 +388,7 @@ export default function ActionsTab({
                       {rescindCooldownRemaining > 0 ? `${rescindCooldownRemaining}w` : "Rescind"}
                     </button>
                   )}
+                  </div>
                 </div>
               );
             })}
@@ -375,24 +401,24 @@ export default function ActionsTab({
     {actionsSubTab === "visits" && <>
 
       {/* Quick action */}
-      <div style={{ marginBottom: 7 }}>
+      <div style={{ marginBottom: 8 }}>
         <button onClick={() => {
           const s = STATE_DATA[Math.floor(Math.random() * STATE_DATA.length)];
           setVisitType("rally"); setVisitState(s.abbr);
         }} style={{
-          padding: "4px 11px", fontSize: 10, fontWeight: 500,
+          padding: "4px 10px", fontSize: 9, fontWeight: 500,
           background: "transparent", color: "var(--color-text-secondary)",
-          border: "0.5px solid var(--color-border-tertiary)",
+          border: "0.5px solid var(--color-border-secondary)",
           borderRadius: "var(--border-radius-md)", cursor: "pointer",
-        }}>⚡ Rally in a random state</button>
+        }}>Random rally</button>
       </div>
 
       {/* Top: action bar */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
-        padding: "9px 12px", marginBottom: 10, borderRadius: "var(--border-radius-lg)",
-        background: "var(--color-background-secondary)", border: "0.5px solid var(--color-border-tertiary)",
-      }}>
+      <div style={{ ...panelStyle, marginBottom: 10 }}>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+          padding: "11px 13px", flexWrap: "wrap",
+        }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           {visitType && visitState ? (() => {
             const vt = VISIT_TYPES.find(v => v.id === visitType);
@@ -440,13 +466,15 @@ export default function ActionsTab({
           border: "none", borderRadius: "var(--border-radius-md)",
           cursor: visitType && visitState && act < maxActions ? "pointer" : "not-allowed",
         }}>Go visit</button>
+        </div>
       </div>
 
+      <SectionHeader label="Visit Planning" />
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
 
         {/* Left: visit type grid */}
         <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-          <div style={{ fontSize: 10, fontWeight: 500, color: "var(--color-text-secondary)", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Visit type</div>
+          <div style={{ ...sectionLabelStyle, marginBottom: 5 }}>Visit Type</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
             {VISIT_TYPES.map(v => {
               const isSelected = visitType === v.id;
@@ -472,14 +500,18 @@ export default function ActionsTab({
                   }
                 }} style={{
                   textAlign: "left", padding: "7px 9px", borderRadius: "var(--border-radius-lg)",
-                  border: isSelected ? "2px solid var(--color-border-info)" : "0.5px solid var(--color-border-tertiary)",
-                  background: isSelected ? "var(--color-background-secondary)" : "var(--color-background-primary)",
+                  border: isSelected ? "1px solid var(--color-border-secondary)" : "0.5px solid var(--color-border-secondary)",
+                  background: isSelected ? "linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0))" : "var(--color-background-secondary)",
                   cursor: "pointer",
                 }}>
                   <div style={{ fontSize: 10, fontWeight: isSelected ? 600 : 500, color: "var(--color-text-primary)", lineHeight: 1.3 }}>{v.name}</div>
                   {restriction && <div style={{ fontSize: 8, color: "#EF9F27", marginTop: 2 }}>{restriction}</div>}
                   {(() => {
-                    const uc = visitTypeCounts?.[v.id] || 0;
+                    const rawVisitHistory = visitTypeCounts?.[v.id];
+                    const visitHistory = Array.isArray(rawVisitHistory)
+                      ? rawVisitHistory
+                      : Array.from({ length: rawVisitHistory || 0 }, () => week - 1);
+                    const uc = visitHistory.filter(usedWeek => week - usedWeek < VISIT_REPEAT_WINDOW_TURNS).length;
                     if (uc === 0) return null;
                     const nextPct = Math.round(100 / (uc + 1));
                     return <div style={{ fontSize: 8, color: "#EF9F27", marginTop: 2 }}>{nextPct}% eff next use</div>;
@@ -500,16 +532,16 @@ export default function ActionsTab({
 
     {/* ── Speeches ── */}
     {actionsSubTab === "speeches" && <>
-      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 6 }}>Speeches and positions</div>
+      <SectionHeader label="Speeches and Positions" />
       <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>Choose a topic, then pick your stance. Preview effects before committing.</div>
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
         {SPEECH_TOPICS.map(t => (
           <button key={t.id} onClick={() => { setSpeechTopic(t.id); setSpeechPreview(null); }} style={{
-            padding: "5px 10px", fontSize: 11,
+            padding: "4px 10px", fontSize: 9,
             fontWeight: speechTopic === t.id ? 500 : 400,
             background: speechTopic === t.id ? "var(--color-background-secondary)" : "transparent",
             color: speechTopic === t.id ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-            border: speechTopic === t.id ? "0.5px solid var(--color-border-secondary)" : "0.5px solid var(--color-border-tertiary)",
+            border: "0.5px solid var(--color-border-secondary)",
             borderRadius: "var(--border-radius-md)", cursor: "pointer",
           }}>{t.name}</button>
         ))}
@@ -525,8 +557,8 @@ export default function ActionsTab({
               return (
                 <button key={i} onClick={() => setSpeechPreview(i)} style={{
                   padding: "8px 10px", borderRadius: "var(--border-radius-lg)",
-                  border: isPreview ? "2px solid var(--color-border-info)" : "0.5px solid var(--color-border-tertiary)",
-                  background: "var(--color-background-primary)", cursor: "pointer", textAlign: "left",
+                  border: isPreview ? "1px solid var(--color-border-secondary)" : "0.5px solid var(--color-border-secondary)",
+                  background: isPreview ? "linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0))" : "var(--color-background-secondary)", cursor: "pointer", textAlign: "left",
                 }}>
                   <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 2 }}>{pos.label}</div>
                   <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>{pos.intensity.replace("-", " ")}</div>
@@ -537,7 +569,8 @@ export default function ActionsTab({
           {speechPreview !== null && (() => {
             const pos = topic.positions[speechPreview];
             return (
-              <div style={{ padding: "10px 12px", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-lg)", marginBottom: 8 }}>
+              <div style={{ ...panelStyle, marginBottom: 8 }}>
+                <div style={{ padding: "10px 12px" }}>
                 <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 6 }}>Preview: "{pos.label}"</div>
                 <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 4 }}>
                   Approval impact: <span style={{ fontWeight: 500, color: pos.approvalSwing > 0 ? "#1D9E75" : pos.approvalSwing < 0 ? "#E24B4A" : "var(--color-text-secondary)" }}>
@@ -566,6 +599,7 @@ export default function ActionsTab({
                   color: act >= maxActions ? "var(--color-text-secondary)" : "var(--color-background-primary)",
                   border: "none", borderRadius: "var(--border-radius-md)", cursor: act >= maxActions ? "not-allowed" : "pointer",
                 }}>Deliver this speech (1 action)</button>
+                </div>
               </div>
             );
           })()}

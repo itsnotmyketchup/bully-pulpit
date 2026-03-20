@@ -97,7 +97,7 @@
  *   overreachLowSinceWeek: number,
  *   pendingChainEvents: Array<object>,
  *   lastSpecialEventWeek: number,
- *   visitTypeCounts: Record<string, number>,
+ *   visitTypeCounts: Record<string, number[]>,
  *   billLikelihood: number | null,
  *   billFactionVotes: Array<object> | null,
  *   billRecord: Array<object>,

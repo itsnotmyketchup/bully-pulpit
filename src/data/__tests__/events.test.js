@@ -4,12 +4,14 @@ import {
   CHINA_SANCTIONS_RETALIATION_EVENT,
   NUCLEAR_SMR_OPENING_EVENT,
   PROGRESSIVE_HECKLER_EVENT,
+  WORSHIP_SERVICE_DENUNCIATION_EVENT,
   annualChanceToPerCheckChance,
   generateDynamicEvents,
   getProgressiveHecklingChance,
   isDisasterCheckWeek,
   rollEligibleSpecialEvents,
   shouldTriggerProgressiveHeckling,
+  shouldTriggerWorshipServiceDenunciation,
 } from "../events.js";
 import { INITIAL_STATS } from "../stats.js";
 
@@ -278,5 +280,13 @@ describe("special event rarity helpers", () => {
     expect(shouldTriggerProgressiveHeckling("university", "CA", 25, new Set([PROGRESSIVE_HECKLER_EVENT.id]), () => 0.01)).toBe(false);
     expect(shouldTriggerProgressiveHeckling("university", "TX", 5, new Set(), () => 0.01)).toBe(false);
     expect(shouldTriggerProgressiveHeckling("factory", "CA", 5, new Set(), () => 0.01)).toBe(false);
+  });
+
+  it("only triggers the worship-service denunciation after abortion rights passes", () => {
+    expect(WORSHIP_SERVICE_DENUNCIATION_EVENT.unique).toBe(true);
+    expect(shouldTriggerWorshipServiceDenunciation("church", true, new Set(), () => 0.19)).toBe(true);
+    expect(shouldTriggerWorshipServiceDenunciation("church", true, new Set([WORSHIP_SERVICE_DENUNCIATION_EVENT.id]), () => 0.01)).toBe(false);
+    expect(shouldTriggerWorshipServiceDenunciation("church", false, new Set(), () => 0.01)).toBe(false);
+    expect(shouldTriggerWorshipServiceDenunciation("university", true, new Set(), () => 0.01)).toBe(false);
   });
 });

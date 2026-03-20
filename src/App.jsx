@@ -4,7 +4,7 @@ import { PARTIES, FACTION_DATA } from "./data/factions.js";
 import { STATE_DATA } from "./data/states.js";
 import { COUNTRIES_INIT } from "./data/countries.js";
 import { INITIAL_STATS } from "./data/stats.js";
-import { VISIT_TYPES } from "./data/visits.js";
+import { VISIT_REPEAT_WINDOW_TURNS, VISIT_TYPES } from "./data/visits.js";
 import { SPEECH_TOPICS } from "./data/speeches.js";
 import { POLICY_ACTIONS, BILL_LOCKS, BILL_AMENDMENTS } from "./data/policies.js";
 import {
@@ -12,6 +12,8 @@ import {
   PROGRESSIVE_HECKLER_EVENT,
   getSeasonLabel,
   shouldTriggerProgressiveHeckling,
+  shouldTriggerWorshipServiceDenunciation,
+  WORSHIP_SERVICE_DENUNCIATION_EVENT,
 } from "./data/events.js";
 import {
   EXECUTIVE_ORDERS,
@@ -199,7 +201,7 @@ export default function Game() {
   const [hovFaction, setHovFaction] = useState(null);
   const [visitState, setVisitState] = useState("");
   const [visitType, setVisitType] = useState("");
-  const [visitTypeCounts, setVisitTypeCounts] = useState({}); // { [visitId]: useCount } — resets each 4-week advance
+  const [visitTypeCounts, setVisitTypeCounts] = useState({}); // { [visitId]: number[] } of recent visit weeks within repeat window
   const [speechTopic, setSpeechTopic] = useState(null);
   const [speechPreview, setSpeechPreview] = useState(null);
   const [billRecord, setBillRecord] = useState([]);
@@ -1239,7 +1241,12 @@ export default function Game() {
     const vt = VISIT_TYPES.find(v => v.id === visitType);
     const st = STATE_DATA.find(s => s.abbr === visitState);
     if (!vt || !st) return;
-    const count = visitTypeCounts[visitType] || 0;
+    const rawVisitHistory = visitTypeCounts[visitType];
+    const visitHistory = Array.isArray(rawVisitHistory)
+      ? rawVisitHistory
+      : Array.from({ length: rawVisitHistory || 0 }, () => week - 1);
+    const recentVisitWeeks = visitHistory.filter(usedWeek => week - usedWeek < VISIT_REPEAT_WINDOW_TURNS);
+    const count = recentVisitWeeks.length;
     const mult = 1 / (count + 1); // 1st use=full, 2nd=½, 3rd=⅓, etc.
     const ns = { ...stats };
     const b = { ...stBon };
@@ -1293,12 +1300,18 @@ export default function Game() {
     setStBon(b);
     setStats(syncDerivedStats(ns, macroState));
     setAct(n => n + 1);
-    setVisitTypeCounts(prev => ({ ...prev, [visitType]: (prev[visitType] || 0) + 1 }));
+    setVisitTypeCounts(prev => ({
+      ...prev,
+      [visitType]: [...recentVisitWeeks, week],
+    }));
     if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
     addLog(`Visited ${st.name}: ${vt.name}${count > 0 ? ` (${Math.round(mult * 100)}% effectiveness)` : ""}`);
     if (shouldTriggerProgressiveHeckling(visitType, visitState, visitNF.prog?.relationship ?? 50, usedEv, Math.random)) {
       setUsedEv(prev => new Set([...prev, PROGRESSIVE_HECKLER_EVENT.id]));
       setCurEv(PROGRESSIVE_HECKLER_EVENT);
+    } else if (shouldTriggerWorshipServiceDenunciation(visitType, !!passedLegislation.abortion_rights, usedEv, Math.random)) {
+      setUsedEv(prev => new Set([...prev, WORSHIP_SERVICE_DENUNCIATION_EVENT.id]));
+      setCurEv(WORSHIP_SERVICE_DENUNCIATION_EVENT);
     }
     setVisitState("");
     setVisitType("");
