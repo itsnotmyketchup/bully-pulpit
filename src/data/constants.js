@@ -1,4 +1,4 @@
-export const TABS = ["overview", "congress", "party", "cabinet", "policy", "actions", "diplomacy", "log"];
+export const TABS = ["overview", "congress", "party", "cabinet", "policy", "actions", "diplomacy", "judiciary", "log"];
 
 export const ALLIED_FACTIONS     = { DEM: ["prog","mod_dem","blue_dog"], REP: ["freedom","mod_rep","trad_con"] };
 export const OPPOSITION_FACTIONS = { DEM: ["freedom","mod_rep","trad_con"], REP: ["prog","mod_dem","blue_dog"] };

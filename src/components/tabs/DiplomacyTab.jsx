@@ -256,7 +256,6 @@ export default function DiplomacyTab({ countries, visitedCountries, act, maxActi
 
     {/* Right: Country list */}
     <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-    <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>Foreign relations</div>
     {["Europe", "Americas", "Asia-Pacific", "Middle East", "Africa"].map(region => {
       const rc = countries.filter(c => c.region === region);
       if (rc.length === 0) return null;

@@ -23,6 +23,26 @@ const POLITICAL_NAME_BANK = [
   "Xavier Ramsey", "Alicia Dunn", "Dominic Bauer", "Paige Thornton", "Rafael Cortez",
   "Mallory Beck", "Curtis Hammond", "Leslie Vaughn", "Gavin Rhodes", "Tara Holloway",
   "Phoebe Lawson", "Micah Sullivan", "Allison Drake", "Peter Choi", "Marlon West",
+  "Steven Caldwell", "Angela Whitaker", "Douglas Hensley", "Cynthia Barrett", "Bruce Ellison",
+  "Denise Cartwright", "Ronald Mercer", "Pamela Sutton", "Gregory Harlan", "Deborah Pike",
+  "Scott Langley", "Brenda Whitfield", "Eric Sanderson", "Theresa Colby", "Kevin Halstead",
+  "Laura McKinney", "Patrick Donnelly", "Shannon Reeves", "Timothy Grayson", "Melissa Corbett",
+  "Jason Whitman", "Kristin Farley", "Adam Lockwood", "Tracy Hollowell", "Benjamin Kline",
+  "Erin Callahan", "Zachary Prescott", "Lori Hanley", "Nathaniel Burke", "Heidi Dunlap",
+  "Christian Talbot", "Monique Harlan", "Derek Garrison", "Valerie Stokes", "Kyle Rutledge",
+  "Courtney Ellsworth", "Sean Whitaker", "April Costigan", "Philip Redmond", "Tiffany Slade",
+  "Joel Beckett", "Vanessa Corwin", "Evan Talley", "Kara Winslow", "Colin Prescott",
+  "Meghan Farrow", "Jared Keaton", "Alyssa Norwood", "Spencer Hadley", "Kelsey Denton",
+  "Blake Treadwell", "Rachael Kimball", "Grant Holloway", "Paula Winslow", "Tristan Keefe",
+  "Danielle Mercer", "Lucas Pendleton", "Whitney Crane", "Corey Halbrook", "Miranda Sloane",
+  "Brent Calloway", "Holly Stratton", "Logan Pierce", "Stacey Whitmore", "Trevor Ellison",
+  "Jillian Rhodes", "Cody Bennett", "Megan Draper", "Austin Caldwell", "Bethany Osborne",
+  "Chad Hollowell", "Krista Monroe", "Dylan Whitfield", "Amber Quinn", "Garrett Sloane",
+  "Leah Cartwright", "Tyler Maddox", "Kaitlyn Reeves", "Preston Langford", "Brooke Tanner",
+  "Colby Merritt", "Jocelyn Pike", "Shawn Rutledge", "Cassidy Farley", "Dustin Gable",
+  "Marissa Colbert", "Trevor Hensley", "Natalia Boone", "Wade Kauffman", "Lindsey Barrett",
+  "Mitchell Grayson", "Alison Drakeford", "Ross Callahan", "Elise Norwood", "Brett Sanderson",
+  "Samantha Keaton", "Calvin Whitaker", "Hannah Prescott", "Dominic Harlan", "Paula Whitman"
 ];
 
 function randomItem(items) {

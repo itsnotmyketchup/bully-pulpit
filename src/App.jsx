@@ -44,6 +44,13 @@ import {
 } from "./logic/macroEconomy.js";
 import { generateSecStateCandidates } from "./logic/cabinetAppointments.js";
 import { APPOINTMENT_STAGES, evaluateAppointment } from "./logic/appointmentProgression.js";
+import {
+  generateInitialJustices,
+  ageJustices,
+  checkJusticeVacancy,
+  generateScotusJusticeCandidates,
+  buildScotusAppointmentProcess,
+} from "./logic/scotusAppointments.js";
 import { settleSecStatePromises } from "./logic/promiseResolution.js";
 import { runWeeklySimulation } from "./logic/weeklySimulation.js";
 import { computeBudgetReactions } from "./systems/budgetCalc.js";
@@ -61,6 +68,7 @@ import OverviewTab from "./components/tabs/OverviewTab.jsx";
 import CongressTab from "./components/tabs/CongressTab.jsx";
 import PartyTab from "./components/tabs/PartyTab.jsx";
 import CabinetTab from "./components/tabs/CabinetTab.jsx";
+import JudiciaryTab from "./components/tabs/JudiciaryTab.jsx";
 import PolicyTab from "./components/tabs/PolicyTab.jsx";
 import ActionsTab from "./components/tabs/ActionsTab.jsx";
 import DiplomacyTab from "./components/tabs/DiplomacyTab.jsx";
@@ -244,6 +252,12 @@ export default function Game() {
   const [pendingAppointment, setPendingAppointment] = useState(null); // {officeId, officeLabel, nomineeName, personality, stage, stages, startedWeek, factionReactions}
   const [confirmationHistory, setConfirmationHistory] = useState([]);
   const [cabinet, setCabinet] = useState(() => createInitialCabinetState());
+
+  // ── SCOTUS state ──────────────────────────────────────────────────────────
+  const [scotusJustices, setScotusJustices] = useState([]); // [{id, name, age, timeServed, party, ideology, isChief}]
+  const [scotusVacancy, setScotusVacancy] = useState(null);  // { justiceId, isChief, stage:"selecting"|"confirming", candidates, selectedId, vetMoreUsed }
+  const [scotusPendingConfirmation, setScotusConfirmation] = useState(null); // appointment-like object
+  const [pendingScotusEvent, setPendingScotusEvent] = useState(null); // queued crisis event for when curEv clears
 
   // ── Election state ──────────────────────────────────────────────────────────
   const [congressHistory, setCongressHistory] = useState([]);
@@ -596,7 +610,7 @@ export default function Game() {
   }, [addLog, addNotification, cabinet, cg, macroState, pendingAppointment, promises, refreshPromiseOffers, resolveAppointmentStep, week]);
 
   const lobbyAppointment = useCallback(() => {
-    if (pendingAppointment?.officeId !== "sec_state") return;
+    if (!pendingAppointment || pendingAppointment.officeId !== "sec_state") return;
 
     const success = Math.random() < 0.66;
     const boostedReactions = Object.fromEntries(
@@ -617,6 +631,54 @@ export default function Game() {
 
     addLog(`${surrogates.find(s => s.id === "s1")?.name || "Senior Advisor"} ${success ? "improved" : "failed to improve"} Senate sentiment for ${pendingAppointment.nomineeName}.`);
   }, [addLog, cg, pendingAppointment, surrogates]);
+
+  // ── SCOTUS actions ───────────────────────────────────────────────────────
+
+  const selectScotusCandidate = (candidateId) => {
+    setScotusVacancy(prev => prev ? { ...prev, selectedId: prev.selectedId === candidateId ? null : candidateId } : prev);
+  };
+
+  const vetMoreScotus = () => {
+    if (!scotusVacancy || scotusVacancy.vetMoreUsed) return;
+    const moreCandidates = generateScotusJusticeCandidates(pp, nameRegistryRef.current);
+    setScotusVacancy(prev => prev ? {
+      ...prev,
+      candidates: [...prev.candidates, ...moreCandidates],
+      vetMoreUsed: true,
+    } : prev);
+  };
+
+  const nominateScotusCandidate = () => {
+    if (!scotusVacancy || !scotusVacancy.selectedId) return;
+    const candidate = scotusVacancy.candidates.find(c => c.id === scotusVacancy.selectedId);
+    if (!candidate) return;
+    const process = buildScotusAppointmentProcess(candidate);
+    process.isChief = scotusVacancy.isChief;
+    process.justiceId = scotusVacancy.justiceId;
+    setScotusConfirmation(process);
+    setScotusVacancy(prev => prev ? { ...prev, stage: "confirming", selectedId: null } : prev);
+    addLog(`${candidate.name} nominated for Supreme Court.`);
+  };
+
+  const lobbyScotus = () => {
+    if (!scotusPendingConfirmation) return;
+    if (scotusPendingConfirmation.lobbyUsedStage === scotusPendingConfirmation.stage) return;
+    const success = Math.random() < 0.66;
+    const boosted = Object.fromEntries(
+      Object.entries(scotusPendingConfirmation.factionReactions || {}).map(([fid, r]) => [
+        fid, Math.max(-0.95, Math.min(0.95, r + (success ? 0.04 : 0))),
+      ])
+    );
+    const vote = evaluateAppointment({ ...cg, factions: cg.factions }, boosted);
+    setScotusConfirmation(prev => prev ? ({
+      ...prev,
+      factionReactions: boosted,
+      factionVotes: vote.factionVotes,
+      passLikelihood: vote.passLikelihood,
+      lobbyUsedStage: prev.stage,
+    }) : prev);
+    addLog(`${surrogates.find(s => s.id === "s1")?.name || "Senior Advisor"} ${success ? "improved" : "failed to improve"} Senate sentiment for ${scotusPendingConfirmation.nomineeName}.`);
+  };
 
   const start = () => {
     if (!pp || !pf || !pn.trim()) return;
@@ -690,6 +752,11 @@ export default function Game() {
     setPendingAppointment(null);
     setConfirmationHistory([]);
     setCabinet(createInitialCabinetState());
+    // ── SCOTUS ──
+    setScotusJustices(generateInitialJustices(pp, difficulty, nameRegistryRef.current));
+    setScotusVacancy(null);
+    setScotusConfirmation(null);
+    setPendingScotusEvent(null);
     setCongressHistory([buildHistorySnapshot(c, 1, 0, 0, freshStats.approvalRating, 0, freshStats.approvalRating, false, { isInitial: true })]);
     setMidtermResults(null);
     setShowMidtermModal(false);
@@ -848,6 +915,125 @@ export default function Game() {
       return nextHist;
     });
 
+    // ── SCOTUS: age justices yearly, check death/retirement, advance confirmation ──
+    const nextWiy = ((nextState.week - 1) % 52) + 1;
+
+    // Advance SCOTUS confirmation one stage per week
+    if (scotusPendingConfirmation) {
+      const appt = scotusPendingConfirmation;
+      const nextAppt = { ...appt, turnsInStage: (appt.turnsInStage || 0) + 1 };
+
+      if (appt.stage === "committee_hearing") {
+        setScotusConfirmation({ ...nextAppt, stage: "committee_vote", turnsInStage: 0, passLikelihood: 100, lobbyUsedStage: null });
+      } else {
+        const vote = evaluateAppointment({ ...cg, factions: cg.factions }, appt.factionReactions);
+        if (appt.stage === "committee_vote" && vote.passed) {
+          setScotusConfirmation({ ...nextAppt, stage: "senate_vote", turnsInStage: 0, factionVotes: vote.factionVotes, passLikelihood: vote.passLikelihood, committeeVote: vote, lobbyUsedStage: null });
+        } else if (appt.stage === "senate_vote" || (appt.stage === "committee_vote" && !vote.passed)) {
+          // Final result
+          const confirmed = vote.passed;
+          const resultEvent = {
+            id: `scotus_result_${nextState.week}`,
+            type: "scotus_result",
+            confirmed,
+            nomineeName: appt.nomineeName,
+            nomineeIdeology: appt.nomineeIdeology,
+            nomineeAge: appt.nomineeAge,
+            isChief: appt.isChief,
+            senateYes: vote.senateYes,
+            senateNo: vote.senateNo,
+            name: confirmed
+              ? `Senate Confirms ${appt.nomineeName}`
+              : `Senate Rejects ${appt.nomineeName}`,
+            desc: confirmed
+              ? `The Senate has confirmed ${appt.nomineeName} (${appt.nomineeIdeology.replace("_", " ")}) to the Supreme Court by a vote of ${vote.senateYes}-${vote.senateNo}.`
+              : `The Senate has rejected ${appt.nomineeName} for the Supreme Court by a vote of ${vote.senateYes}-${vote.senateNo}. The seat remains vacant.`,
+            choices: [{ text: "Acknowledged", result: "" }],
+          };
+          setScotusConfirmation(null);
+          if (confirmed) {
+            // Justice was already removed from the list at vacancy creation; add the confirmed one
+            const newJustice = {
+              id: `justice_confirmed_${nextState.week}`,
+              name: appt.nomineeName,
+              ideology: appt.nomineeIdeology,
+              party: ["very_liberal", "liberal"].includes(appt.nomineeIdeology) ? "DEM" : "REP",
+              age: appt.nomineeAge,
+              timeServed: 0,
+              isChief: appt.isChief,
+            };
+            setScotusJustices(prev => [...prev, newJustice]);
+            setScotusVacancy(null);
+            addLog(`${appt.nomineeName} confirmed to the Supreme Court ${vote.senateYes}-${vote.senateNo}.`);
+          } else {
+            // Rejection: vacancy stays open but go back to selecting
+            setScotusVacancy(prev => prev ? { ...prev, stage: "selecting", candidates: generateScotusJusticeCandidates(pp, nameRegistryRef.current), selectedId: null, vetMoreUsed: false } : prev);
+            addLog(`${appt.nomineeName} rejected by the Senate ${vote.senateYes}-${vote.senateNo}. A new selection is available.`);
+          }
+          setConfirmationHistory(prev => [...prev, {
+            id: `scotus_${nextState.week}`,
+            officeId: "scotus",
+            officeLabel: "Supreme Court Justice",
+            nomineeName: appt.nomineeName,
+            passed: confirmed,
+            senateYes: vote.senateYes,
+            senateNo: vote.senateNo,
+            year: Math.ceil(nextState.week / 52),
+            weekOfYear: nextWiy,
+          }]);
+          // Show CrisisModal for result
+          if (!nextState.curEv) {
+            setCurEv(resultEvent);
+          } else {
+            setPendingScotusEvent(resultEvent);
+          }
+        }
+      }
+    }
+
+    // Check for new vacancy (only when no vacancy already open)
+    if (!scotusVacancy && !scotusPendingConfirmation && scotusJustices.length > 0) {
+      const vacancy = checkJusticeVacancy(scotusJustices, pp);
+      if (vacancy) {
+        const j = vacancy.justice;
+        const vacancyEvent = {
+          id: `scotus_vacancy_${nextState.week}`,
+          type: "scotus_vacancy",
+          justiceId: j.id,
+          isChief: j.isChief,
+          name: vacancy.type === "death"
+            ? `Justice ${j.name} Has Died`
+            : `Justice ${j.name} Announces Retirement`,
+          desc: vacancy.type === "death"
+            ? `Justice ${j.name} (${j.ideology.replace(/_/g, " ")}, age ${j.age}) has passed away. A Supreme Court vacancy must be filled.`
+            : `Justice ${j.name} (${j.ideology.replace(/_/g, " ")}, age ${j.age}, ${j.timeServed} years served) has announced their retirement from the Supreme Court. A vacancy opens.`,
+          choices: [{ text: "Begin nomination process", result: "" }],
+        };
+        // Remove justice from the bench
+        setScotusJustices(prev => prev.filter(jj => jj.id !== j.id));
+        // Open vacancy in selecting stage
+        setScotusVacancy({
+          justiceId: j.id,
+          isChief: j.isChief,
+          stage: "selecting",
+          candidates: generateScotusJusticeCandidates(pp, nameRegistryRef.current),
+          selectedId: null,
+          vetMoreUsed: false,
+        });
+        addLog(`Supreme Court vacancy: Justice ${j.name} ${vacancy.type === "death" ? "died" : "retired"}.`);
+        if (!nextState.curEv) {
+          setCurEv(vacancyEvent);
+        } else {
+          setPendingScotusEvent(vacancyEvent);
+        }
+      }
+    }
+
+    // Age justices once per year (week 1)
+    if (nextWiy === 1) {
+      setScotusJustices(prev => ageJustices(prev));
+    }
+
     if ((((nextState.week - 1) % 52) + 1) === 1) {
       refreshPromiseOffers({
         factions: nextState.cg.factions,
@@ -859,6 +1045,13 @@ export default function Game() {
   };
 
   const handleEventChoice = choice => {
+    // SCOTUS vacancy / result events are UI-only acknowledgements
+    if (curEv?.type === "scotus_vacancy" || curEv?.type === "scotus_result") {
+      setCurEv(pendingScotusEvent || null);
+      setPendingScotusEvent(null);
+      return;
+    }
+
     const result = resolveEventChoice({
       stats,
       macroState,
@@ -891,7 +1084,9 @@ export default function Game() {
         return next;
       });
     }
-    setCurEv(null);
+    // After resolving a normal event, flush any queued SCOTUS event
+    setCurEv(pendingScotusEvent || null);
+    setPendingScotusEvent(null);
   };
 
   const propose = action => {
@@ -1411,6 +1606,7 @@ export default function Game() {
       {tab === "congress" && (
         <CongressTab
           allF={allF} allyF={allyF} oppoF={oppoF} pf={pf}
+          vpn={vpn}
           congressTab={congressTab} setCongressTab={setCongressTab}
           hovFaction={hovFaction} setHovFaction={setHovFaction}
           billRecord={billRecord}
@@ -1508,6 +1704,21 @@ export default function Game() {
           engagement={engagement}
           powerProjection={powerProjection}
           globalTension={globalTension}
+        />
+      )}
+
+      {tab === "judiciary" && (
+        <JudiciaryTab
+          scotusJustices={scotusJustices}
+          scotusVacancy={scotusVacancy}
+          scotusPendingConfirmation={scotusPendingConfirmation}
+          playerParty={pp}
+          surrogates={surrogates}
+          allFactions={[...FACTION_DATA.DEM, ...FACTION_DATA.REP]}
+          onSelectCandidate={selectScotusCandidate}
+          onNominate={nominateScotusCandidate}
+          onVetMore={vetMoreScotus}
+          onLobbyScotus={lobbyScotus}
         />
       )}
 

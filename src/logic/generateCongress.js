@@ -45,7 +45,9 @@ export function generateCongress(playerParty, playerFaction, nameRegistry, diffi
 
   FACTION_DATA[playerParty].forEach((f, i) => {
     const sw = [0.4, 0.35, 0.25][i], hw = [0.38, 0.37, 0.25][i];
-    const leader = makeLeader(nameRegistry);
+    const leader       = makeLeader(nameRegistry);
+    const houseLeader  = makeLeader(nameRegistry);
+    const senateLeader = makeLeader(nameRegistry);
     factions[f.id] = {
       ...f,
       party: playerParty,
@@ -54,13 +56,17 @@ export function generateCongress(playerParty, playerFaction, nameRegistry, diffi
       trust: f.id === playerFaction ? 72 + Math.floor(Math.random() * 8) : 42 + Math.floor(Math.random() * 12),
       relationship: f.id === playerFaction ? 75 + Math.floor(Math.random() * 10) : 48 + Math.floor(Math.random() * 10),
       leader,
+      houseLeader,
+      senateLeader,
       unity: initUnity(leader, false),
     };
   });
 
   FACTION_DATA[op].forEach((f, i) => {
     const sw = [0.35, 0.38, 0.27][i], hw = [0.33, 0.4, 0.27][i];
-    const leader = makeLeader(nameRegistry);
+    const leader       = makeLeader(nameRegistry);
+    const houseLeader  = makeLeader(nameRegistry);
+    const senateLeader = makeLeader(nameRegistry);
     factions[f.id] = {
       ...f,
       party: op,
@@ -69,6 +75,8 @@ export function generateCongress(playerParty, playerFaction, nameRegistry, diffi
       trust: 28 + Math.floor(Math.random() * 10),
       relationship: 18 + Math.floor(Math.random() * 12),
       leader,
+      houseLeader,
+      senateLeader,
       unity: initUnity(leader, true),
     };
   });

@@ -50,7 +50,7 @@ export default function PolicyTab({
 
     {!activeBill && (
       <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>
-        {maxActions - act} action{maxActions - act !== 1 ? "s" : ""} remaining. Choose a bill to introduce. Only one bill may be in Congress at a time.
+      Choose a bill to introduce. Only one bill may be in Congress at a time.
       </div>
     )}
     {activeBill && (

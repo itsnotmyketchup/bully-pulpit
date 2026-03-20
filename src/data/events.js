@@ -251,16 +251,6 @@ export function generateDynamicEvents(
   const pickState = (city) => { const m = city.match(/,\s*(\w+)$/); return m ? m[1] : null; };
 
   const allyIds = playerParty === "DEM" ? ["prog","mod_dem","blue_dog"] : ["freedom","mod_rep","trad_con"];
-  const oppIds  = playerParty === "DEM" ? ["freedom","mod_rep","trad_con"] : ["prog","mod_dem","blue_dog"];
-
-  // Dynamic SCOTUS "strong ally" effects based on player party
-  const scotusStrongAllyFx = Object.fromEntries([
-    ...allyIds.map((id, i) => [id,  [0.4, 0.2, -0.1][i]]),
-    ...oppIds.map((id, i)  => [id, [-0.6, -0.3, -0.4][i]]),
-  ]);
-  const scotusStrongAllyResult = playerParty === "DEM"
-    ? "Liberal base energized. Conservative opposition mobilizes."
-    : "Conservative base energized. Progressive opposition mobilizes.";
 
   // ── Random events: stat-triggered / public mood ────────────────────────
   if (stats.inflation > 3.5) addEvent("normal", {
@@ -400,13 +390,6 @@ export function generateDynamicEvents(
       {text:"Publicly attribute and sanction",effects:{approvalRating:2},countryEffects:{russia:{relationship:-2,trust:-4}},result:"Strong response. Tensions rise."},
       {text:"Covert cyber response",effects:{approvalRating:1},result:"Quiet action debated."},
       {text:"Focus on defense upgrades",effects:{approvalRating:0,nationalDebt:0.03},result:"Cautious approach."},
-    ]},
-
-    // Institutions, courts, and governance
-    {id:"scotus",name:"Supreme Court Justice retires",desc:"A pivotal Justice steps down. Nomination opportunity.",unique:true,effects:{approvalRating:1},choices:[
-      {text:"Nominate strong ideological ally",effects:{approvalRating:1},factionEffects:scotusStrongAllyFx,result:scotusStrongAllyResult},
-      {text:"Nominate moderate consensus builder",effects:{approvalRating:2},factionEffects:{mod_dem:0.3,mod_rep:0.2,prog:-0.2,freedom:-0.2},result:"Bipartisan nod."},
-      {text:"Nominate young rising star",effects:{approvalRating:0},result:"Strategic long-term play."},
     ]},
 
     // Disasters and infrastructure failures

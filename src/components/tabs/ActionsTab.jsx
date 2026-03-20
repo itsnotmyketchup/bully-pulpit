@@ -81,8 +81,6 @@ export default function ActionsTab({
   const overreachIncrease = eo ? (eo.controversy === 0 ? 0 : 3 + 5 * eo.controversy) : 0;
 
   return <>
-    <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>{maxActions - act} action{maxActions - act !== 1 ? "s" : ""} left this week.</div>
-
     {/* Sub-tab bar */}
     <div style={{ display: "flex", gap: 2, marginBottom: 14, borderBottom: "1px solid var(--color-border-tertiary)", paddingBottom: 8 }}>
       {[["orders", "Executive Orders"], ["visits", "State Visits"], ["speeches", "Speeches"]].map(([st, label]) => (
