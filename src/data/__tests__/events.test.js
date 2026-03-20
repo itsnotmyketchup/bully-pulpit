@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CHINA_SANCTIONS_RETALIATION_EVENT,
+  NUCLEAR_SMR_OPENING_EVENT,
   PROGRESSIVE_HECKLER_EVENT,
   annualChanceToPerCheckChance,
   generateDynamicEvents,
@@ -82,6 +83,30 @@ describe("generateDynamicEvents", () => {
     expect(specialIds.has("russia_hostage")).toBe(true);
     expect(specialIds.has("corp_profits_surge")).toBe(true);
     expect(specialIds.has("literacy_crisis")).toBe(true);
+  });
+
+  it("queues the nuclear reactor opening as an immediate policy consequence after a long delay", () => {
+    const earlyPools = generateDynamicEvents(
+      { ...INITIAL_STATS },
+      BASE_STATE_APPROVAL,
+      new Set(),
+      "DEM",
+      40,
+      { nuclear_expansion: 4 },
+      []
+    );
+    const delayedPools = generateDynamicEvents(
+      { ...INITIAL_STATS },
+      BASE_STATE_APPROVAL,
+      new Set(),
+      "DEM",
+      60,
+      { nuclear_expansion: 4 },
+      []
+    );
+
+    expect(earlyPools.immediatePool.some((event) => event.id === "nuclear_smr_opening")).toBe(false);
+    expect(delayedPools.immediatePool.some((event) => event.id === "nuclear_smr_opening")).toBe(true);
   });
 
   it("keeps already-used unique special events out of the pool", () => {
@@ -231,6 +256,13 @@ describe("special event rarity helpers", () => {
     expect(CHINA_SANCTIONS_RETALIATION_EVENT.choices).toHaveLength(3);
     expect(CHINA_SANCTIONS_RETALIATION_EVENT.macroEffects.investment).toBeLessThan(0);
     expect(CHINA_SANCTIONS_RETALIATION_EVENT.macroEffects.technology).toBeLessThan(0);
+  });
+
+  it("builds the SMR opening event as a one-choice immediate policy consequence", () => {
+    expect(NUCLEAR_SMR_OPENING_EVENT.category).toBe("immediate");
+    expect(NUCLEAR_SMR_OPENING_EVENT.triggeredBy).toBe("Nuclear Expansion & Energy Independence Act");
+    expect(NUCLEAR_SMR_OPENING_EVENT.choices).toHaveLength(1);
+    expect(NUCLEAR_SMR_OPENING_EVENT.choices[0].effects.powerNuclearShare).toBeGreaterThan(0);
   });
 
   it("computes progressive heckling chances from faction relationship", () => {

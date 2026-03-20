@@ -1,5 +1,6 @@
 import { POLICY_ACTIONS } from "../../data/policies.js";
 import SectionHeader from "../SectionHeader.jsx";
+import MiniChart from "../MiniChart.jsx";
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -14,6 +15,7 @@ const panelStyle = {
 
 export default function PartyTab({
   allF, allyF, cg, pf,
+  factionHist,
   promises, promiseOffers, passedLegislation, week,
   surrogates, surrogateUI, setSurrogateUI,
   coachCooldown, countries, visitedCountries, act, maxActions,
@@ -26,6 +28,14 @@ export default function PartyTab({
   const partyUnity = allyF.length > 0
     ? Math.round(allyF.reduce((s, f) => s + (f.unity || 50), 0) / allyF.length)
     : 50;
+  const partyApprovalPrev = allyF.length > 0
+    ? allyF.reduce((s, f) => s + (factionHist?.[f.id]?.rel?.at(-2) ?? f.relationship ?? 50), 0) / allyF.length
+    : 50;
+  const partyUnityPrev = allyF.length > 0
+    ? allyF.reduce((s, f) => s + (factionHist?.[f.id]?.unity?.at(-2) ?? f.unity ?? 50), 0) / allyF.length
+    : 50;
+  const partyApprovalDelta = partyApproval - partyApprovalPrev;
+  const partyUnityDelta = partyUnity - partyUnityPrev;
 
   return (
     <>
@@ -39,8 +49,8 @@ export default function PartyTab({
             <div style={{ fontSize: 24, fontWeight: 700, color: "var(--color-text-primary)", lineHeight: 1 }}>
               {partyApproval}%
             </div>
-            <div style={{ fontSize: 9, color: "var(--color-text-secondary)", marginTop: 2 }}>
-              avg faction relationship
+            <div style={{ fontSize: 9, marginTop: 2, color: Math.abs(partyApprovalDelta) < 0.05 ? "var(--color-text-secondary)" : partyApprovalDelta > 0 ? "#1D9E75" : "#E24B4A" }}>
+              {Math.abs(partyApprovalDelta) < 0.05 ? "No change" : `${partyApprovalDelta > 0 ? "▲ +" : "▼ "}${Math.abs(partyApprovalDelta).toFixed(1)} pts this week`}
             </div>
           </div>
         </div>
@@ -52,8 +62,8 @@ export default function PartyTab({
             <div style={{ fontSize: 24, fontWeight: 700, color: "var(--color-text-primary)", lineHeight: 1 }}>
               {partyUnity}
             </div>
-            <div style={{ fontSize: 9, color: "var(--color-text-secondary)", marginTop: 2 }}>
-              avg faction unity
+            <div style={{ fontSize: 9, marginTop: 2, color: Math.abs(partyUnityDelta) < 0.05 ? "var(--color-text-secondary)" : partyUnityDelta > 0 ? "#1D9E75" : "#E24B4A" }}>
+              {Math.abs(partyUnityDelta) < 0.05 ? "No change" : `${partyUnityDelta > 0 ? "▲ +" : "▼ "}${Math.abs(partyUnityDelta).toFixed(1)} this week`}
             </div>
           </div>
         </div>
@@ -79,6 +89,7 @@ export default function PartyTab({
             background: isBase
               ? "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0))"
               : "var(--color-background-primary)",
+            borderLeft: `3px solid ${f.color || "var(--color-border-secondary)"}`,
           }}>
             {/* Name + seats */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -111,6 +122,22 @@ export default function PartyTab({
                 </div>
               </div>
             )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 7 }}>
+              {[
+                { label: "Rel", value: f.relationship ?? 50, history: factionHist?.[f.id]?.rel || [] },
+                { label: "Trust", value: f.trust ?? 50, history: factionHist?.[f.id]?.trust || [] },
+                { label: "Unity", value: f.unity ?? 50, history: factionHist?.[f.id]?.unity || [] },
+              ].map(({ label, value, history }) => (
+                <div key={label} style={{ padding: "5px 6px", borderRadius: "var(--border-radius-md)", background: "var(--color-background-secondary)", border: "0.5px solid var(--color-border-tertiary)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3, fontSize: 8 }}>
+                    <span style={{ color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</span>
+                    <span style={{ color: "var(--color-text-primary)", fontWeight: 600 }}>{Math.round(value)}</span>
+                  </div>
+                  <MiniChart data={history} color={f.color || "var(--color-text-secondary)"} h={22} w={92} />
+                </div>
+              ))}
+            </div>
 
             {/* Rel / Trust / Unity bars */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 10px", marginBottom: 6 }}>

@@ -165,6 +165,24 @@ export const PROGRESSIVE_HECKLER_EVENT = {
   ],
 };
 
+export const NUCLEAR_SMR_OPENING_EVENT = {
+  id: "nuclear_smr_opening",
+  category: "immediate",
+  lane: "immediate",
+  priority: 3,
+  unique: true,
+  name: "New Small Modular Reactor Comes Online",
+  desc: "Federal officials and local workers celebrate the opening of a new small modular reactor made possible by the Nuclear Expansion & Energy Independence Act's construction funding and expedited approvals. Supporters call it a milestone for domestic energy security and advanced American industry.",
+  triggeredBy: "Nuclear Expansion & Energy Independence Act",
+  choices: [
+    {
+      text: "Celebrate the opening",
+      effects: { powerNuclearShare: 0.6 },
+      result: "The reactor begins feeding power into the grid, nudging nuclear generation upward.",
+    },
+  ],
+};
+
 // ──────────────────────────────────────────────────────────────────────────
 
 export function getSeason(week) {
@@ -540,6 +558,13 @@ export function generateDynamicEvents(
           { text: "Defend the Pentagon and blame outdated accounting systems", effects: { approvalRating: -2 }, factionEffects: { trad_con: 0.2, mod_rep: -0.2, freedom: -0.3 }, result: "Looks like a cover-up. Media has a field day." },
         ],
       });
+    }
+  }
+
+  if (passedLegislation.nuclear_expansion) {
+    const elapsed = week - passedLegislation.nuclear_expansion;
+    if (elapsed >= 52 && elapsed <= 156 && !usedEvents.has(NUCLEAR_SMR_OPENING_EVENT.id)) {
+      addEvent("immediate", NUCLEAR_SMR_OPENING_EVENT);
     }
   }
 

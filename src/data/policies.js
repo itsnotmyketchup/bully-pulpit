@@ -106,6 +106,15 @@ export const POLICY_ACTIONS = [
     factionReactions: { prog: 0.78, mod_dem: 0.7, blue_dog: 0.22, freedom: -0.7, mod_rep: -0.08, trad_con: -0.28 },
   },
   {
+    id: "nuclear_expansion",
+    name: "Nuclear Expansion & Energy Independence Act",
+    desc: "Funds construction of next-generation nuclear reactors, including small modular reactors, and fast-tracks federal approval for new plant construction.",
+    category: "energy & environment",
+    effects: { energyEnvironmentSpending: 20 },
+    macroEffects: { technologicalAdvancement: 0.35, technology: 0.05, investment: 0.04 },
+    factionReactions: { prog: -0.45, mod_dem: 0.25, blue_dog: 0.35, freedom: 0.18, mod_rep: 0.4, trad_con: 0.45 },
+  },
+  {
     id: "ukraine_defense",
     name: "Ukraine Defense Act",
     desc: "Authorizes additional military aid, munitions replenishment, and training support for Ukraine while reinforcing U.S. commitments in Europe.",

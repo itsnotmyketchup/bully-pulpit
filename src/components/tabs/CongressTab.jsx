@@ -1,6 +1,7 @@
 import { useState } from "react";
 import CongressBar from "../CongressBar.jsx";
 import LegislationRecord from "../LegislationRecord.jsx";
+import MiniChart from "../MiniChart.jsx";
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -13,6 +14,7 @@ const panelStyle = {
 
 const PARTY_COLORS = { DEM: "#3b7dd8", REP: "#c0392b" };
 const PARTY_NAMES  = { DEM: "Democrats", REP: "Republicans" };
+const PARTY_PERSON = { DEM: "Democrat", REP: "Republican" };
 
 // ── Congressional role derivation ─────────────────────────────────────────────
 // Returns a map of factionId → { role, chamber } for the HIGHEST official role.
@@ -100,7 +102,7 @@ function StatBar({ label, value, max = 100 }) {
 
 // ── Leader card (compact, click-to-expand) ────────────────────────────────────
 
-function LeaderCard({ roleTitle, leaderObj, factionName, faction, isVP = false, selectedId, onSelect }) {
+function LeaderCard({ roleTitle, leaderObj, faction, isVP = false, selectedId, onSelect }) {
   const name   = leaderObj?.name ?? "—";
   const cardId = `${roleTitle}_${name}`;
   const isOpen = selectedId === cardId;
@@ -126,7 +128,7 @@ function LeaderCard({ roleTitle, leaderObj, factionName, faction, isVP = false, 
         {name}
       </div>
       <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>
-        {isVP ? "Vice President of the United States" : factionName}
+        {isVP ? "Vice President of the United States" : PARTY_PERSON[faction?.party] || faction?.party || "—"}
       </div>
 
       {isOpen && !isVP && leaderObj && (
@@ -137,13 +139,11 @@ function LeaderCard({ roleTitle, leaderObj, factionName, faction, isVP = false, 
           gap: "3px 12px", fontSize: 9,
         }}>
           {[
-            { label: "Faction",   value: faction?.name },
             { label: "Party",     value: faction?.party === "DEM" ? "Democrat" : "Republican" },
-            { label: "H. Seats",  value: faction?.houseSeats },
-            { label: "S. Seats",  value: faction?.senateSeats },
+            { label: "Faction",   value: faction?.name },
             { label: "Charisma",  value: leaderObj.charisma },
-            { label: "Authority", value: leaderObj.authority },
             { label: "Sincerity", value: leaderObj.sincerity },
+            { label: "Authority", value: leaderObj.authority },
           ].map(row => (
             <div key={row.label} style={{ display: "flex", justifyContent: "space-between", gap: 4 }}>
               <span style={{ color: "var(--color-text-secondary)" }}>{row.label}</span>
@@ -195,10 +195,9 @@ function LeadershipPanel({ allyF, oppoF, vpn, executiveOverreach }) {
   return (
     <div style={panelStyle}>
       <div style={{ padding: "12px 20px 10px", borderBottom: "0.5px solid var(--color-border-secondary)" }}>
-        <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--color-text-secondary)", marginBottom: 3 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.18em", color: "var(--color-text-secondary)", textAlign: "center" }}>
           United States Congress
         </div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>Congress</div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 0.5px 1fr" }}>
@@ -211,20 +210,20 @@ function LeadershipPanel({ allyF, oppoF, vpn, executiveOverreach }) {
             {speaker && (
               <LeaderCard roleTitle="Speaker of the House"
                 leaderObj={officialLeader(speaker, "Speaker of the House")}
-                factionName={speaker.name} faction={speaker}
+                faction={speaker}
                 selectedId={selectedId} onSelect={toggle} />
             )}
             {houseMajLdr && (
               <LeaderCard roleTitle="House Majority Leader"
                 leaderObj={officialLeader(houseMajLdr, "House Majority Leader")}
-                factionName={houseMajLdr.name} faction={houseMajLdr}
+                faction={houseMajLdr}
                 selectedId={selectedId} onSelect={toggle} />
             )}
             <MinorityDivider />
             {houseMinLdr && (
               <LeaderCard roleTitle="House Minority Leader"
                 leaderObj={officialLeader(houseMinLdr, "House Minority Leader")}
-                factionName={houseMinLdr.name} faction={houseMinLdr}
+                faction={houseMinLdr}
                 selectedId={selectedId} onSelect={toggle} />
             )}
           </div>
@@ -241,19 +240,19 @@ function LeadershipPanel({ allyF, oppoF, vpn, executiveOverreach }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             <LeaderCard roleTitle="President of the Senate"
               leaderObj={{ name: vpn || "Vice President" }}
-              factionName="" faction={null}
+              faction={null}
               isVP selectedId={selectedId} onSelect={toggle} />
             {senateMajLdr && (
               <LeaderCard roleTitle="Senate Majority Leader"
                 leaderObj={officialLeader(senateMajLdr, "Senate Majority Leader")}
-                factionName={senateMajLdr.name} faction={senateMajLdr}
+                faction={senateMajLdr}
                 selectedId={selectedId} onSelect={toggle} />
             )}
             <MinorityDivider />
             {senateMinLdr && (
               <LeaderCard roleTitle="Senate Minority Leader"
                 leaderObj={officialLeader(senateMinLdr, "Senate Minority Leader")}
-                factionName={senateMinLdr.name} faction={senateMinLdr}
+                faction={senateMinLdr}
                 selectedId={selectedId} onSelect={toggle} />
             )}
           </div>
@@ -343,19 +342,9 @@ function ControlBarsPanel({ allF, allyF, hovFaction, setHovFaction }) {
 
 // ── Faction cards ─────────────────────────────────────────────────────────────
 
-function FactionCard({ f, pf, officialRole }) {
+function FactionCard({ f, pf, factionHist }) {
   const isBase = f.id === pf;
-  // Determine which named leader to show and what title/badge
-  let displayLeader = f.leader;
-  let officialBadge = null;
-  if (officialRole) {
-    displayLeader = officialLeader(f, officialRole);
-    officialBadge = officialRole === "Speaker of the House"   ? "Speaker" :
-                    officialRole === "Senate Majority Leader"  ? "Senate Maj. Leader" :
-                    officialRole === "House Majority Leader"   ? "House Maj. Leader" :
-                    officialRole === "Senate Minority Leader"  ? "Senate Min. Leader" :
-                    officialRole === "House Minority Leader"   ? "House Min. Leader" : null;
-  }
+  const displayLeader = f.leader;
 
   return (
     <div style={{
@@ -376,9 +365,6 @@ function FactionCard({ f, pf, officialRole }) {
             {f.name}
             {isBase && <span style={{ fontSize: 8, color: "var(--color-text-secondary)", fontWeight: 400, marginLeft: 5 }}>Base</span>}
           </div>
-          {officialBadge && (
-            <div style={{ fontSize: 8, color: "var(--color-text-secondary)" }}>{officialBadge}</div>
-          )}
         </div>
         <div style={{ fontSize: 9, color: "var(--color-text-secondary)", whiteSpace: "nowrap", paddingLeft: 6 }}>
           {f.senateSeats}S · {f.houseSeats}H
@@ -399,6 +385,22 @@ function FactionCard({ f, pf, officialRole }) {
         </div>
       )}
 
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 7 }}>
+        {[
+          { label: "Rel", value: f.relationship ?? 50, history: factionHist?.[f.id]?.rel || [] },
+          { label: "Trust", value: f.trust ?? 50, history: factionHist?.[f.id]?.trust || [] },
+          { label: "Unity", value: f.unity ?? 50, history: factionHist?.[f.id]?.unity || [] },
+        ].map(({ label, value, history }) => (
+          <div key={label} style={{ padding: "5px 6px", borderRadius: "var(--border-radius-md)", background: "var(--color-background-secondary)", border: "0.5px solid var(--color-border-tertiary)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3, fontSize: 8 }}>
+              <span style={{ color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</span>
+              <span style={{ color: "var(--color-text-primary)", fontWeight: 600 }}>{Math.round(value)}</span>
+            </div>
+            <MiniChart data={history} color={f.color || "var(--color-text-secondary)"} h={22} w={92} />
+          </div>
+        ))}
+      </div>
+
       {/* Rel / Trust / Unity bars */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 10px" }}>
         <StatBar label="Rel"   value={f.relationship ?? 50} />
@@ -409,7 +411,7 @@ function FactionCard({ f, pf, officialRole }) {
   );
 }
 
-function FactionsPanel({ allyF, oppoF, pf, roles }) {
+function FactionsPanel({ allyF, oppoF, pf, factionHist }) {
   return (
     <div style={panelStyle}>
       <div style={{ padding: "10px 14px 12px", borderBottom: "0.5px solid var(--color-border-secondary)" }}>
@@ -422,14 +424,14 @@ function FactionsPanel({ allyF, oppoF, pf, roles }) {
           <div style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.10em", color: "var(--color-text-secondary)", marginBottom: 2 }}>
             Your Coalition
           </div>
-          {allyF.map(f => <FactionCard key={f.id} f={f} pf={pf} officialRole={roles[f.id] ?? null} />)}
+          {allyF.map(f => <FactionCard key={f.id} f={f} pf={pf} factionHist={factionHist} />)}
         </div>
         <div style={{ background: "var(--color-border-secondary)" }} />
         <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 10 }}>
           <div style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: "0.10em", color: "var(--color-text-secondary)", marginBottom: 2 }}>
             Opposition
           </div>
-          {oppoF.map(f => <FactionCard key={f.id} f={f} pf={pf} officialRole={roles[f.id] ?? null} />)}
+          {oppoF.map(f => <FactionCard key={f.id} f={f} pf={pf} factionHist={factionHist} />)}
         </div>
       </div>
     </div>
@@ -486,7 +488,10 @@ function CongressHistoryPane({ congressHistory }) {
         const snapRoles   = deriveRolesFromSnapshot(entry.factions, entry.pp);
         const ROLE_ORDER  = ["Speaker of the House", "Senate Majority Leader", "House Majority Leader", "Senate Minority Leader", "House Minority Leader"];
         const roleEntries = Object.entries(snapRoles)
-          .map(([fid, role]) => ({ role, factionName: entry.factions[fid]?.name || fid }))
+          .map(([fid, role]) => ({
+            role,
+            leaderName: officialLeader(entry.factions[fid], role)?.name || entry.factions[fid]?.leader?.name || entry.factions[fid]?.name || fid,
+          }))
           .sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role));
 
         const houseGain  = entry.houseNetChange  >= 0;
@@ -531,10 +536,10 @@ function CongressHistoryPane({ congressHistory }) {
                   Congressional Leadership
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  {roleEntries.map(({ role, factionName }) => (
+                  {roleEntries.map(({ role, leaderName }) => (
                     <div key={role} style={{ display: "flex", justifyContent: "space-between", fontSize: 9 }}>
                       <span style={{ color: "var(--color-text-secondary)" }}>{role}</span>
-                      <span style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{factionName}</span>
+                      <span style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{leaderName}</span>
                     </div>
                   ))}
                 </div>
@@ -598,10 +603,8 @@ export default function CongressTab({
   executiveOverreach,
   congressHistory,
   confirmationHistory,
-  // factionHist retained for future use
+  factionHist,
 }) {
-  const roles = deriveRoles(allyF, oppoF);
-
   return (
     <>
       <div style={{ display: "flex", gap: 1, marginBottom: 10, borderBottom: "0.5px solid var(--color-border-tertiary)", paddingBottom: 4 }}>
@@ -621,7 +624,7 @@ export default function CongressTab({
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <LeadershipPanel allyF={allyF} oppoF={oppoF} vpn={vpn} executiveOverreach={executiveOverreach} />
           <ControlBarsPanel allF={allF} allyF={allyF} hovFaction={hovFaction} setHovFaction={setHovFaction} />
-          <FactionsPanel allyF={allyF} oppoF={oppoF} pf={pf} roles={roles} />
+          <FactionsPanel allyF={allyF} oppoF={oppoF} pf={pf} factionHist={factionHist} />
         </div>
       )}
 
