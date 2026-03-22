@@ -329,6 +329,7 @@ export default function JudiciaryTab({
   scotusJustices,
   scotusVacancy,
   scotusPendingConfirmation,
+  scotusRulings,
   playerParty,
   surrogates,
   allFactions,
@@ -437,6 +438,61 @@ export default function JudiciaryTab({
           onLobby={onLobbyScotus}
         />
       )}
+
+      <div style={panelStyle}>
+        <div style={{ padding: "12px 16px 10px", borderBottom: "0.5px solid var(--color-border-secondary)" }}>
+          <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.11em", color: "var(--color-text-secondary)", marginBottom: 2 }}>
+            Supreme Court Rulings
+          </div>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+            Major decisions from the current Court.
+          </div>
+        </div>
+
+        {!scotusRulings?.length && (
+          <div style={{ padding: "14px 16px", fontSize: 10, color: "var(--color-text-secondary)", fontStyle: "italic" }}>
+            No Supreme Court rulings yet.
+          </div>
+        )}
+
+        {scotusRulings?.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {scotusRulings.map((ruling, index) => (
+              <div key={ruling.id || `${ruling.orderId}_${index}`} style={{ padding: "11px 16px", ...(index > 0 ? divider : {}) }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                    {ruling.orderName}
+                  </div>
+                  <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>
+                    Wk {((ruling.week - 1) % 52) + 1}, Yr {ruling.year}
+                  </div>
+                </div>
+                <div style={{ marginTop: 4, fontSize: 10, color: ruling.decision === "struck_down" ? "#E24B4A" : "#1D9E75", fontWeight: 600 }}>
+                  {ruling.decision === "struck_down" ? "Struck down" : "Upheld"} · {ruling.vote}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 9, color: "var(--color-text-secondary)" }}>
+                  Majority opinion author: {ruling.majorityAuthor || "Per curiam"}
+                </div>
+                {ruling.majorityJustices?.length > 0 && (
+                  <div style={{ marginTop: 2, fontSize: 9, color: "var(--color-text-secondary)" }}>
+                    {ruling.decision === "struck_down" ? "To strike down" : "To uphold"}: {ruling.majorityJustices.join(", ")}
+                  </div>
+                )}
+                {ruling.dissentAuthor && (
+                  <div style={{ marginTop: 2, fontSize: 9, color: "var(--color-text-secondary)" }}>
+                    Dissenting opinion author: {ruling.dissentAuthor}
+                  </div>
+                )}
+                {ruling.dissentJustices?.length > 0 && (
+                  <div style={{ marginTop: 2, fontSize: 9, color: "var(--color-text-secondary)" }}>
+                    {ruling.decision === "struck_down" ? "To uphold" : "To strike down"}: {ruling.dissentJustices.join(", ")}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
     </div>
   );

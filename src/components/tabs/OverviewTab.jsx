@@ -4,6 +4,7 @@ import BillProgress from "../BillProgress.jsx";
 import TileMap from "../TileMap.jsx";
 import SectionHeader from "../SectionHeader.jsx";
 import { SM } from "../../data/stats.js";
+import { getTotalFederalSpending } from "../../logic/macroEconomy.js";
 
 const MAP_VIEWS = [
   { id: "approval", label: "Approval" },
@@ -23,11 +24,14 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
   const defColor = stats.nationalDeficit < 0 ? "#1D9E75" : stats.nationalDeficit > 2500 ? "#E24B4A" : stats.nationalDeficit > 1800 ? "#EF9F27" : "var(--color-text-primary)";
   const successColor = "#1D9E75";
   const dangerColor = "#E24B4A";
+  const totalFederalBudget = getTotalFederalSpending(stats);
+  const prevTotalFederalBudget = getTotalFederalSpending(prev);
   const otherBreakdown = [
     ["Science & Technology", stats.scienceTechnologySpending],
     ["Law Enforcement", stats.lawEnforcementSpending],
     ["Agriculture", stats.agricultureSpending],
     ["Energy & Environment", stats.energyEnvironmentSpending],
+    ["IRS", stats.irsFunding],
   ];
 
   const LEGENDS = {
@@ -318,6 +322,15 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
                 {stats.nationalDeficit < prev.nationalDeficit ? "↓" : "↑"} {Math.abs(Math.round(stats.nationalDeficit - prev.nationalDeficit))}B
               </div>
             )}
+            <div style={{ marginTop: 10, paddingTop: 8, borderTop: "0.5px solid var(--color-border-secondary)" }}>
+              <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 1 }}>Total federal budget</div>
+              <div style={{ fontSize: 18, fontWeight: 600, color: "var(--color-text-primary)" }}>${Math.round(totalFederalBudget)}B</div>
+              {Math.abs(totalFederalBudget - prevTotalFederalBudget) > 1 && (
+                <div style={{ fontSize: 10, marginTop: 4, color: totalFederalBudget > prevTotalFederalBudget ? dangerColor : successColor }}>
+                  {totalFederalBudget > prevTotalFederalBudget ? "↑" : "↓"} {Math.abs(Math.round(totalFederalBudget - prevTotalFederalBudget))}B
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

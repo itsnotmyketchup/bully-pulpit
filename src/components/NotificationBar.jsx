@@ -10,6 +10,7 @@ const TYPE_STYLES = {
   appointment_success: { bg: "#1D9E7522", border: "#1D9E7566", accent: "#1D9E75", icon: "▲" },
   appointment_fail: { bg: "#E24B4A22", border: "#E24B4A66", accent: "#E24B4A", icon: "■" },
   eo_unlock: { bg: "#2563eb1f", border: "#2563eb66", accent: "#2563eb", icon: "!" },
+  crisis_alert: { bg: "#cc1a1a22", border: "#cc1a1a88", accent: "#cc1a1a", icon: "⚠" },
 };
 
 export default function NotificationBar({ notifications, onDismiss, onTabSwitch }) {

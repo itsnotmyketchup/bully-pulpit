@@ -29,6 +29,7 @@ export const INITIAL_STATS = {
   lawEnforcementSpending: 58,
   agricultureSpending: 31,
   energyEnvironmentSpending: 35,
+  irsFunding: 14,
   powerHydroShare: 6,
   powerSolarShare: 7,
   powerWindShare: 10,
@@ -39,11 +40,20 @@ export const INITIAL_STATS = {
   carbonEmissionsPerCapita: 13.8,
   cleanVehicleTaxCreditCost: 0,
   evAdoptionIncentive: 0,
+  medicareEligibilityAge: 65,
+  drugPriceNegotiationLevel: 1,
+  healthcareSubsidyLevel: 0,
   corporateTaxRate: 21,     // %
   incomeTaxLow: 10,         // % on income < $50k
   incomeTaxMid: 22,         // % on income $50k–$200k
   incomeTaxHigh: 37,        // % on income > $200k
   payrollTaxRate: 7.65,     // %
+  childTaxCredit: 2000,
+  earnedIncomeTaxCredit: 7830,
+  saltDeductionCap: 10000,
+  firstTimeHomebuyerTaxCredit: 0,
+  evTaxCredit: 7500,
+  renewableInvestmentTaxCredit: 30,
 };
 
 export const SM = {
@@ -77,6 +87,7 @@ export const SM = {
   lawEnforcementSpending: { l: "Law Enforcement", g: "neutral", f: v => "$" + Math.round(v) + "B" },
   agricultureSpending: { l: "Agriculture", g: "neutral", f: v => "$" + Math.round(v) + "B" },
   energyEnvironmentSpending: { l: "Energy & Environment", g: "neutral", f: v => "$" + Math.round(v) + "B" },
+  irsFunding: { l: "IRS funding", g: "neutral", f: v => "$" + Math.round(v) + "B" },
   powerHydroShare:     { l: "Hydro",              g: "up",      f: v => v.toFixed(1) + "%" },
   powerSolarShare:     { l: "Solar",              g: "up",      f: v => v.toFixed(1) + "%" },
   powerWindShare:      { l: "Wind",               g: "up",      f: v => v.toFixed(1) + "%" },
@@ -87,9 +98,18 @@ export const SM = {
   carbonEmissionsPerCapita: { l: "Carbon per capita", g: "down", f: v => v.toFixed(1) + " t/person" },
   cleanVehicleTaxCreditCost: { l: "EV tax credits", g: "down", f: v => "$" + Math.round(v) + "B/yr" },
   evAdoptionIncentive: { l: "EV adoption incentive", g: "up", f: v => v.toFixed(2) },
+  medicareEligibilityAge: { l: "Medicare age", g: "neutral", f: v => `${Math.round(v)}` },
+  drugPriceNegotiationLevel: { l: "Drug negotiation", g: "neutral", f: v => ["None", "Limited", "Expanded"][v] || "Limited" },
+  healthcareSubsidyLevel: { l: "ACA subsidies", g: "neutral", f: v => ({ "-1": "Reduced", "0": "Current", "1": "Expanded" }[v] || "Current") },
   corporateTaxRate:   { l: "Corporate tax",      g: "neutral", f: v => v.toFixed(0) + "%" },
   incomeTaxLow:       { l: "Income tax <$50k",   g: "neutral", f: v => v.toFixed(0) + "%" },
   incomeTaxMid:       { l: "Income tax <$200k",  g: "neutral", f: v => v.toFixed(0) + "%" },
   incomeTaxHigh:      { l: "Income tax >$200k",  g: "neutral", f: v => v.toFixed(0) + "%" },
   payrollTaxRate:     { l: "Payroll tax",        g: "neutral", f: v => v.toFixed(2) + "%" },
+  childTaxCredit: { l: "Child tax credit", g: "neutral", f: v => "$" + Math.round(v).toLocaleString() },
+  earnedIncomeTaxCredit: { l: "Earned income tax credit", g: "neutral", f: v => "$" + Math.round(v).toLocaleString() },
+  saltDeductionCap: { l: "SALT cap", g: "neutral", f: v => (v < 0 ? "No cap" : "$" + Math.round(v).toLocaleString()) },
+  firstTimeHomebuyerTaxCredit: { l: "Homebuyer credit", g: "neutral", f: v => "$" + Math.round(v).toLocaleString() },
+  evTaxCredit: { l: "EV tax credit", g: "neutral", f: v => "$" + Math.round(v).toLocaleString() },
+  renewableInvestmentTaxCredit: { l: "Renewable ITC", g: "neutral", f: v => Math.round(v) + "%" },
 };

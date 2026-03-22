@@ -88,7 +88,7 @@ export default function PolicyTab({
         <div style={{ flex: "0 1 280px", minWidth: 220 }}>
           <div style={{ ...sectionLabelStyle, marginBottom: 3 }}>Budget Reconciliation</div>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 2 }}>Budget Reconciliation Act</div>
-          <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>Adjust tax rates and spending by up to ±10%</div>
+          <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>Set tax rates, healthcare provisions, and targeted credits inside a reconciliation package.</div>
           {!budgetAvailable && <div style={{ fontSize: 9, color: "#C98B2E", marginBottom: 8 }}>Available in {weeksUntil} wk{weeksUntil !== 1 ? "s" : ""}</div>}
           <button onClick={onOpenBudget} disabled={!budgetAvailable || !!activeBill}
             style={{ padding: "6px 12px", fontSize: 11, fontWeight: 600, background: !budgetAvailable || !!activeBill ? "var(--color-background-tertiary)" : "var(--color-text-primary)", color: !budgetAvailable || !!activeBill ? "var(--color-text-secondary)" : "var(--color-background-primary)", border: "none", borderRadius: "var(--border-radius-md)", cursor: !budgetAvailable || !!activeBill ? "not-allowed" : "pointer" }}>
@@ -143,7 +143,7 @@ export default function PolicyTab({
               background: d ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
               color: d ? "var(--color-text-secondary)" : "var(--color-background-primary)",
               border: "none", borderRadius: "var(--border-radius-md)", cursor: d ? "not-allowed" : "pointer",
-            }}>{u && !inCooldown ? "Enacted" : inCooldown ? `Retry wk ${billCooldowns[a.id]}` : isLocked ? "Locked" : "Introduce (2 actions)"}</button>
+            }}>{u && !inCooldown ? "Enacted" : inCooldown ? `Retry wk ${billCooldowns[a.id]}` : isLocked ? "Locked" : "Introduce"}</button>
           </div>
         </div>
       );

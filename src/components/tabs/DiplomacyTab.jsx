@@ -1,4 +1,31 @@
 import { useState } from "react";
+
+const ONGOING_WARS = [
+  {
+    id: "russia_ukraine",
+    name: "Russia–Ukraine War",
+    status: "Ongoing",
+    started: "February 2022",
+    sides: [
+      { label: "Russia + Belarus (limited)", color: "#E24B4A" },
+      { label: "Ukraine", color: "#378ADD" },
+    ],
+    desc: "Russia's full-scale invasion of Ukraine continues with active fighting along eastern and southern front lines. The U.S. has provided extensive military and financial aid to Ukraine. Conflict has caused hundreds of thousands of casualties and the displacement of millions.",
+    usPosture: "Active military & economic support for Ukraine. Major NATO coordination.",
+  },
+  {
+    id: "war_in_gaza",
+    name: "War in Gaza",
+    status: "Ongoing",
+    started: "October 2023",
+    sides: [
+      { label: "Israel (IDF)", color: "#378ADD" },
+      { label: "Hamas / Palestinian Factions", color: "#E24B4A" },
+    ],
+    desc: "Israeli military operations in Gaza launched following the Hamas attacks of October 7, 2023. The conflict has resulted in mass civilian casualties and a severe humanitarian crisis. Ceasefire negotiations have repeatedly stalled.",
+    usPosture: "Strong security partnership with Israel. Significant international diplomatic pressure.",
+  },
+];
 import { ComposableMap, Geographies, Geography } from "react-simple-maps";
 import { STCOL } from "../../data/countries.js";
 import { COUNTRY_FACTION_EFFECTS } from "../../data/constants.js";
@@ -171,8 +198,9 @@ function MetricBar({ value, color, label, sentence }) {
   );
 }
 
-export default function DiplomacyTab({ countries, visitedCountries, act, maxActions, week, factions, onForeignVisit, engagement, powerProjection, globalTension }) {
+export default function DiplomacyTab({ countries, visitedCountries, act, maxActions, week, factions, onForeignVisit, engagement, powerProjection, globalTension, georgianCrisis }) {
   const [mapMode, setMapMode] = useState("relations");
+  const [rightTab, setRightTab] = useState("dossiers");
 
   const alliedCountries = countries.filter(c => c.status === "ALLIED");
   const avgAlliedRel = alliedCountries.length
@@ -280,65 +308,191 @@ export default function DiplomacyTab({ countries, visitedCountries, act, maxActi
       </div>
 
       <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-        <SectionHeader label="Country Dossiers" />
-        {["Europe", "Americas", "Asia-Pacific", "Middle East", "Africa"].map(region => {
-          const rc = countries.filter(c => c.region === region);
-          if (rc.length === 0) return null;
-          const actionCost = region === "Americas" ? 2 : 3;
-          return (
-            <div key={region} style={{ marginBottom: 12 }}>
-              <div style={{ ...sectionLabelStyle, marginBottom: 5 }}>{region}</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 5 }}>
-                {rc.map(c => {
-                  const isHostile = c.status === "HOSTILE";
-                  const fxHints = COUNTRY_FACTION_EFFECTS[c.id];
-                  return (
-                    <div key={c.id} style={panelStyle}>
-                      <div style={{ padding: "10px 12px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>{c.name}</span>
-                          <Badge color={STCOL[c.status]}>{c.status}</Badge>
-                        </div>
-                        <DualMeter trust={c.trust} relationship={c.relationship} color={STCOL[c.status]} />
-                        {fxHints && (
-                          <div style={{ fontSize: 8, color: "var(--color-text-secondary)", marginTop: 4, lineHeight: 1.45 }}>
-                            {Object.entries(fxHints).map(([fid, v]) => {
-                              const f = factions[fid];
-                              return f ? (
-                                <span key={fid} style={{ marginRight: 4, color: v > 0 ? "#1D9E75" : "#E24B4A" }}>
-                                  {f.name.split(" ")[0]}: {v > 0 ? "+" : ""}{Math.round(v * 8)}
-                                </span>
-                              ) : null;
-                            })}
-                          </div>
-                        )}
-                        {!isHostile && (() => {
-                          const onCooldown = visitedCountries[c.id] && week < visitedCountries[c.id];
-                          const cooldownWeeks = onCooldown ? Math.max(0, visitedCountries[c.id] - week) : 0;
-                          const visitDisabled = act + actionCost > maxActions || onCooldown;
-                          return (
-                            <div style={{ display: "flex", gap: 3, marginTop: 7, flexWrap: "wrap" }}>
-                              <button onClick={() => onForeignVisit(c.id)} disabled={visitDisabled} style={{
-                                fontSize: 9,
-                                padding: "3px 8px",
-                                borderRadius: "var(--border-radius-md)",
-                                border: "none",
-                                cursor: visitDisabled ? "not-allowed" : "pointer",
-                                background: visitDisabled ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
-                                color: visitDisabled ? "var(--color-text-secondary)" : "var(--color-background-primary)",
-                              }}>Visit ({actionCost} actions)</button>
-                              {onCooldown && <span style={{ fontSize: 9, color: "#C98B2E", alignSelf: "center" }}>CD: {cooldownWeeks}w</span>}
+        {/* Right panel subtab switcher */}
+        <div style={{ display: "flex", gap: 2, marginBottom: 10, background: "var(--color-background-tertiary)", borderRadius: "var(--border-radius-md)", padding: 2, width: "fit-content" }}>
+          <button
+            onClick={() => setRightTab("dossiers")}
+            style={{
+              fontSize: 9, padding: "3px 10px",
+              borderRadius: "var(--border-radius-md)", border: "none",
+              background: rightTab === "dossiers" ? "var(--color-background-secondary)" : "transparent",
+              color: rightTab === "dossiers" ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+              cursor: "pointer",
+            }}
+          >Country Dossiers</button>
+          <button
+            onClick={() => setRightTab("crises")}
+            style={{
+              fontSize: 9, padding: "3px 10px",
+              borderRadius: "var(--border-radius-md)", border: "none",
+              background: rightTab === "crises" ? "var(--color-background-secondary)" : "transparent",
+              color: rightTab === "crises" ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+              cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 4,
+            }}
+          >
+            Crises &amp; Wars
+            {georgianCrisis && (
+              <span style={{
+                fontSize: 7, background: "#E24B4A", color: "#fff",
+                borderRadius: 3, padding: "0px 4px", fontWeight: 700, letterSpacing: "0.05em",
+              }}>URGENT</span>
+            )}
+          </button>
+        </div>
+
+        {rightTab === "dossiers" && (
+          <>
+            {["Europe", "Americas", "Asia-Pacific", "Middle East", "Africa"].map(region => {
+              const rc = countries.filter(c => c.region === region);
+              if (rc.length === 0) return null;
+              const actionCost = region === "Americas" ? 2 : 3;
+              return (
+                <div key={region} style={{ marginBottom: 12 }}>
+                  <div style={{ ...sectionLabelStyle, marginBottom: 5 }}>{region}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 5 }}>
+                    {rc.map(c => {
+                      const isHostile = c.status === "HOSTILE";
+                      const fxHints = COUNTRY_FACTION_EFFECTS[c.id];
+                      return (
+                        <div key={c.id} style={panelStyle}>
+                          <div style={{ padding: "10px 12px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>{c.name}</span>
+                              <Badge color={STCOL[c.status]}>{c.status}</Badge>
                             </div>
-                          );
-                        })()}
-                      </div>
+                            <DualMeter trust={c.trust} relationship={c.relationship} color={STCOL[c.status]} />
+                            {fxHints && (
+                              <div style={{ fontSize: 8, color: "var(--color-text-secondary)", marginTop: 4, lineHeight: 1.45 }}>
+                                {Object.entries(fxHints).map(([fid, v]) => {
+                                  const f = factions[fid];
+                                  return f ? (
+                                    <span key={fid} style={{ marginRight: 4, color: v > 0 ? "#1D9E75" : "#E24B4A" }}>
+                                      {f.name.split(" ")[0]}: {v > 0 ? "+" : ""}{Math.round(v * 8)}
+                                    </span>
+                                  ) : null;
+                                })}
+                              </div>
+                            )}
+                            {!isHostile && (() => {
+                              const onCooldown = visitedCountries[c.id] && week < visitedCountries[c.id];
+                              const cooldownWeeks = onCooldown ? Math.max(0, visitedCountries[c.id] - week) : 0;
+                              const visitDisabled = act + actionCost > maxActions || onCooldown;
+                              return (
+                                <div style={{ display: "flex", gap: 3, marginTop: 7, flexWrap: "wrap" }}>
+                                  <button onClick={() => onForeignVisit(c.id)} disabled={visitDisabled} style={{
+                                    fontSize: 9,
+                                    padding: "3px 8px",
+                                    borderRadius: "var(--border-radius-md)",
+                                    border: "none",
+                                    cursor: visitDisabled ? "not-allowed" : "pointer",
+                                    background: visitDisabled ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
+                                    color: visitDisabled ? "var(--color-text-secondary)" : "var(--color-background-primary)",
+                                  }}>Visit ({actionCost} actions)</button>
+                                  {onCooldown && <span style={{ fontSize: 9, color: "#C98B2E", alignSelf: "center" }}>CD: {cooldownWeeks}w</span>}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {rightTab === "crises" && (
+          <div>
+            {/* Active Crises */}
+            {georgianCrisis && (
+              <>
+                <div style={{ ...sectionLabelStyle, marginBottom: 5 }}>Active Crises</div>
+                <div style={{
+                  ...panelStyle,
+                  marginBottom: 12,
+                  borderColor: "#E24B4A66",
+                  borderLeft: "3px solid #E24B4A",
+                }}>
+                  <div style={{ padding: "10px 12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--color-text-primary)" }}>Georgian Crisis</span>
+                      <span style={{
+                        fontSize: 7, fontWeight: 800, letterSpacing: "0.12em",
+                        color: "#fff", background: "#E24B4A",
+                        padding: "2px 6px", borderRadius: 3, textTransform: "uppercase",
+                      }}>URGENT</span>
                     </div>
-                  );
-                })}
+                    <div style={{ display: "flex", gap: 5, marginBottom: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 9, color: "#E24B4A", background: "#E24B4A14", padding: "1px 7px", borderRadius: 3, border: "0.5px solid #E24B4A44" }}>Georgia</span>
+                      <span style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>vs.</span>
+                      <span style={{ fontSize: 9, color: "#E24B4A", background: "#E24B4A14", padding: "1px 7px", borderRadius: 3, border: "0.5px solid #E24B4A44" }}>Russia</span>
+                    </div>
+                    <p style={{ fontSize: 10, color: "var(--color-text-secondary)", lineHeight: 1.55, margin: "0 0 6px" }}>
+                      South Ossetia and Abkhazia have declared referendums on annexation to Russia following the pro-EU opposition victory in Georgian elections. Russian military forces have repositioned near the Georgian border. The situation is highly volatile.
+                    </p>
+                    <div style={{ fontSize: 8, color: "#E24B4A", fontWeight: 600 }}>
+                      ⚠ Global tension elevated · South Caucasus destabilized
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {!georgianCrisis && (
+              <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 14, fontStyle: "italic" }}>
+                No active crises at this time.
               </div>
+            )}
+
+            {/* Ongoing Wars */}
+            <div style={{ ...sectionLabelStyle, marginBottom: 5 }}>Ongoing Wars</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {ONGOING_WARS.map(war => (
+                <div key={war.id} style={panelStyle}>
+                  <div style={{ padding: "10px 12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>{war.name}</span>
+                      <span style={{
+                        fontSize: 7, fontWeight: 700, letterSpacing: "0.1em",
+                        color: "#C98B2E", background: "#C98B2E14",
+                        padding: "1px 6px", borderRadius: 3, border: "0.5px solid #C98B2E44",
+                        textTransform: "uppercase",
+                      }}>{war.status}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                      {war.sides.map((side, i) => (
+                        <span key={i} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                          <span style={{
+                            fontSize: 9, color: side.color,
+                            background: `${side.color}14`,
+                            padding: "1px 7px", borderRadius: 3,
+                            border: `0.5px solid ${side.color}44`,
+                          }}>{side.label}</span>
+                          {i < war.sides.length - 1 && (
+                            <span style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>vs.</span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                    <p style={{ fontSize: 10, color: "var(--color-text-secondary)", lineHeight: 1.55, margin: "0 0 5px" }}>
+                      {war.desc}
+                    </p>
+                    <div style={{ borderTop: "0.5px solid var(--color-border-secondary)", paddingTop: 5, marginTop: 2 }}>
+                      <div style={{ fontSize: 8, color: "var(--color-text-secondary)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>U.S. Posture</div>
+                      <div style={{ fontSize: 9, color: "var(--color-text-primary)", lineHeight: 1.5 }}>{war.usPosture}</div>
+                    </div>
+                    <div style={{ fontSize: 8, color: "var(--color-text-secondary)", marginTop: 5 }}>
+                      Since {war.started}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          );
-        })}
+          </div>
+        )}
       </div>
     </div>
   </>;

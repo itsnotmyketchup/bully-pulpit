@@ -45,6 +45,7 @@ function makeStats(overrides = {}) {
     lawEnforcementSpending: 58,
     agricultureSpending: 31,
     energyEnvironmentSpending: 35,
+    irsFunding: 14,
     powerHydroShare: 6,
     powerSolarShare: 7,
     powerWindShare: 10,
@@ -55,11 +56,20 @@ function makeStats(overrides = {}) {
     carbonEmissionsPerCapita: 13.8,
     cleanVehicleTaxCreditCost: 0,
     evAdoptionIncentive: 0,
+    medicareEligibilityAge: 65,
+    drugPriceNegotiationLevel: 1,
+    healthcareSubsidyLevel: 0,
     corporateTaxRate: 21,
     incomeTaxLow: 10,
     incomeTaxMid: 22,
     incomeTaxHigh: 37,
     payrollTaxRate: 7.65,
+    childTaxCredit: 2000,
+    earnedIncomeTaxCredit: 7830,
+    saltDeductionCap: 10000,
+    firstTimeHomebuyerTaxCredit: 0,
+    evTaxCredit: 7500,
+    renewableInvestmentTaxCredit: 30,
     ...overrides,
   };
 }
@@ -84,11 +94,19 @@ describe("computeFiscalState", () => {
   });
 
   it("reduces net tax revenue when EV tax credits are larger", () => {
-    const base = computeFiscalState(makeStats({ cleanVehicleTaxCreditCost: 0 }), createInitialMacroState());
-    const credited = computeFiscalState(makeStats({ cleanVehicleTaxCreditCost: 12 }), createInitialMacroState());
+    const base = computeFiscalState(makeStats({ evTaxCredit: 7500, cleanVehicleTaxCreditCost: 0 }), createInitialMacroState());
+    const credited = computeFiscalState(makeStats({ evTaxCredit: 10000, cleanVehicleTaxCreditCost: 0 }), createInitialMacroState());
 
-    expect(credited.taxRevenue).toBe(base.taxRevenue - 12);
-    expect(credited.nationalDeficit).toBe(base.nationalDeficit + 12);
+    expect(credited.taxRevenue).toBeLessThan(base.taxRevenue);
+    expect(credited.nationalDeficit).toBeGreaterThan(base.nationalDeficit);
+  });
+
+  it("raises revenue when IRS funding improves compliance", () => {
+    const lowerFunding = computeFiscalState(makeStats({ irsFunding: 10 }), createInitialMacroState());
+    const higherFunding = computeFiscalState(makeStats({ irsFunding: 18 }), createInitialMacroState());
+
+    expect(higherFunding.taxRevenue).toBeGreaterThan(lowerFunding.taxRevenue);
+    expect(higherFunding.nationalDeficit).toBeLessThan(lowerFunding.nationalDeficit);
   });
 });
 
@@ -191,7 +209,7 @@ describe("budget projection and Fed nominations", () => {
     const projection = computeBudgetProjection(
       makeStats(),
       createInitialMacroState(),
-      { incomeTaxMid: 0.05, infrastructureSpending: 0.1 }
+      { incomeTaxMid: 5, infrastructureSpending: 0.1, childTaxCredit: 3000, irsFunding: 0.1 }
     );
 
     expect(projection.nationalDeficit).not.toBe(makeStats().nationalDeficit);

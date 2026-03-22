@@ -51,6 +51,10 @@ describe("policy data integrity", () => {
 describe("executive order data integrity", () => {
   it("only uses known factions and stat keys", () => {
     EXECUTIVE_ORDERS.forEach((order) => {
+      expect(Number.isInteger(order.legal_risk)).toBe(true);
+      expect(order.legal_risk).toBeGreaterThanOrEqual(0);
+      expect(order.legal_risk).toBeLessThanOrEqual(4);
+
       Object.keys(order.factionReactions || {}).forEach((factionId) => {
         expect(factionIds.has(factionId)).toBe(true);
       });

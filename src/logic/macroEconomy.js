@@ -8,11 +8,21 @@ export const FED_PERSONALITIES = ["HAWKISH", "NEUTRAL", "DOVISH"];
 const BASELINE_NOMINAL_GDP = 28.0;
 const BASELINE_PRICE_LEVEL = 100;
 const BASELINE_REAL_GDP = BASELINE_NOMINAL_GDP / (BASELINE_PRICE_LEVEL / 100);
-const BASELINE_SPENDING = 8146;
+const BASELINE_SPENDING = 6800;
 const BASELINE_HOUSING_STARTS = 1366900;
 const BASELINE_PRODUCTIVITY = 65;
 const BASELINE_CONSUMER_CONFIDENCE = 51;
 const FED_MEETING_INTERVAL_WEEKS = 6;
+const BASELINE_MEDICARE_AGE = 65;
+const BASELINE_DRUG_NEGOTIATION_LEVEL = 1;
+const BASELINE_HEALTHCARE_SUBSIDY_LEVEL = 0;
+const BASELINE_CHILD_TAX_CREDIT = 2000;
+const BASELINE_EARNED_INCOME_TAX_CREDIT = 7830;
+const BASELINE_SALT_CAP = 10000;
+const BASELINE_FIRST_TIME_HOMEBUYER_CREDIT = 0;
+const BASELINE_EV_TAX_CREDIT = 7500;
+const BASELINE_RENEWABLE_ITC = 30;
+const BASELINE_IRS_FUNDING = 14;
 
 const PERSONALITY_CONFIG = {
   HAWKISH: { inflationWeight: 1.15, outputGapWeight: 0.35, cutDamping: 0.65, hikeDamping: 1.0 },
@@ -84,7 +94,8 @@ export function getTotalFederalSpending(stats) {
     + (stats.lawEnforcementSpending || 0)
     + (stats.agricultureSpending || 0)
     + (stats.energyEnvironmentSpending || 0)
-    + 3200
+    + (stats.irsFunding || 0)
+    + 2340
   );
 }
 
@@ -95,18 +106,139 @@ export function getEffectiveIncomeTaxRate(stats) {
   return low * 0.18 + mid * 0.52 + high * 0.30;
 }
 
+function getHealthcarePolicyCost(stats) {
+  const medicareAge = stats.medicareEligibilityAge ?? BASELINE_MEDICARE_AGE;
+  const negotiationLevel = stats.drugPriceNegotiationLevel ?? BASELINE_DRUG_NEGOTIATION_LEVEL;
+  const subsidyLevel = stats.healthcareSubsidyLevel ?? BASELINE_HEALTHCARE_SUBSIDY_LEVEL;
+
+  const ageCost = ({
+    64: 45,
+    65: 0,
+    66: -28,
+    67: -62,
+  })[medicareAge] ?? 0;
+  const negotiationCost = ({
+    0: 24,
+    1: 0,
+    2: -38,
+  })[negotiationLevel] ?? 0;
+  const subsidyCost = ({
+    [-1]: -42,
+    0: 0,
+    1: 36,
+  })[subsidyLevel] ?? 0;
+
+  return ageCost + negotiationCost + subsidyCost;
+}
+
+function getChildTaxCreditCost(stats) {
+  const credit = Math.max(0, stats.childTaxCredit ?? BASELINE_CHILD_TAX_CREDIT);
+  return 118 * (credit / BASELINE_CHILD_TAX_CREDIT);
+}
+
+function getEarnedIncomeTaxCreditCost(stats) {
+  const credit = Math.max(0, stats.earnedIncomeTaxCredit ?? BASELINE_EARNED_INCOME_TAX_CREDIT);
+  return 78 * (credit / BASELINE_EARNED_INCOME_TAX_CREDIT);
+}
+
+function getSaltCapRevenueEffect(stats) {
+  const cap = stats.saltDeductionCap ?? BASELINE_SALT_CAP;
+  if (cap < 0) return -95;
+  if (cap <= BASELINE_SALT_CAP) return ((BASELINE_SALT_CAP - cap) / 5000) * 35;
+  return -Math.min(80, ((cap - BASELINE_SALT_CAP) / 10000) * 18);
+}
+
+function getHomebuyerCreditCost(stats) {
+  const credit = Math.max(0, stats.firstTimeHomebuyerTaxCredit ?? BASELINE_FIRST_TIME_HOMEBUYER_CREDIT);
+  return credit * 0.0024;
+}
+
+function getEvTaxCreditCost(stats) {
+  const credit = Math.max(0, stats.evTaxCredit ?? BASELINE_EV_TAX_CREDIT);
+  const baseCost = 8 * (credit / BASELINE_EV_TAX_CREDIT);
+  return baseCost + Math.max(0, stats.cleanVehicleTaxCreditCost || 0);
+}
+
+function getRenewableItcCost(stats) {
+  const credit = Math.max(0, stats.renewableInvestmentTaxCredit ?? BASELINE_RENEWABLE_ITC);
+  return 18 * (credit / BASELINE_RENEWABLE_ITC);
+}
+
+function getHouseholdTaxReliefImpulse(stats) {
+  const childBoost = ((stats.childTaxCredit ?? BASELINE_CHILD_TAX_CREDIT) - BASELINE_CHILD_TAX_CREDIT) / BASELINE_CHILD_TAX_CREDIT;
+  const eitcBoost = ((stats.earnedIncomeTaxCredit ?? BASELINE_EARNED_INCOME_TAX_CREDIT) - BASELINE_EARNED_INCOME_TAX_CREDIT) / BASELINE_EARNED_INCOME_TAX_CREDIT;
+  const subsidyBoost = (stats.healthcareSubsidyLevel ?? BASELINE_HEALTHCARE_SUBSIDY_LEVEL) * 0.05;
+  const saltBoost = getSaltCapRevenueEffect(stats) < 0 ? Math.abs(getSaltCapRevenueEffect(stats)) / 2000 : -getSaltCapRevenueEffect(stats) / 3000;
+
+  return childBoost * 0.07 + eitcBoost * 0.09 + subsidyBoost + saltBoost;
+}
+
+function getHomebuyerHousingImpulse(stats) {
+  const homebuyerBoost = Math.max(0, stats.firstTimeHomebuyerTaxCredit ?? BASELINE_FIRST_TIME_HOMEBUYER_CREDIT) / 15000;
+  const saltBoost = getSaltCapRevenueEffect(stats) < 0 ? Math.abs(getSaltCapRevenueEffect(stats)) / 180 : -getSaltCapRevenueEffect(stats) / 300;
+  return homebuyerBoost * 22000 + saltBoost * 3500;
+}
+
+export function applyBudgetDraftToStats(stats, budgetDraft = {}) {
+  const nextStats = { ...stats };
+
+  ["corporateTaxRate", "incomeTaxLow", "incomeTaxMid", "incomeTaxHigh", "payrollTaxRate"].forEach((key) => {
+    if (budgetDraft[key] != null) nextStats[key] = stats[key] + budgetDraft[key];
+  });
+  [
+    "militarySpending",
+    "educationSpending",
+    "infrastructureSpending",
+    "otherSpending",
+    "scienceTechnologySpending",
+    "lawEnforcementSpending",
+    "agricultureSpending",
+    "energyEnvironmentSpending",
+    "irsFunding",
+  ].forEach((key) => {
+    if (budgetDraft[key] != null) nextStats[key] = Math.round(stats[key] * (1 + budgetDraft[key]));
+  });
+
+  [
+    "medicareEligibilityAge",
+    "drugPriceNegotiationLevel",
+    "healthcareSubsidyLevel",
+    "childTaxCredit",
+    "earnedIncomeTaxCredit",
+    "saltDeductionCap",
+    "firstTimeHomebuyerTaxCredit",
+    "evTaxCredit",
+    "renewableInvestmentTaxCredit",
+  ].forEach((key) => {
+    if (budgetDraft[key] != null) nextStats[key] = budgetDraft[key];
+  });
+
+  nextStats.healthcareSpending = Math.round(
+    (stats.healthcareSpending || 0)
+    + (getHealthcarePolicyCost(nextStats) - getHealthcarePolicyCost(stats))
+  );
+
+  return nextStats;
+}
+
 export function computeFiscalState(stats, macroState) {
   const nominalGdpB = (macroState.realGdp * (macroState.priceLevel / 100)) * 1000;
   const effectiveIncomeTaxRate = getEffectiveIncomeTaxRate(stats);
   const payrollRate = (stats.payrollTaxRate || 0) / 100;
   const corporateRate = (stats.corporateTaxRate || 0) / 100;
-  const cleanVehicleTaxCreditCost = Math.max(0, stats.cleanVehicleTaxCreditCost || 0);
   const unemployment = stats.unemployment ?? NATURAL_UNEMPLOYMENT;
+  const taxExpenditureCost = getChildTaxCreditCost(stats)
+    + getEarnedIncomeTaxCreditCost(stats)
+    + getHomebuyerCreditCost(stats)
+    + getEvTaxCreditCost(stats)
+    + getRenewableItcCost(stats);
+  const saltRevenueEffect = getSaltCapRevenueEffect(stats);
 
   const employmentAdjustment = clamp(1 - Math.max(0, unemployment - 4) * 0.045, 0.72, 1.03);
-  const incomeCompliance = clamp(1 - Math.max(0, effectiveIncomeTaxRate - 0.24) * 1.25, 0.72, 1.02);
-  const payrollCompliance = clamp(1 - Math.max(0, payrollRate - 0.085) * 1.05, 0.82, 1.01);
-  const corporateCompliance = clamp(1 - Math.max(0, corporateRate - 0.22) * 1.45, 0.62, 1.02);
+  const irsFundingGap = clamp(((stats.irsFunding ?? BASELINE_IRS_FUNDING) - BASELINE_IRS_FUNDING) / BASELINE_IRS_FUNDING, -0.6, 1.25);
+  const incomeCompliance = clamp(1 - Math.max(0, effectiveIncomeTaxRate - 0.24) * 1.25 + irsFundingGap * 0.05, 0.70, 1.04);
+  const payrollCompliance = clamp(1 - Math.max(0, payrollRate - 0.085) * 1.05 + irsFundingGap * 0.025, 0.80, 1.02);
+  const corporateCompliance = clamp(1 - Math.max(0, corporateRate - 0.22) * 1.45 + irsFundingGap * 0.09, 0.58, 1.05);
   const profitCycleAdjustment = clamp(
     1 + (macroState.businessConfidence - 50) / 180 + (macroState.outputGap / 10),
     0.72,
@@ -121,7 +253,7 @@ export function computeFiscalState(stats, macroState) {
   const payrollRevenue = payrollBase * payrollRate * payrollCompliance;
   const corporateRevenue = corporateProfitBase * corporateRate * corporateCompliance;
 
-  const taxRevenue = personalIncomeRevenue + payrollRevenue + corporateRevenue - cleanVehicleTaxCreditCost;
+  const taxRevenue = personalIncomeRevenue + payrollRevenue + corporateRevenue + saltRevenueEffect - taxExpenditureCost;
   const totalSpending = getTotalFederalSpending(stats);
   const nationalDeficit = Math.round(totalSpending - taxRevenue);
 
@@ -269,6 +401,8 @@ export function advanceMacroEconomy(currentMacroState, currentStats, week, rando
   const infrastructureSpendingGap = ((currentStats.infrastructureSpending || 110) - 110) / 110;
   const scienceSpendingGap = ((currentStats.scienceTechnologySpending || 45) - 45) / 45;
   const laggedUnemployment = currentMacroState.lastUnemployment ?? currentStats.unemployment ?? NATURAL_UNEMPLOYMENT;
+  const householdReliefImpulse = getHouseholdTaxReliefImpulse(currentStats);
+  const homebuyerHousingImpulse = getHomebuyerHousingImpulse(currentStats);
 
   macroState.educationQuality = clamp(
     macroState.educationQuality + educationSpendingGap * 0.12 + macroState.impulses.productivity * 0.04,
@@ -346,6 +480,7 @@ export function advanceMacroEconomy(currentMacroState, currentStats, week, rando
     - (laggedUnemployment - NATURAL_UNEMPLOYMENT) * 28000
     - (inflation - INFLATION_TARGET) * 18000
     + (macroState.productivity - BASELINE_PRODUCTIVITY) * 3200
+    + homebuyerHousingImpulse
     + macroState.impulses.investment * 22000
   );
   const nextHousingMomentum = clamp(
@@ -379,6 +514,7 @@ export function advanceMacroEconomy(currentMacroState, currentStats, week, rando
     - Math.max(0, unemployment - NATURAL_UNEMPLOYMENT) * 0.35
     - Math.max(0, inflation - INFLATION_TARGET) * 0.22
     - Math.max(0, currentStats.gasPrice - 3.5) * 0.12
+    + householdReliefImpulse
     + macroState.impulses.demand * 0.55;
   const investmentImpulse = ((macroState.businessConfidence - 50) / 28)
     + (macroState.productivity - 50) * 0.015
@@ -538,10 +674,7 @@ export function resolveFedNomination(congress, playerParty, personality) {
 }
 
 export function computeBudgetProjection(stats, macroState, budgetDraft) {
-  const nextStats = { ...stats };
-  Object.entries(budgetDraft || {}).forEach(([key, delta]) => {
-    if (nextStats[key] != null) nextStats[key] = stats[key] * (1 + delta);
-  });
+  const nextStats = applyBudgetDraftToStats(stats, budgetDraft);
   const fiscal = computeFiscalState(nextStats, macroState);
   return {
     stats: nextStats,

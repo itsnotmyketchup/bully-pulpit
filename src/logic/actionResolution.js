@@ -9,6 +9,7 @@ import {
   applyTrustEffects,
   cloneFactions,
 } from "./factionMutations.js";
+import { applyBudgetDraftToStats } from "./macroEconomy.js";
 import { getPromiseLabel } from "./promiseResolution.js";
 
 function resolveDelayedWeeks(config = {}) {
@@ -57,6 +58,8 @@ function queueDelayedPolicyEffects(queue, source, week, mult = 1) {
     nextQueue.push({
       week: delayedWeek,
       name: `${source.name} (delayed)`,
+      sourceId: source.id || null,
+      sourceType: source.sourceType || null,
       effects: Object.fromEntries(Object.entries(source.delayedEffects.effects || {}).map(([key, value]) => [key, value * mult])),
       macroEffects: Object.fromEntries(Object.entries(source.delayedMacroEffects?.effects || {}).map(([key, value]) => [key, value * mult])),
     });
@@ -64,6 +67,8 @@ function queueDelayedPolicyEffects(queue, source, week, mult = 1) {
     nextQueue.push({
       week: delayedWeek,
       name: `${source.name} (delayed)`,
+      sourceId: source.id || null,
+      sourceType: source.sourceType || null,
       effects: {},
       macroEffects: Object.fromEntries(Object.entries(source.delayedMacroEffects.effects || {}).map(([key, value]) => [key, value * mult])),
     });
@@ -277,7 +282,7 @@ export function resolveExecutiveOrder({
     : { ...stBon };
 
   const nextOverreach = Math.min(100, executiveOverreach + (eo.controversy === 0 ? 0 : 3 + 5 * eo.controversy));
-  const nextQueue = queueDelayedPolicyEffects([], { ...outcome, name: eo.name }, week, mult);
+  const nextQueue = queueDelayedPolicyEffects([], { ...outcome, id: eo.id, sourceType: "executive_order", name: eo.name }, week, mult);
 
   const factionLines = Object.entries(outcome.factionReactions || {}).map(([factionId, value]) => {
     const faction = nextFactions[factionId];
@@ -299,7 +304,25 @@ export function resolveExecutiveOrder({
     countries: nextCountries,
     stBon: nextStateBonuses,
     pFx: nextQueue,
-    activeOrders: [...activeOrders, { id: eo.id, name: eo.name, issuedWeek: week, active: true, choiceData: extraData }],
+    activeOrders: [...activeOrders, {
+      id: eo.id,
+      name: eo.name,
+      issuedWeek: week,
+      active: true,
+      choiceData: extraData,
+      courtStatus: "active",
+      invalidatedWeek: null,
+      appealFiledWeek: null,
+      outcomeSnapshot: {
+        effects: { ...(outcome.effects || {}) },
+        macroEffects: { ...(outcome.macroEffects || {}) },
+        delayedEffects: outcome.delayedEffects ? { weeks: outcome.delayedEffects.weeks, effects: { ...(outcome.delayedEffects.effects || {}) } } : null,
+        delayedMacroEffects: outcome.delayedMacroEffects ? { weeks: outcome.delayedMacroEffects.weeks, effects: { ...(outcome.delayedMacroEffects.effects || {}) } } : null,
+        factionReactions: { ...(outcome.factionReactions || {}) },
+        stateEffects: outcome.stateEffects ? { ...(outcome.stateEffects || {}) } : null,
+        specialEffects: eo.specialEffects ? [...eo.specialEffects] : null,
+      },
+    }],
     overreach: nextOverreach,
     log: `EXECUTIVE ORDER: "${eo.name}" signed.${outcome.delayedEffects || outcome.delayedMacroEffects ? ` Effects delayed ${(outcome.delayedEffects?.weeks || outcome.delayedMacroEffects?.weeks)} weeks.` : ""}`,
     eoResult: {
@@ -341,8 +364,7 @@ export function resolveSignedBill({
   let nextCountries = countries;
 
   if (isBudget) {
-    ["corporateTaxRate","incomeTaxLow","incomeTaxMid","incomeTaxHigh","payrollTaxRate","militarySpending","educationSpending","healthcareSpending","socialSecuritySpending","infrastructureSpending","otherSpending"]
-      .forEach((key) => { if (budgetDraft[key] != null) nextStats[key] = stats[key] * (1 + budgetDraft[key]); });
+    nextStats = applyBudgetDraftToStats(stats, budgetDraft);
     nextStats.approvalRating = (nextStats.approvalRating || 50) + 1.5;
   } else {
     ({ stats: nextStats, macroState: nextMacroState } = applyEffectsBundle(

@@ -53,6 +53,7 @@ import {
   generateScotusJusticeCandidates,
   buildScotusAppointmentProcess,
 } from "./logic/scotusAppointments.js";
+import { invalidateExecutiveOrder } from "./logic/executiveOrderJudiciary.js";
 import { settleSecStatePromises } from "./logic/promiseResolution.js";
 import { runWeeklySimulation } from "./logic/weeklySimulation.js";
 import { computeBudgetReactions } from "./systems/budgetCalc.js";
@@ -65,6 +66,7 @@ import Badge from "./components/Badge.jsx";
 import LandingScreen from "./components/screens/LandingScreen.jsx";
 import SetupScreen from "./components/screens/SetupScreen.jsx";
 import CrisisModal from "./components/modals/CrisisModal.jsx";
+import PDBModal from "./components/modals/PDBModal.jsx";
 
 import OverviewTab from "./components/tabs/OverviewTab.jsx";
 import CongressTab from "./components/tabs/CongressTab.jsx";
@@ -260,6 +262,9 @@ export default function Game() {
   const [scotusVacancy, setScotusVacancy] = useState(null);  // { justiceId, isChief, stage:"selecting"|"confirming", candidates, selectedId, vetMoreUsed }
   const [scotusPendingConfirmation, setScotusConfirmation] = useState(null); // appointment-like object
   const [pendingScotusEvent, setPendingScotusEvent] = useState(null); // queued crisis event for when curEv clears
+  const [scotusRulings, setScotusRulings] = useState([]);
+  const [nextExecutiveOrderCourtCheckWeek, setNextExecutiveOrderCourtCheckWeek] = useState(null);
+  const [pendingJudicialEvent, setPendingJudicialEvent] = useState(null);
 
   // ── Election state ──────────────────────────────────────────────────────────
   const [congressHistory, setCongressHistory] = useState([]);
@@ -271,6 +276,9 @@ export default function Game() {
   const [campaignActivity, setCampaignActivity] = useState(0); // speeches + visits + surrogate actions during campaign
   const [pollingNoise, setPollingNoise] = useState(0);
   const [isPresidentialElection, setIsPresidentialElection] = useState(false);
+
+  // ── Geopolitical crisis tracking ──────────────────────────────────────────
+  const [georgianCrisis, setGeorgianCrisis] = useState(false);
 
   const yr = Math.ceil(week / 52), wiy = ((week - 1) % 52) + 1;
   const season = getSeasonLabel(week);
@@ -759,6 +767,9 @@ export default function Game() {
     setScotusVacancy(null);
     setScotusConfirmation(null);
     setPendingScotusEvent(null);
+    setScotusRulings([]);
+    setNextExecutiveOrderCourtCheckWeek(null);
+    setPendingJudicialEvent(null);
     setCongressHistory([buildHistorySnapshot(c, 1, 0, 0, freshStats.approvalRating, 0, freshStats.approvalRating, false, { isInitial: true })]);
     setMidtermResults(null);
     setShowMidtermModal(false);
@@ -768,6 +779,7 @@ export default function Game() {
     setCampaignActivity(0);
     setPollingNoise(0);
     setIsPresidentialElection(false);
+    setGeorgianCrisis(false);
     setLog([{ week: 1, text: `President ${pn.trim()} and Vice President ${vpn.trim()} inaugurated. ${PARTIES[pp]} hold both chambers. Base: ${FACTION_DATA[pp].find(f => f.id === pf)?.name}.` }]);
     setScreen(2);
   };
@@ -807,6 +819,7 @@ export default function Game() {
       overreachLastIncreasedWeek,
       overreachLowSinceWeek,
       pendingChainEvents,
+      nextExecutiveOrderCourtCheckWeek,
       lastSpecialEventWeek,
       visitTypeCounts,
       billLikelihood,
@@ -819,6 +832,8 @@ export default function Game() {
       reconciliationCooldown,
       confirmationHistory,
       congressHistory,
+      scotusJustices,
+      scotusRulings,
       midtermResults,
       showMidtermModal,
       showInaugurationModal,
@@ -829,6 +844,7 @@ export default function Game() {
       notifications,
       brokenPromises,
       recentDisasters,
+      pendingJudicialEvent,
       curEv,
       act,
       maxActions,
@@ -881,6 +897,7 @@ export default function Game() {
     setFactionHist(nextState.factionHist);
     setPendingAppointment(nextState.pendingAppointment);
     setConfirmationHistory(nextState.confirmationHistory);
+    setScotusRulings(nextState.scotusRulings);
     setPromises(nextState.promises);
     setBrokenPromises(nextState.brokenPromises);
     setEngagement(nextState.engagement);
@@ -891,6 +908,7 @@ export default function Game() {
     setWeek(nextState.week);
     setNotifications(nextState.notifications);
     setRecentDisasters(nextState.recentDisasters);
+    setPendingJudicialEvent(nextState.pendingJudicialEvent);
     setAct(nextState.act);
     setMidtermResults(nextState.midtermResults);
     setShowMidtermModal(nextState.showMidtermModal);
@@ -903,6 +921,7 @@ export default function Game() {
     setCountryStatusSnapshot(nextState.countryStatusSnapshot);
     setDiplomacyThresholds(nextState.diplomacyThresholds);
     setPendingChainEvents(nextState.pendingChainEvents);
+    setNextExecutiveOrderCourtCheckWeek(nextState.nextExecutiveOrderCourtCheckWeek);
     setLastSpecialEventWeek(nextState.lastSpecialEventWeek);
     setStateHist(nextState.stateHist);
     setStBon(nextState.stBon);
@@ -1046,11 +1065,88 @@ export default function Game() {
     }
   };
 
+  const flushQueuedModalEvent = useCallback(() => {
+    const nextEvent = pendingJudicialEvent || pendingScotusEvent || null;
+    setCurEv(nextEvent);
+    if (pendingJudicialEvent) {
+      setPendingJudicialEvent(null);
+      return;
+    }
+    setPendingScotusEvent(null);
+  }, [pendingJudicialEvent, pendingScotusEvent]);
+
   const handleEventChoice = choice => {
     // SCOTUS vacancy / result events are UI-only acknowledgements
     if (curEv?.type === "scotus_vacancy" || curEv?.type === "scotus_result") {
-      setCurEv(pendingScotusEvent || null);
-      setPendingScotusEvent(null);
+      flushQueuedModalEvent();
+      return;
+    }
+
+    if (typeof choice?.judicialAction === "string" && curEv?.orderId) {
+      if (choice.judicialAction === "appeal_to_scotus") {
+        setAct(n => n + 1);
+        setActiveOrders(prev => prev.map(order => (
+          order.id === choice.orderId && order.active
+            ? { ...order, courtStatus: "scotus_pending_cert", appealFiledWeek: week }
+            : order
+        )));
+        setPendingChainEvents(prev => [...prev, {
+          triggerAtWeek: week + 2 + Math.floor(Math.random() * 3),
+          event: { type: "eo_scotus_cert_check", orderId: choice.orderId },
+        }]);
+        addLog(`Appealed "${activeOrders.find(order => order.id === choice.orderId)?.name || choice.orderId}" to the Supreme Court.`);
+        flushQueuedModalEvent();
+        return;
+      }
+
+      if (choice.judicialAction === "schedule_scotus_decision") {
+        setActiveOrders(prev => prev.map(order => (
+          order.id === choice.orderId && order.active
+            ? { ...order, courtStatus: "scotus_pending_decision" }
+            : order
+        )));
+        setPendingChainEvents(prev => [...prev, {
+          triggerAtWeek: week + 4 + Math.floor(Math.random() * 9),
+          event: { type: "eo_scotus_final_pending", orderId: choice.orderId },
+        }]);
+        addLog(`The Supreme Court granted review in the challenge to "${activeOrders.find(order => order.id === choice.orderId)?.name || choice.orderId}".`);
+        flushQueuedModalEvent();
+        return;
+      }
+
+      if (choice.judicialAction === "invalidate_order") {
+        const next = invalidateExecutiveOrder({
+          activeOrders,
+          orderId: choice.orderId,
+          invalidatedWeek: week,
+          stats,
+          macroState,
+          stBon,
+          pFx,
+          drillingRegionStateMap: DRILLING_REGION_STATE_MAP,
+          maxActions,
+        });
+        setStats(next.stats);
+        setMacroState(next.macroState);
+        setStBon(next.stBon);
+        setPFx(next.pFx);
+        setActiveOrders(next.activeOrders);
+        if (next.maxActions != null) setMaxActions(next.maxActions);
+        addLog(`EXECUTIVE ORDER INVALIDATED: "${activeOrders.find(order => order.id === choice.orderId)?.name || choice.orderId}"`);
+        flushQueuedModalEvent();
+        return;
+      }
+
+      if (choice.judicialAction === "close_judicial_event") {
+        setActiveOrders(prev => prev.map(order => (
+          order.id === choice.orderId && order.active
+            ? { ...order, courtStatus: curEv?.type === "eo_appeals_upheld" ? "appeals_upheld" : "active" }
+            : order
+        )));
+        flushQueuedModalEvent();
+        return;
+      }
+
       return;
     }
 
@@ -1074,7 +1170,16 @@ export default function Game() {
     setCountries(result.countries);
     setStBon(result.stBon);
     if (curEv.engagementEffect) setEngagement(e => Math.max(0, Math.min(50, e + curEv.engagementEffect)));
+    if (choice.engagementEffect) setEngagement(e => Math.max(0, Math.min(50, e + choice.engagementEffect)));
     if (result.globalTensionDelta) setGlobalTension(t => Math.max(0, Math.min(50, t + result.globalTensionDelta)));
+    if (curEv.setsGeorgianCrisis) {
+      setGeorgianCrisis(true);
+      addNotification({
+        type: "crisis_alert",
+        message: "The Georgian Crisis is now active. Global tensions are rising in the South Caucasus.",
+        tab: "diplomacy",
+      });
+    }
     if (result.pendingChainEvent) setPendingChainEvents(prev => [...prev, result.pendingChainEvent]);
     if (result.pendingAppointment) setPendingAppointment(result.pendingAppointment);
     result.logs.forEach(addLog);
@@ -1087,8 +1192,7 @@ export default function Game() {
       });
     }
     // After resolving a normal event, flush any queued SCOTUS event
-    setCurEv(pendingScotusEvent || null);
-    setPendingScotusEvent(null);
+    flushQueuedModalEvent();
   };
 
   const propose = action => {
@@ -1676,7 +1780,30 @@ export default function Game() {
           cg={cg}
           onOpenBudget={() => {
             if (!activeBill && (reconciliationCooldown === 0 || week >= reconciliationCooldown)) {
-              setBudgetDraft({ corporateTaxRate: 0, incomeTaxLow: 0, incomeTaxMid: 0, incomeTaxHigh: 0, payrollTaxRate: 0, militarySpending: 0, educationSpending: 0, healthcareSpending: 0, socialSecuritySpending: 0, infrastructureSpending: 0, otherSpending: 0 });
+              setBudgetDraft({
+                corporateTaxRate: 0,
+                incomeTaxLow: 0,
+                incomeTaxMid: 0,
+                incomeTaxHigh: 0,
+                payrollTaxRate: 0,
+                militarySpending: 0,
+                educationSpending: 0,
+                infrastructureSpending: 0,
+                scienceTechnologySpending: 0,
+                lawEnforcementSpending: 0,
+                agricultureSpending: 0,
+                energyEnvironmentSpending: 0,
+                irsFunding: 0,
+                medicareEligibilityAge: stats.medicareEligibilityAge,
+                drugPriceNegotiationLevel: stats.drugPriceNegotiationLevel,
+                healthcareSubsidyLevel: stats.healthcareSubsidyLevel,
+                childTaxCredit: stats.childTaxCredit,
+                earnedIncomeTaxCredit: stats.earnedIncomeTaxCredit,
+                saltDeductionCap: stats.saltDeductionCap,
+                firstTimeHomebuyerTaxCredit: stats.firstTimeHomebuyerTaxCredit,
+                evTaxCredit: stats.evTaxCredit,
+                renewableInvestmentTaxCredit: stats.renewableInvestmentTaxCredit,
+              });
               setShowBudget(true);
             }
           }}
@@ -1717,6 +1844,7 @@ export default function Game() {
           engagement={engagement}
           powerProjection={powerProjection}
           globalTension={globalTension}
+          georgianCrisis={georgianCrisis}
         />
       )}
 
@@ -1725,6 +1853,7 @@ export default function Game() {
           scotusJustices={scotusJustices}
           scotusVacancy={scotusVacancy}
           scotusPendingConfirmation={scotusPendingConfirmation}
+          scotusRulings={scotusRulings}
           playerParty={pp}
           surrogates={surrogates}
           allFactions={[...FACTION_DATA.DEM, ...FACTION_DATA.REP]}
@@ -1770,7 +1899,8 @@ export default function Game() {
         results={showInaugurationModal ? midtermResults : null}
         onDismiss={() => setShowInaugurationModal(false)}
       />
-      <CrisisModal curEv={curEv} wiy={wiy} yr={yr} onChoice={handleEventChoice} />
+      <PDBModal curEv={curEv?.type === "pdb" ? curEv : null} wiy={wiy} yr={yr} onChoice={handleEventChoice} />
+      <CrisisModal curEv={curEv?.type !== "pdb" ? curEv : null} wiy={wiy} yr={yr} onChoice={handleEventChoice} />
     </div>
   );
 }

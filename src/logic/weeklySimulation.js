@@ -10,6 +10,7 @@ import { clamp, clampUni } from "../utils/clamp.js";
 import { cloneFactions, adjustFaction, pushFactionHistory } from "./factionMutations.js";
 import { cloneCountries } from "./countryMutations.js";
 import { applyEffectsBundle, syncDerivedStats } from "./effectResolution.js";
+import { advanceExecutiveOrderJudiciaryPhase } from "./executiveOrderJudiciary.js";
 import { getPromiseLabel, settleSecStatePromises } from "./promiseResolution.js";
 
 const RANDOM_EVENT_CHECKS_PER_YEAR = 13;
@@ -30,13 +31,15 @@ const POWER_SOURCE_LIMITS = {
 function getEnvironmentProgressMultiplier(stats, macroState) {
   const techFactor = ((macroState.technologicalAdvancement ?? BASELINE_TECHNOLOGY) - BASELINE_TECHNOLOGY) / 50;
   const spendingFactor = ((stats.energyEnvironmentSpending ?? BASELINE_ENERGY_ENVIRONMENT_SPENDING) - BASELINE_ENERGY_ENVIRONMENT_SPENDING) / BASELINE_ENERGY_ENVIRONMENT_SPENDING;
-  return clamp(1 + techFactor * 0.85 + spendingFactor * 0.75, 0.3, 2.6);
+  const renewableCreditFactor = ((stats.renewableInvestmentTaxCredit ?? 30) - 30) / 30;
+  return clamp(1 + techFactor * 0.85 + spendingFactor * 0.75 + renewableCreditFactor * 0.3, 0.3, 2.6);
 }
 
 function advanceEnvironmentStats(stats, macroState) {
   const progressMultiplier = getEnvironmentProgressMultiplier(stats, macroState);
   const cleanAllocationToSolar = clamp(0.52 + ((macroState.technologicalAdvancement ?? BASELINE_TECHNOLOGY) - BASELINE_TECHNOLOGY) / 250, 0.45, 0.62);
-  const evPolicyBoost = 1 + Math.max(0, stats.evAdoptionIncentive || 0) * 0.65;
+  const evCreditFactor = ((stats.evTaxCredit ?? 7500) - 7500) / 7500;
+  const evPolicyBoost = clamp(1 + Math.max(-0.35, evCreditFactor * 0.35) + Math.max(0, stats.evAdoptionIncentive || 0) * 0.65, 0.55, 2.2);
 
   const desiredCoalLoss = Math.max(0, 0.03 * progressMultiplier);
   const desiredNaturalGasLoss = Math.max(0, 0.01 * progressMultiplier);
@@ -125,6 +128,8 @@ function cloneSnapshot(snapshot) {
     countryStatusSnapshot: { ...snapshot.countryStatusSnapshot },
     diplomacyThresholds: { ...snapshot.diplomacyThresholds },
     pendingChainEvents: [...(snapshot.pendingChainEvents || [])],
+    nextExecutiveOrderCourtCheckWeek: snapshot.nextExecutiveOrderCourtCheckWeek ?? null,
+    pendingJudicialEvent: snapshot.pendingJudicialEvent || null,
     visitTypeCounts: Object.fromEntries(
       Object.entries(snapshot.visitTypeCounts || {}).map(([visitId, visitWeeks]) => [visitId, [...normalizeVisitWeeks(visitWeeks)]])
     ),
@@ -139,6 +144,8 @@ function cloneSnapshot(snapshot) {
     reconciliationCooldown: snapshot.reconciliationCooldown || 0,
     confirmationHistory: [...(snapshot.confirmationHistory || [])],
     congressHistory: [...(snapshot.congressHistory || [])],
+    scotusJustices: [...(snapshot.scotusJustices || [])],
+    scotusRulings: [...(snapshot.scotusRulings || [])],
     notifications: [...(snapshot.notifications || [])],
     brokenPromises: [...(snapshot.brokenPromises || [])],
     recentDisasters: { ...snapshot.recentDisasters },
@@ -767,6 +774,7 @@ export function advanceDiplomacyPhase(context) {
 
 export function advanceEventPhase(context) {
   const { state, deps, runtime } = context;
+  if (state.curEv) return;
   if (((runtime.nextWeek - 1) % 52) + 1 === 1 && !state.macroState.fedVacant && Math.random() < 0.2) {
     state.macroState = { ...state.macroState, fedVacant: true, fedDecisionSummary: "Chair vacancy pending Senate confirmation." };
     state.curEv = deps.buildFedNominationEvent();
@@ -841,6 +849,7 @@ export function runWeeklySimulation(snapshot, deps) {
   advanceSurrogatesPhase(context);
   advanceElectionPhase(context);
   advanceDiplomacyPhase(context);
+  advanceExecutiveOrderJudiciaryPhase(context);
   advanceEventPhase(context);
 
   const mergedLog = [...context.sideEffects.logs.reverse(), ...snapshot.log].slice(0, 100);

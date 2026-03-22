@@ -75,6 +75,176 @@ export function isDisasterCheckWeek(week) {
   return DISASTER_CHECK_WEEKS.has(weekOfYear);
 }
 
+// ─── Georgia Election Interference Chain ───────────────────────────────────
+
+const GEORGIA_C1_EVENT = {
+  id: "georgia_c1_normalization",
+  category: "chain",
+  isChainEvent: true,
+  chainOf: "Georgian Parliamentary Elections",
+  unique: true,
+  name: "Georgia Signs Diplomatic Normalization Agreement with Moscow",
+  desc: "The new pro-Russian Georgian government has signed a comprehensive diplomatic normalization agreement with Moscow, restoring full ambassadorial relations severed after the 2008 war. More controversially, a secondary \"non-use of force\" pact tacitly recognizes the de facto independence of South Ossetia and Abkhazia — effectively accepting the outcome of the 2008 war in all but name. Pro-Western Georgian opposition parties have denounced the agreement as capitulation.",
+  effects: { approvalRating: 0 },
+  choices: [
+    {
+      text: "Issue a formal statement of concern through diplomatic channels.",
+      effects: {},
+      result: "The State Department notes displeasure. Little practical effect.",
+    },
+  ],
+};
+
+const GEORGIA_C3_EVENT = {
+  id: "georgia_c3_referendum",
+  category: "chain",
+  isChainEvent: true,
+  chainOf: "Georgian Parliamentary Elections",
+  unique: true,
+  name: "South Ossetia and Abkhazia Declare Independence Referendums",
+  desc: "In a move widely seen as coordinated with the Kremlin, the Russian-backed separatist governments of South Ossetia and Abkhazia have announced independence referendums to be held within two weeks — on annexation into the Russian Federation. The timing, framed as a reaction to 'aggressive' moves by the new pro-EU Georgian government, has alarmed European capitals. Russian military units have been repositioned near the Georgian border. NATO allies are demanding a coordinated Western response.",
+  effects: {},
+  choices: [
+    {
+      text: "Denounce the Russian military buildup and issue a formal warning against any incursion into Georgia.",
+      effects: {},
+      countryEffects: { russia: { relationship: -1 } },
+      result: "The White House statement draws praise from NATO allies. Russia dismisses it as 'hostile rhetoric.' The referendums proceed as scheduled.",
+    },
+    {
+      text: "Denounce, warn, and immediately authorize intelligence sharing and military advisors for Georgia.",
+      effects: {},
+      countryEffects: { russia: { relationship: -5 } },
+      result: "Moscow condemns U.S. interference. Georgia receives tactical support. Tensions in the South Caucasus escalate sharply.",
+    },
+    {
+      text: "Pursue backdoor negotiations — call the Russian president directly to defuse the crisis.",
+      effects: {},
+      countryEffects: { russia: { relationship: 5 } },
+      result: "After tense back-channel talks, the referendums are delayed 'for further consultations.' European allies express private frustration at being bypassed.",
+    },
+  ],
+};
+
+const GEORGIA_B1_EVENT = {
+  id: "georgia_b1_prorussian_wins_big",
+  category: "chain",
+  isChainEvent: true,
+  chainOf: "Georgian Parliamentary Elections Intel Report",
+  unique: true,
+  name: "Georgian Elections: Pro-Russian Georgian Dream Party Claims Decisive Victory",
+  desc: "The Georgian Dream party, backed by Moscow, has won a commanding parliamentary majority in elections that international observers flagged as deeply irregular. With turnout anomalies in rural districts, coordinated media blackouts on opposition coverage, and unexplained outages in the central election management system on voting day, the results have been condemned by the EU and Council of Europe — though formal proceedings will take months. The new government is expected to pivot sharply away from EU accession talks.",
+  effects: {},
+  choices: [
+    {
+      text: "Acknowledge the results and await further developments.",
+      effects: {},
+      result: "The administration takes note. Georgian pro-EU protesters fill Tbilisi's streets in the coming days.",
+      schedulesChain: {
+        minDelay: 52,
+        maxDelay: 104,
+        outcomes: [{ probability: 1.0, event: GEORGIA_C1_EVENT }],
+      },
+    },
+  ],
+};
+
+const GEORGIA_B2_EVENT = {
+  id: "georgia_b2_prorussian_wins_small",
+  category: "chain",
+  isChainEvent: true,
+  chainOf: "Georgian Parliamentary Elections Intel Report",
+  unique: true,
+  name: "Georgian Elections: Pro-Russian Party Wins Narrow Majority",
+  desc: "The Georgian Dream party has secured a slim parliamentary majority in elections that saw unusually high turnout in traditionally low-participation rural regions. International election monitors noted 'significant irregularities.' The U.S. declassification of Russian disinformation networks generated significant international coverage before election day, with several Georgian media outlets running major exposés. The margin was closer than Russian operatives planned. The new government's first statement attacked American interference in Georgian internal affairs.",
+  effects: {},
+  choices: [
+    {
+      text: "Issue a statement criticizing Russia's documented interference in Georgian democracy.",
+      effects: {},
+      engagementEffect: 2,
+      result: "The statement draws broad international support. Russia accuses the U.S. of hypocrisy.",
+    },
+    {
+      text: "Call on the new Georgian government to respect democratic norms and EU integration commitments.",
+      effects: {},
+      engagementEffect: 2,
+      result: "European partners welcome the measured approach. Tbilisi's pro-EU opposition takes heart.",
+    },
+  ],
+};
+
+const GEORGIA_B3_EVENT = {
+  id: "georgia_b3_opposition_wins",
+  category: "chain",
+  isChainEvent: true,
+  chainOf: "Georgian Parliamentary Elections Intel Report",
+  unique: true,
+  setsGeorgianCrisis: true,
+  name: "Georgian Elections: Pro-EU Opposition Wins Parliamentary Majority",
+  desc: "In a stunning upset, the pro-EU, pro-Western opposition coalition has won a clear parliamentary majority in Georgian elections. International observers cited unusually high turnout among urban youth voters and a late surge in opposition support following international coverage of the Russian interference operation. The Kremlin has refused to recognize the results, calling them 'illegitimate' and citing 'evidence of foreign interference.' Russian state media is running wall-to-wall coverage claiming the vote was 'stolen by Washington.' The situation in the South Caucasus is now highly volatile.",
+  effects: {},
+  choices: [
+    {
+      text: "Congratulate the Georgian people and monitor the situation carefully.",
+      effects: {},
+      tensionEffect: 6,
+      result: "The President extends congratulations to the Georgian opposition. Moscow's response is furious. The South Caucasus enters a period of acute instability.",
+      schedulesChain: {
+        minDelay: 52,
+        maxDelay: 104,
+        outcomes: [{ probability: 1.0, event: GEORGIA_C3_EVENT }],
+      },
+    },
+  ],
+};
+
+const GEORGIA_ELECTION_PDB_EVENT = {
+  id: "georgia_election_pdb",
+  category: "special",
+  type: "pdb",
+  annualChance: 0.99,
+  unique: true,
+  name: "INTELLIGENCE ASSESSMENT: Russian Election Interference in Georgia",
+  desc: "CIA HUMINT and SIGINT assets have confirmed a sophisticated, multi-vector operation by Russian intelligence services targeting the upcoming Georgian parliamentary elections. The operation encompasses coordinated bot farm networks amplifying pro-Russian Georgian Dream party messaging, disinformation campaigns seeding fabricated corruption allegations against opposition leaders across domestic and international platforms, and documented attempted intrusion into the Georgian Central Election Commission's vote tabulation infrastructure.\n\nMost critically: station assets have obtained documented evidence of a vote-buying network operating in rural Georgian provinces. Campaign coordination documents — obtained through a source with direct access to Georgian Dream party leadership — confirm that senior campaign officials were directly aware of and actively coordinated the payments. This constitutes foreign-interference in a sovereign democratic election at a scale not previously documented in the post-Soviet space.",
+  choices: [
+    {
+      text: "Maintain full intelligence classification. No information is to be released.",
+      effects: {},
+      result: "The intelligence remains compartmented. No external action is taken.",
+      schedulesChain: {
+        minDelay: 2,
+        maxDelay: 2,
+        outcomes: [{ probability: 1.0, event: GEORGIA_B1_EVENT }],
+      },
+    },
+    {
+      text: "Declassify and release evidence of Russian bot farms and disinformation networks.",
+      effects: {},
+      engagementEffect: 2,
+      countryEffects: { russia: { relationship: -2 } },
+      result: "The declassified assessment triggers significant international coverage. Russia condemns the release as 'fabricated Western propaganda.'",
+      schedulesChain: {
+        minDelay: 2,
+        maxDelay: 2,
+        outcomes: [{ probability: 1.0, event: GEORGIA_B2_EVENT }],
+      },
+    },
+    {
+      text: "Release all evidence — including documented proof that campaign officials were aware of the vote-buying network.",
+      effects: {},
+      engagementEffect: 2,
+      countryEffects: { russia: { relationship: -2 } },
+      result: "The full intelligence drop becomes an international bombshell. The campaign documents directly implicating Georgian Dream leadership dominate global news cycles for days.",
+      schedulesChain: {
+        minDelay: 2,
+        maxDelay: 2,
+        outcomes: [{ probability: 1.0, event: GEORGIA_B3_EVENT }],
+      },
+    },
+  ],
+};
+
 // ─── Event chain definitions ───────────────────────────────────────────────
 export const LIBERAL_STATES_COURT_WIN = {
   id: "liberal_states_court_win",
@@ -798,6 +968,11 @@ export function generateDynamicEvents(
         { text: "Accept the cuts as necessary given fiscal constraints", effects: { approvalRating: -2 }, factionEffects: { freedom: 0.2, prog: -0.4, mod_dem: -0.2, blue_dog: -0.1 }, result: "Rural communities feel abandoned. Bipartisan condemnation follows." },
       ],
     });
+  }
+
+  // ── Georgia election interference PDB (20% annual, unique) ───────────────
+  if (!usedEvents.has(GEORGIA_ELECTION_PDB_EVENT.id)) {
+    addEvent("special", GEORGIA_ELECTION_PDB_EVENT);
   }
 
   randomPool = finalizeRandomAnnualChances(randomPool);
