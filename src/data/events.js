@@ -101,6 +101,7 @@ const GEORGIA_C3_EVENT = {
   isChainEvent: true,
   chainOf: "Georgian Parliamentary Elections",
   unique: true,
+  setsGeorgianCrisis: true,
   name: "South Ossetia and Abkhazia Declare Independence Referendums",
   desc: "In a move widely seen as coordinated with the Kremlin, the Russian-backed separatist governments of South Ossetia and Abkhazia have announced independence referendums to be held within two weeks — on annexation into the Russian Federation. The timing, framed as a reaction to 'aggressive' moves by the new pro-EU Georgian government, has alarmed European capitals. Russian military units have been repositioned near the Georgian border. NATO allies are demanding a coordinated Western response.",
   effects: {},
@@ -108,18 +109,21 @@ const GEORGIA_C3_EVENT = {
     {
       text: "Denounce the Russian military buildup and issue a formal warning against any incursion into Georgia.",
       effects: {},
+      tensionEffect: 6,
       countryEffects: { russia: { relationship: -1 } },
       result: "The White House statement draws praise from NATO allies. Russia dismisses it as 'hostile rhetoric.' The referendums proceed as scheduled.",
     },
     {
       text: "Denounce, warn, and immediately authorize intelligence sharing and military advisors for Georgia.",
       effects: {},
+      tensionEffect: 6,
       countryEffects: { russia: { relationship: -5 } },
       result: "Moscow condemns U.S. interference. Georgia receives tactical support. Tensions in the South Caucasus escalate sharply.",
     },
     {
       text: "Pursue backdoor negotiations — call the Russian president directly to defuse the crisis.",
       effects: {},
+      tensionEffect: 6,
       countryEffects: { russia: { relationship: 5 } },
       result: "After tense back-channel talks, the referendums are delayed 'for further consultations.' European allies express private frustration at being bypassed.",
     },
@@ -180,16 +184,14 @@ const GEORGIA_B3_EVENT = {
   isChainEvent: true,
   chainOf: "Georgian Parliamentary Elections Intel Report",
   unique: true,
-  setsGeorgianCrisis: true,
   name: "Georgian Elections: Pro-EU Opposition Wins Parliamentary Majority",
-  desc: "In a stunning upset, the pro-EU, pro-Western opposition coalition has won a clear parliamentary majority in Georgian elections. International observers cited unusually high turnout among urban youth voters and a late surge in opposition support following international coverage of the Russian interference operation. The Kremlin has refused to recognize the results, calling them 'illegitimate' and citing 'evidence of foreign interference.' Russian state media is running wall-to-wall coverage claiming the vote was 'stolen by Washington.' The situation in the South Caucasus is now highly volatile.",
+  desc: "In a stunning upset, the pro-EU, pro-Western opposition coalition has won a clear parliamentary majority in Georgian elections. International observers cited unusually high turnout among urban youth voters and a late surge in opposition support following international coverage of the Russian interference operation. The Kremlin has refused to recognize the results, calling them 'illegitimate' and citing 'evidence of foreign interference.' Russian state media is running wall-to-wall coverage claiming the vote was 'stolen by Washington.'",
   effects: {},
   choices: [
     {
       text: "Congratulate the Georgian people and monitor the situation carefully.",
       effects: {},
-      tensionEffect: 6,
-      result: "The President extends congratulations to the Georgian opposition. Moscow's response is furious. The South Caucasus enters a period of acute instability.",
+      result: "The President extends congratulations to the Georgian opposition. Moscow's response is furious.",
       schedulesChain: {
         minDelay: 52,
         maxDelay: 104,
@@ -206,7 +208,7 @@ const GEORGIA_ELECTION_PDB_EVENT = {
   annualChance: 0.99,
   unique: true,
   name: "INTELLIGENCE ASSESSMENT: Russian Election Interference in Georgia",
-  desc: "CIA HUMINT and SIGINT assets have confirmed a sophisticated, multi-vector operation by Russian intelligence services targeting the upcoming Georgian parliamentary elections. The operation encompasses coordinated bot farm networks amplifying pro-Russian Georgian Dream party messaging, disinformation campaigns seeding fabricated corruption allegations against opposition leaders across domestic and international platforms, and documented attempted intrusion into the Georgian Central Election Commission's vote tabulation infrastructure.\n\nMost critically: station assets have obtained documented evidence of a vote-buying network operating in rural Georgian provinces. Campaign coordination documents — obtained through a source with direct access to Georgian Dream party leadership — confirm that senior campaign officials were directly aware of and actively coordinated the payments. This constitutes foreign-interference in a sovereign democratic election at a scale not previously documented in the post-Soviet space.",
+  desc: "CIA HUMINT and SIGINT assets have confirmed a sophisticated, multi-vector operation by Russian intelligence services targeting the upcoming Georgian parliamentary elections. The operation encompasses coordinated bot farm networks amplifying pro-Russian Georgian Dream party messaging, disinformation campaigns seeding fabricated corruption allegations against opposition leaders across domestic and international platforms, and documented attempted intrusion into the Election Administration of Georgia's vote tabulation infrastructure.\n\nMost critically: station assets have obtained documented evidence of a vote-buying network operating in rural Georgian provinces. Campaign coordination documents — obtained through a source with direct access to Georgian Dream party leadership — confirm that senior campaign officials were directly aware of and actively coordinated the payments. This constitutes foreign-interference in a sovereign democratic election at a scale not previously documented in the post-Soviet space.",
   choices: [
     {
       text: "Maintain full intelligence classification. No information is to be released.",
@@ -214,7 +216,7 @@ const GEORGIA_ELECTION_PDB_EVENT = {
       result: "The intelligence remains compartmented. No external action is taken.",
       schedulesChain: {
         minDelay: 2,
-        maxDelay: 2,
+        maxDelay: 3,
         outcomes: [{ probability: 1.0, event: GEORGIA_B1_EVENT }],
       },
     },
@@ -226,7 +228,7 @@ const GEORGIA_ELECTION_PDB_EVENT = {
       result: "The declassified assessment triggers significant international coverage. Russia condemns the release as 'fabricated Western propaganda.'",
       schedulesChain: {
         minDelay: 2,
-        maxDelay: 2,
+        maxDelay: 3,
         outcomes: [{ probability: 1.0, event: GEORGIA_B2_EVENT }],
       },
     },
@@ -238,7 +240,7 @@ const GEORGIA_ELECTION_PDB_EVENT = {
       result: "The full intelligence drop becomes an international bombshell. The campaign documents directly implicating Georgian Dream leadership dominate global news cycles for days.",
       schedulesChain: {
         minDelay: 2,
-        maxDelay: 2,
+        maxDelay: 3,
         outcomes: [{ probability: 1.0, event: GEORGIA_B3_EVENT }],
       },
     },

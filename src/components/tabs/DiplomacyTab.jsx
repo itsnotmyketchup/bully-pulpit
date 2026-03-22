@@ -5,9 +5,9 @@ const ONGOING_WARS = [
     id: "russia_ukraine",
     name: "Russia–Ukraine War",
     status: "Ongoing",
-    started: "February 2022",
+    started: "before your term",
     sides: [
-      { label: "Russia + Belarus (limited)", color: "#E24B4A" },
+      { label: "Russia", color: "#E24B4A" },
       { label: "Ukraine", color: "#378ADD" },
     ],
     desc: "Russia's full-scale invasion of Ukraine continues with active fighting along eastern and southern front lines. The U.S. has provided extensive military and financial aid to Ukraine. Conflict has caused hundreds of thousands of casualties and the displacement of millions.",
@@ -17,12 +17,12 @@ const ONGOING_WARS = [
     id: "war_in_gaza",
     name: "War in Gaza",
     status: "Ongoing",
-    started: "October 2023",
+    started: "before your term",
     sides: [
-      { label: "Israel (IDF)", color: "#378ADD" },
-      { label: "Hamas / Palestinian Factions", color: "#E24B4A" },
+      { label: "Israel", color: "#378ADD" },
+      { label: "Hamas", color: "#E24B4A" },
     ],
-    desc: "Israeli military operations in Gaza launched following the Hamas attacks of October 7, 2023. The conflict has resulted in mass civilian casualties and a severe humanitarian crisis. Ceasefire negotiations have repeatedly stalled.",
+    desc: "Israeli military operations in Gaza launched following attacks from Hamas. The conflict has resulted in mass civilian casualties and a severe humanitarian crisis. Ceasefire negotiations have repeatedly stalled.",
     usPosture: "Strong security partnership with Israel. Significant international diplomatic pressure.",
   },
 ];
