@@ -1,4 +1,4 @@
-export default function CrisisModal({ curEv, wiy, yr, onChoice }) {
+export default function CrisisModal({ curEv, wiy, yr, onChoice, act = 0, maxActions = 4 }) {
   if (!curEv) return null;
 
   let sectionLabel = "BREAKING NEWS";
@@ -79,32 +79,47 @@ export default function CrisisModal({ curEv, wiy, yr, onChoice }) {
           }}>Presidential Response</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {curEv.choices.map((c, i) => (
+              (() => {
+                const disabled = act + (c.actionCost || 0) > maxActions;
+                return (
               <button
                 key={i}
                 onClick={() => onChoice(c)}
+                disabled={disabled}
                 style={{
                   textAlign: "left", padding: "10px 13px",
                   border: "1px solid #d8d8d4",
                   borderLeft: `3px solid #111`,
-                  background: "#fff", cursor: "pointer",
+                  background: disabled ? "#f2f2ef" : "#fff", cursor: disabled ? "not-allowed" : "pointer",
+                  opacity: disabled ? 0.6 : 1,
                   transition: "background 0.12s, border-left-color 0.12s",
                 }}
                 onMouseEnter={e => {
+                  if (disabled) return;
                   e.currentTarget.style.background = "#f0f0ec";
                   e.currentTarget.style.borderLeftColor = accentColor;
                 }}
                 onMouseLeave={e => {
+                  if (disabled) return;
                   e.currentTarget.style.background = "#fff";
                   e.currentTarget.style.borderLeftColor = "#111";
                 }}
               >
                 <div style={{ fontSize: 12, fontWeight: 600, color: "#111", lineHeight: 1.45 }}>{c.text}</div>
+                {c.actionCost ? (
+                  <div style={{ fontSize: 9, color: disabled ? "#b45309" : "#666", marginTop: 4 }}>
+                    Costs {c.actionCost} action{c.actionCost === 1 ? "" : "s"}
+                    {disabled ? " — not enough actions left this week" : ""}
+                  </div>
+                ) : null}
                 {c.schedulesChain && (
                   <div style={{ fontSize: 9, color: "#7c3aed", marginTop: 4 }}>
                     ⛓ Triggers a follow-up in {c.schedulesChain.minDelay}–{c.schedulesChain.maxDelay} weeks
                   </div>
                 )}
               </button>
+                );
+              })()
             ))}
           </div>
         </div>

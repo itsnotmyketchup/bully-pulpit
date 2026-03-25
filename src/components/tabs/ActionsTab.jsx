@@ -47,6 +47,8 @@ export default function ActionsTab({
   visitTypeCounts,
   speechTopic, setSpeechTopic,
   speechPreview, setSpeechPreview,
+  activeBills,
+  billSpeechTargetId, setBillSpeechTargetId,
   sA,
   onIssueEO, onRescindEO, onDoVisit, onDoSpeech,
 }) {
@@ -536,7 +538,13 @@ export default function ActionsTab({
       <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>Choose a topic, then pick your stance. Preview effects before committing.</div>
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
         {SPEECH_TOPICS.map(t => (
-          <button key={t.id} onClick={() => { setSpeechTopic(t.id); setSpeechPreview(null); }} style={{
+          <button key={t.id} type="button" onClick={() => {
+            setSpeechTopic(t.id);
+            setSpeechPreview(null);
+            if (t.dynamicBillTarget) {
+              setBillSpeechTargetId(activeBills[0]?.id || "");
+            }
+          }} style={{
             padding: "4px 10px", fontSize: 9,
             fontWeight: speechTopic === t.id ? 500 : 400,
             background: speechTopic === t.id ? "var(--color-background-secondary)" : "transparent",
@@ -549,8 +557,43 @@ export default function ActionsTab({
       {speechTopic && (() => {
         const topic = SPEECH_TOPICS.find(t => t.id === speechTopic);
         if (!topic) return null;
+        const selectedBill = activeBills.find((bill) => bill.id === billSpeechTargetId) || activeBills[0] || null;
         return <>
           <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 6 }}>Your position on {topic.name}:</div>
+          {topic.dynamicBillTarget && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 5 }}>Choose a bill to target:</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {activeBills.map((bill) => {
+                  const selected = billSpeechTargetId === bill.id;
+                  return (
+                    <button
+                      key={bill.id}
+                      type="button"
+                      onClick={() => setBillSpeechTargetId(bill.id)}
+                      style={{
+                        padding: "6px 10px",
+                        fontSize: 10,
+                        fontWeight: 500,
+                        borderRadius: "var(--border-radius-md)",
+                        border: selected ? "1px solid #2563eb66" : "0.5px solid var(--color-border-secondary)",
+                        background: selected ? "#2563eb14" : "var(--color-background-secondary)",
+                        color: selected ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {bill.act.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {!activeBills.length && (
+                <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginTop: 4 }}>
+                  No bills are currently in Congress.
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 5, marginBottom: 8 }}>
             {topic.positions.map((pos, i) => {
               const isPreview = speechPreview === i;
@@ -577,6 +620,11 @@ export default function ActionsTab({
                     {pos.approvalSwing > 0 ? "+" : ""}{pos.approvalSwing}
                   </span>
                 </div>
+                {topic.dynamicBillTarget && selectedBill && (
+                  <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 6 }}>
+                    Targeting: <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{selectedBill.act.name}</span> · salience +15 · slight {pos.billStance === "against" ? "negative" : "positive"} home-faction reaction shift
+                  </div>
+                )}
                 {pos.factionEffects && (
                   <div style={{ marginBottom: 6 }}>
                     <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 2 }}>Faction reactions:</div>
@@ -593,12 +641,12 @@ export default function ActionsTab({
                     </div>
                   </div>
                 )}
-                <button onClick={() => onDoSpeech(pos)} disabled={act >= maxActions} style={{
+                <button type="button" onClick={() => onDoSpeech(pos, selectedBill?.id || "")} style={{
                   padding: "5px 14px", fontSize: 11, fontWeight: 500,
-                  background: act >= maxActions ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
-                  color: act >= maxActions ? "var(--color-text-secondary)" : "var(--color-background-primary)",
-                  border: "none", borderRadius: "var(--border-radius-md)", cursor: act >= maxActions ? "not-allowed" : "pointer",
-                }}>Deliver this speech (1 action)</button>
+                  background: act >= maxActions || (topic.dynamicBillTarget && !selectedBill) ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
+                  color: act >= maxActions || (topic.dynamicBillTarget && !selectedBill) ? "var(--color-text-secondary)" : "var(--color-background-primary)",
+                  border: "none", borderRadius: "var(--border-radius-md)", cursor: act >= maxActions || (topic.dynamicBillTarget && !selectedBill) ? "not-allowed" : "pointer",
+                }} disabled={act >= maxActions || (topic.dynamicBillTarget && !selectedBill)}>Deliver this speech (1 action)</button>
                 </div>
               </div>
             );

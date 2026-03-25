@@ -1,6 +1,45 @@
 import { STATE_DATA } from "./states.js";
 
-const CITIES = ["Las Vegas, NV","Orlando, FL","Dallas, TX","Chicago, IL","Denver, CO","Nashville, TN","Phoenix, AZ","Atlanta, GA","Seattle, WA","Houston, TX","Portland, OR","Miami, FL","Charlotte, NC","Minneapolis, MN","San Antonio, TX","Detroit, MI","Pittsburgh, PA","St. Louis, MO","Baltimore, MD","Sacramento, CA"];
+const CITIES = [
+  "Las Vegas, NV","Orlando, FL","Dallas, TX","Chicago, IL","Denver, CO","Nashville, TN","Phoenix, AZ","Atlanta, GA","Seattle, WA","Houston, TX",
+  "Portland, OR","Miami, FL","Charlotte, NC","Minneapolis, MN","San Antonio, TX","Detroit, MI","Pittsburgh, PA","St. Louis, MO","Baltimore, MD","Sacramento, CA",
+  "Philadelphia, PA","Cleveland, OH","Columbus, OH","Indianapolis, IN","Kansas City, MO","Milwaukee, WI","Tampa, FL","Raleigh, NC","Richmond, VA","New Orleans, LA",
+  "Louisville, KY","Omaha, NE","Boise, ID","Albuquerque, NM","Salt Lake City, UT","Buffalo, NY","Cincinnati, OH","Memphis, TN","Birmingham, AL","San Diego, CA",
+];
+const MASS_SHOOTING_LOCATIONS = [
+  "bar",
+  "nightclub",
+  "high school",
+  "college campus",
+  "city park",
+  "concert venue",
+  "shopping mall",
+  "movie theater",
+  "community center",
+  "church",
+  "festival",
+  "office complex",
+];
+const SUBWAY_METROS = [
+  { city: "New York City, NY", state: "NY", system: "subway" },
+  { city: "Chicago, IL", state: "IL", system: "L" },
+  { city: "Boston, MA", state: "MA", system: "MBTA" },
+  { city: "Philadelphia, PA", state: "PA", system: "SEPTA subway" },
+  { city: "Atlanta, GA", state: "GA", system: "MARTA" },
+  { city: "San Francisco, CA", state: "CA", system: "BART" },
+  { city: "Los Angeles, CA", state: "CA", system: "Metro Rail" },
+  { city: "Miami, FL", state: "FL", system: "Metrorail" },
+];
+const SWING_HOUSE_DISTRICTS = [
+  { label: "Grand Rapids-area Michigan House district", state: "MI", metro: "Grand Rapids, MI" },
+  { label: "Phoenix suburban Arizona House district", state: "AZ", metro: "Phoenix, AZ" },
+  { label: "Lehigh Valley Pennsylvania House district", state: "PA", metro: "Allentown, PA" },
+  { label: "Omaha-centered Nebraska House district", state: "NE", metro: "Omaha, NE" },
+  { label: "Virginia Beach/Tidewater House district", state: "VA", metro: "Virginia Beach, VA" },
+  { label: "Raleigh exurban North Carolina House district", state: "NC", metro: "Raleigh, NC" },
+  { label: "Milwaukee collar-county Wisconsin House district", state: "WI", metro: "Milwaukee, WI" },
+  { label: "Las Vegas suburban Nevada House district", state: "NV", metro: "Las Vegas, NV" },
+];
 
 const WEST_STATES         = ["CA","OR","WA","ID","MT","WY","CO","NV","AZ","NM","UT"];
 const GULF_EAST_STATES    = ["LA","MS","AL","FL","TX","GA","SC","NC","VA"];
@@ -24,6 +63,9 @@ function pickOne(arr) {
 function pickN(arr, n) {
   return [...arr].sort(() => Math.random() - 0.5).slice(0, Math.min(n, arr.length));
 }
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
 function getStateName(abbr) {
   return STATE_DATA.find((state) => state.abbr === abbr)?.name || abbr;
@@ -35,6 +77,18 @@ function getStateNames(abbrs = []) {
 
 function clampChance(chance) {
   return Math.max(0, Math.min(0.99, chance || 0));
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getInfrastructureBridgeWeight(infrastructureQuality = 50) {
+  return Number(clamp(0.35 + ((100 - infrastructureQuality) / 80) * 1.45, 0.35, 1.8).toFixed(2));
+}
+
+function getInfrastructureSubwayWeight(infrastructureQuality = 50) {
+  return Number(clamp(0.45 + ((100 - infrastructureQuality) / 80) * 1.7, 0.45, 2.15).toFixed(2));
 }
 
 function perCheckChanceToAnnualChance(perCheckChance, effectiveChecksPerYear) {
@@ -447,10 +501,11 @@ export function rollEligibleSpecialEvents(
 }
 
 export function generateDynamicEvents(
-  stats, stAppr, usedEvents,
+  stats, macroState, stAppr, usedEvents,
   playerParty = "DEM", week = 1,
   passedLegislation = {},
-  countries = []
+  countries = [],
+  campaignSeasonStarted = false
 ) {
   let randomPool = [];
   const disasterPool = [];
@@ -477,6 +532,8 @@ export function generateDynamicEvents(
   const pickState = (city) => { const m = city.match(/,\s*(\w+)$/); return m ? m[1] : null; };
 
   const allyIds = playerParty === "DEM" ? ["prog","mod_dem","blue_dog"] : ["freedom","mod_rep","trad_con"];
+  const oppositionParty = playerParty === "DEM" ? "REP" : "DEM";
+  const infrastructureQuality = macroState?.infrastructureQuality ?? 50;
 
   // ── Random events: stat-triggered / public mood ────────────────────────
   if (stats.inflation > 3.5) addEvent("normal", {
@@ -546,17 +603,38 @@ export function generateDynamicEvents(
   }
 
   const city = pick(), st = pickState(city);
+  const shootingLocation = pickOne(MASS_SHOOTING_LOCATIONS);
+  const majorFatalities = randomInt(16, 37);
+  const majorInjuries = randomInt(28, 55);
+  const minorFatalities = randomInt(2, 12);
+  const minorInjuries = randomInt(4, 19);
   addEvent("normal", {
-    id:"shoot_"+Math.random(),
+    id:"major_shoot_"+Math.random(),
     repeatable:true,
-    name:`Mass shooting in ${city}`,
-    desc:`A gunman killed multiple people at a public venue in ${city}. The nation mourns.`,
+    name:`Major mass shooting in ${city}`,
+    desc:`A gunman opened fire at a ${shootingLocation} in ${city}, killing ${majorFatalities} people and injuring ${majorInjuries}. The scale of the attack dominates national news.`,
     affectedStates:st?[st]:[],
-    effects:{crimeRate:0.05,approvalRating:-1},
+    effects:{crimeRate:0.07,approvalRating:-2},
     choices:[
-      {text:"Push for gun reform legislation",effects:{approvalRating:1},factionEffects:{prog:0.4,mod_dem:0.2,blue_dog:-0.2,freedom:-0.7,mod_rep:-0.2,trad_con:-0.4},stateBoost:0.02,result:"A fierce debate reignites."},
-      {text:"Focus on mental health funding",effects:{approvalRating:1,healthcareSpending:5},stateBoost:0.02,result:"Both sides find common ground."},
-      {text:"Thoughts and prayers, no policy",effects:{approvalRating:-2},stateBoost:-0.02,result:"Critics say it's not enough."},
+      {text:"Push for gun reform legislation",effects:{approvalRating:1},factionEffects:{prog:0.5,mod_dem:0.2,blue_dog:-0.25,freedom:-0.8,mod_rep:-0.25,trad_con:-0.45},stateBoost:0.02,result:"A fierce debate reignites immediately."},
+      {text:"Focus on mental health funding and threat prevention",effects:{approvalRating:1,healthcareSpending:6},factionEffects:{mod_dem:0.1,blue_dog:0.05,mod_rep:0.05},stateBoost:0.02,result:"The White House tries to assemble a narrower consensus response."},
+      {text:"Thoughts and prayers, no policy",effects:{approvalRating:-3},stateBoost:-0.03,result:"Critics say the response is hollow after such a large attack."},
+    ]
+  });
+
+  const secondaryCity = pick(), secondaryState = pickState(secondaryCity);
+  const secondaryLocation = pickOne(MASS_SHOOTING_LOCATIONS);
+  addEvent("normal", {
+    id:"minor_shoot_"+Math.random(),
+    repeatable:true,
+    name:`Mass shooting leaves community shaken in ${secondaryCity}`,
+    desc:`A shooting at a ${secondaryLocation} in ${secondaryCity} left ${minorFatalities} dead and ${minorInjuries} injured. Local officials are pleading for federal attention.`,
+    affectedStates:secondaryState?[secondaryState]:[],
+    effects:{crimeRate:0.04,approvalRating:-1},
+    choices:[
+      {text:"Call for targeted gun safety reforms",effects:{approvalRating:1},factionEffects:{prog:0.35,mod_dem:0.15,blue_dog:-0.1,freedom:-0.55,mod_rep:-0.15,trad_con:-0.25},stateBoost:0.02,result:"Advocates seize on the moment; opposition hardens quickly."},
+      {text:"Announce support for local trauma and mental health services",effects:{approvalRating:1,healthcareSpending:3},factionEffects:{mod_dem:0.1,blue_dog:0.05,mod_rep:0.05},stateBoost:0.02,result:"A less polarizing response earns cautious approval."},
+      {text:"Let local authorities lead and issue condolences",effects:{approvalRating:-1},stateBoost:-0.01,result:"The response is seen as restrained, but distant."},
     ]
   });
 
@@ -575,6 +653,8 @@ export function generateDynamicEvents(
   const bridgeStateName = getStateName(bridgeState);
   const winterStormNames = getStateNames(winterStorm);
   const tornadoStateName = getStateName(tornadoState);
+  const subwayMetro = pickOne(SUBWAY_METROS);
+  const subwayDelayHours = randomInt(3, 8);
 
   // ── Random events: base pool ───────────────────────────────────────────
   const base = [
@@ -621,7 +701,8 @@ export function generateDynamicEvents(
     // Disasters and infrastructure failures
     {id:"bridge",name:"Major bridge collapse",
       desc:`An interstate bridge collapsed today during peak rush hour traffic in ${bridgeStateName}. Search and rescue teams are still clearing out the rubble, but dozens are feared dead.`,
-      repeatable:true,isDisaster:true,affectedStates:[bridgeState],effects:{approvalRating:-2},choices:[
+      selectionWeight:getInfrastructureBridgeWeight(infrastructureQuality),
+      repeatable:true,affectedStates:[bridgeState],effects:{approvalRating:-2},choices:[
         {text:"Push emergency funds from the FHWA",effects:{approvalRating:3,nationalDebt:0.1,infrastructureSpending:5},stateBoost:0.04,result:"Galvanizing moment."},
         {text:"Order nationwide inspections",effects:{approvalRating:1},result:"The public wants faster results."},
         {text:"Blame predecessors' underfunding",effects:{approvalRating:-1},result:"The blame game doesn't help victims."},
@@ -678,6 +759,15 @@ export function generateDynamicEvents(
       {text:"Propose modest wealth surtax on ultra-high earners",effects:{approvalRating:2},factionEffects:{prog:0.5,mod_dem:0.2,freedom:-0.6,mod_rep:-0.3},result:"Progressive base energized. Donor class alarmed."},
       {text:"Emphasize job creation and opportunity programs",effects:{approvalRating:1,nationalDebt:0.03},result:"Bipartisan optics. Doesn't satisfy critics."},
       {text:"Dispute the methodology of the report",effects:{approvalRating:-2},result:"Looks tone-deaf. Goes viral for wrong reasons."},
+    ]},
+    {id:"subway_cascade",
+      name:`Cascading transit failures cripple ${subwayMetro.city}`,
+      desc:`A wave of signal failures, power faults, and disabled trains has crippled the ${subwayMetro.system} in ${subwayMetro.city}. Officials blame years of deferred maintenance after commuters face delays of up to ${subwayDelayHours} hours.`,
+      selectionWeight:getInfrastructureSubwayWeight(infrastructureQuality),
+      repeatable:true,affectedStates:[subwayMetro.state],effects:{approvalRating:-2,infrastructureSpending:4},macroEffects:{ demand:-0.03, productivity:-0.03, infrastructureQuality:-0.18 },choices:[
+        {text:"Send emergency federal transit stabilization funds",effects:{approvalRating:2,nationalDebt:0.03,infrastructureSpending:8},macroEffects:{ infrastructureQuality:0.08 },factionEffects:{prog:0.25,mod_dem:0.15,blue_dog:0.05,freedom:-0.15,mod_rep:-0.05},result:"Commuters see rapid repairs, but fiscal hawks object to another bailout."},
+        {text:"Order a national transit maintenance review and matching grants",effects:{approvalRating:1,nationalDebt:0.02},macroEffects:{ infrastructureQuality:0.04 },factionEffects:{prog:0.15,mod_dem:0.1,blue_dog:0.05,mod_rep:0.05},result:"The response looks serious, though riders still face a miserable week."},
+        {text:"Blame local transit managers and hold the line on new spending",effects:{approvalRating:-2},factionEffects:{freedom:0.2,trad_con:0.15,prog:-0.25,mod_dem:-0.15,blue_dog:-0.05},result:"Cable news loves the fight. Stranded commuters do not."},
     ]},
 
     // Disasters and climate-linked emergencies
@@ -908,18 +998,20 @@ export function generateDynamicEvents(
   const scandalFactionId = pickOne(allyIds);
   const FACTION_DISPLAY = { prog: "Progressive Caucus", mod_dem: "New Democrats", blue_dog: "Blue Dog Coalition", freedom: "Freedom Caucus", mod_rep: "Main Street Republicans", trad_con: "Traditional Conservatives" };
   const scandalFactionName = FACTION_DISPLAY[scandalFactionId] || scandalFactionId;
-  addEvent("normal", {
-    id: "faction_scandal_" + Math.random(),
-    repeatable: true,
-    name: `${scandalFactionName} Leader Arrested for Domestic Abuse`,
-    desc: `A prominent ${scandalFactionName} member and vocal administration ally has been arrested for domestic abuse. Graphic evidence has emerged on social media. Party leadership is calling on you to respond.`,
-    effects: { approvalRating: -2 },
-    choices: [
-      { text: "Call for their immediate resignation", effects: { approvalRating: 2 }, factionEffects: Object.fromEntries([[scandalFactionId, -0.5]]), result: "Public approves the swift condemnation. Your ally feels betrayed." },
-      { text: "Express concern, await due process", effects: { approvalRating: -1 }, factionEffects: Object.fromEntries([[scandalFactionId, 0.1]]), result: "Critics say you are covering for an ally. The story lingers." },
-      { text: "Issue a brief statement, pivot to policy agenda", effects: { approvalRating: -2 }, factionEffects: Object.fromEntries([[scandalFactionId, 0.2]]), result: "Perceived as tone-deaf. Victim advocates condemn the non-response." },
-    ],
-  });
+  if (!usedEvents.has("faction_scandal_domestic_abuse")) {
+    addEvent("normal", {
+      id: "faction_scandal_domestic_abuse",
+      unique: true,
+      name: `${scandalFactionName} Leader Arrested for Domestic Abuse`,
+      desc: `A prominent ${scandalFactionName} member and vocal administration ally has been arrested for domestic abuse. Graphic evidence has emerged on social media. Party leadership is calling on you to respond.`,
+      effects: { approvalRating: -2 },
+      choices: [
+        { text: "Call for their immediate resignation", effects: { approvalRating: 2 }, factionEffects: Object.fromEntries([[scandalFactionId, -0.5]]), result: "Public approves the swift condemnation. Your ally feels betrayed." },
+        { text: "Express concern, await due process", effects: { approvalRating: -1 }, factionEffects: Object.fromEntries([[scandalFactionId, 0.1]]), result: "Critics say you are covering for an ally. The story lingers." },
+        { text: "Issue a brief statement, pivot to policy agenda", effects: { approvalRating: -2 }, factionEffects: Object.fromEntries([[scandalFactionId, 0.2]]), result: "Perceived as tone-deaf. Victim advocates condemn the non-response." },
+      ],
+    });
+  }
 
   const FOOD_ITEMS = ["romaine lettuce","ground beef","frozen chicken nuggets","peanut butter","baby spinach","frozen strawberries","deli meat","canned tuna","shredded cheese","raw oysters"];
   const recalledFood = pickOne(FOOD_ITEMS);
@@ -936,6 +1028,77 @@ export function generateDynamicEvents(
       { text: "Defer to the FDA, issue brief statement", effects: { approvalRating: -1 }, result: "Seen as passive in a public health moment." },
     ],
   });
+
+  if (!campaignSeasonStarted) {
+    const specialElectionDistrict = pickOne(SWING_HOUSE_DISTRICTS);
+    const incumbentParty = Math.random() < 0.5 ? playerParty : oppositionParty;
+    const incumbentLabel = incumbentParty === "DEM" ? "Democratic" : "Republican";
+    addEvent("normal", {
+      id: `special_house_election_${week}_${specialElectionDistrict.state}_${Math.random()}`,
+      repeatable: true,
+      annualChance: 0.22,
+      name: `Special election opens in a swing ${specialElectionDistrict.state} House district`,
+      desc: `A sudden vacancy in a ${specialElectionDistrict.label} has set up a high-stakes special election next week. The departing incumbent was a ${incumbentLabel} congressman. Operatives in both parties say the seat is competitive and up for grabs.`,
+      affectedStates: [specialElectionDistrict.state],
+      choices: [
+        {
+          text: "Campaign there personally (1 action)",
+          actionCost: 1,
+          effects: { approvalRating: 1 },
+          factionEffects: playerParty === "DEM"
+            ? { prog: 0.15, mod_dem: 0.2, blue_dog: 0.1 }
+            : { freedom: 0.1, mod_rep: 0.2, trad_con: 0.15 },
+          result: `You make a late push through ${specialElectionDistrict.metro}. Local coverage treats the race as a national proxy fight.`,
+          schedulesChain: {
+            minDelay: 1,
+            maxDelay: 1,
+            outcomes: [{
+              probability: 1,
+              event: {
+                id: `special_house_election_result_${week}_${specialElectionDistrict.state}_${Math.random()}`,
+                category: "chain",
+                isChainEvent: true,
+                chainOf: `Special election in ${specialElectionDistrict.label}`,
+                dynamicTrigger: "special_house_election_result",
+                specialElection: {
+                  districtLabel: specialElectionDistrict.label,
+                  metro: specialElectionDistrict.metro,
+                  state: specialElectionDistrict.state,
+                  incumbentParty,
+                  campaigned: true,
+                },
+              },
+            }],
+          },
+        },
+        {
+          text: "Do nothing",
+          result: "You stay out of it and let local party committees handle the race.",
+          schedulesChain: {
+            minDelay: 1,
+            maxDelay: 1,
+            outcomes: [{
+              probability: 1,
+              event: {
+                id: `special_house_election_result_${week}_${specialElectionDistrict.state}_${Math.random()}`,
+                category: "chain",
+                isChainEvent: true,
+                chainOf: `Special election in ${specialElectionDistrict.label}`,
+                dynamicTrigger: "special_house_election_result",
+                specialElection: {
+                  districtLabel: specialElectionDistrict.label,
+                  metro: specialElectionDistrict.metro,
+                  state: specialElectionDistrict.state,
+                  incumbentParty,
+                  campaigned: false,
+                },
+              },
+            }],
+          },
+        },
+      ],
+    });
+  }
 
   // ── Consequence events: omitted-legislation fallout (Year 2+) ─────────
   if (week >= 53 && !passedLegislation.border && !passedLegislation.immigration_exp && !usedEvents.has("detention_conditions")) {

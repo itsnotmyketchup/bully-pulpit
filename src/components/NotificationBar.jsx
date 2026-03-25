@@ -2,6 +2,10 @@ import PropTypes from "prop-types";
 
 const TYPE_STYLES = {
   negotiation: { bg: "#378ADD22", border: "#378ADD66", accent: "#378ADD", icon: "⚖" },
+  bill_committee: { bg: "#2563eb1f", border: "#2563eb66", accent: "#2563eb", icon: "◎" },
+  bill_chamber: { bg: "#1D9E7522", border: "#1D9E7566", accent: "#1D9E75", icon: "▲" },
+  bill_resolving: { bg: "#8b5cf61f", border: "#8b5cf666", accent: "#8b5cf6", icon: "⇄" },
+  bill_signature: { bg: "#c98b2e22", border: "#c98b2e66", accent: "#C98B2E", icon: "✦" },
   promise_warning: { bg: "#EF9F2722", border: "#EF9F2766", accent: "#EF9F27", icon: "⏳" },
   surrogate_done: { bg: "#1D9E7522", border: "#1D9E7566", accent: "#1D9E75", icon: "✓" },
   surrogate_fail: { bg: "#E24B4A22", border: "#E24B4A66", accent: "#E24B4A", icon: "✗" },
@@ -11,6 +15,7 @@ const TYPE_STYLES = {
   appointment_fail: { bg: "#E24B4A22", border: "#E24B4A66", accent: "#E24B4A", icon: "■" },
   eo_unlock: { bg: "#2563eb1f", border: "#2563eb66", accent: "#2563eb", icon: "!" },
   crisis_alert: { bg: "#cc1a1a22", border: "#cc1a1a88", accent: "#cc1a1a", icon: "⚠" },
+  house_update: { bg: "#0f766e22", border: "#0f766e66", accent: "#0f766e", icon: "▣" },
 };
 
 export default function NotificationBar({ notifications, onDismiss, onTabSwitch }) {

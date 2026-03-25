@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { POLICY_ACTIONS } from "../../data/policies.js";
 import { INITIAL_STATS } from "../../data/stats.js";
 import { createInitialMacroState } from "../macroEconomy.js";
 import { runWeeklySimulation } from "../weeklySimulation.js";
@@ -259,6 +260,113 @@ describe("runWeeklySimulation", () => {
     const result = runWeeklySimulation(snapshot, buildDeps(snapshot));
 
     expect(result.curEv?.type).toBe("eo_scotus_cert_granted");
+
+    randomSpy.mockRestore();
+  });
+
+  it("offers negotiation amendments when the National Data Privacy Act stalls", () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    const snapshot = buildSnapshot({
+      week: 10,
+      pendingCongressUpdate: null,
+      pFx: [],
+      activeBills: [{
+        id: "bill_privacy",
+        act: POLICY_ACTIONS.find((bill) => bill.id === "national_data_privacy"),
+        stage: "committee",
+        currentChamber: null,
+        firstChamber: "house",
+        fails: 0,
+        turnsInStage: 0,
+        consecutiveFails: 0,
+        negotiated: false,
+        considerationWeeksLeft: 0,
+        pendingNegotiation: null,
+      }],
+    });
+    const deps = buildDeps(snapshot);
+    deps.calcStageAdvance.mockReturnValue({
+      advance: false,
+      passLikelihood: 42,
+      factionVotes: [],
+      votes: { senateYes: 47, senateNo: 53, houseYes: 211, houseNo: 224 },
+    });
+
+    const result = runWeeklySimulation(snapshot, deps);
+    const stalledBill = result.activeBills[0];
+
+    expect(stalledBill.pendingNegotiation).toBeTruthy();
+    expect(stalledBill.pendingNegotiation.amendments.map((amendment) => amendment.id)).toEqual([
+      "privacy_no_private_action",
+      "privacy_drop_civil_rights",
+    ]);
+    expect(stalledBill.pendingNegotiation.eligibleFactionIds).toEqual(
+      expect.arrayContaining(["mod_rep", "trad_con"])
+    );
+
+    randomSpy.mockRestore();
+  });
+
+  it("does not break promises a week before their deadline", () => {
+    const snapshot = buildSnapshot({
+      week: 10,
+      pendingCongressUpdate: null,
+      pFx: [],
+      promises: [{
+        type: "bill",
+        billId: "public_option",
+        factionId: "prog",
+        deadline: 12,
+        brokenRelPenalty: 10,
+        brokenTrustPenalty: 15,
+      }],
+    });
+
+    const result = runWeeklySimulation(snapshot, buildDeps(snapshot));
+
+    expect(result.week).toBe(11);
+    expect(result.promises).toHaveLength(1);
+    expect(result.brokenPromises).toHaveLength(0);
+  });
+
+  it("resolves special House election follow-ups and emits a House update notification", () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+    const snapshot = buildSnapshot({
+      week: 19,
+      pendingCongressUpdate: null,
+      pFx: [],
+      stats: {
+        ...INITIAL_STATS,
+        approvalRating: 58,
+      },
+      pendingChainEvents: [{
+        triggerAtWeek: 20,
+        event: {
+          id: "special_house_election_result_test",
+          dynamicTrigger: "special_house_election_result",
+          specialElection: {
+            districtLabel: "Phoenix suburban Arizona House district",
+            metro: "Phoenix, AZ",
+            state: "AZ",
+            incumbentParty: "REP",
+            campaigned: true,
+          },
+        },
+      }],
+    });
+
+    const result = runWeeklySimulation(snapshot, buildDeps(snapshot));
+
+    expect(result.week).toBe(20);
+    expect(result.curEv?.name).toContain("special House election");
+    expect(result.notifications.some((notification) => notification.type === "house_update")).toBe(true);
+    const demBefore = snapshot.cg.factions.prog.houseSeats + snapshot.cg.factions.mod_dem.houseSeats + snapshot.cg.factions.blue_dog.houseSeats;
+    const repBefore = snapshot.cg.factions.freedom.houseSeats + snapshot.cg.factions.mod_rep.houseSeats + snapshot.cg.factions.trad_con.houseSeats;
+    const demAfter = result.cg.factions.prog.houseSeats + result.cg.factions.mod_dem.houseSeats + result.cg.factions.blue_dog.houseSeats;
+    const repAfter = result.cg.factions.freedom.houseSeats + result.cg.factions.mod_rep.houseSeats + result.cg.factions.trad_con.houseSeats;
+
+    expect(demAfter).toBe(demBefore + 1);
+    expect(repAfter).toBe(repBefore - 1);
 
     randomSpy.mockRestore();
   });

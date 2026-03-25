@@ -14,6 +14,7 @@ import {
   shouldTriggerWorshipServiceDenunciation,
 } from "../events.js";
 import { INITIAL_STATS } from "../stats.js";
+import { createInitialMacroState } from "../../logic/macroEconomy.js";
 
 const BASE_STATE_APPROVAL = {
   CA: 52,
@@ -23,11 +24,13 @@ const BASE_STATE_APPROVAL = {
   OH: 50,
   PA: 51,
 };
+const BASE_MACRO_STATE = createInitialMacroState("Test Chair");
 
 describe("generateDynamicEvents", () => {
   it("returns separated pools with playable events", () => {
     const pools = generateDynamicEvents(
       { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
       BASE_STATE_APPROVAL,
       new Set(),
       "DEM",
@@ -62,6 +65,7 @@ describe("generateDynamicEvents", () => {
         corporateTaxRate: 18,
         educationSpending: 90,
       },
+      BASE_MACRO_STATE,
       BASE_STATE_APPROVAL,
       new Set(),
       "DEM",
@@ -90,6 +94,7 @@ describe("generateDynamicEvents", () => {
   it("queues the nuclear reactor opening as an immediate policy consequence after a long delay", () => {
     const earlyPools = generateDynamicEvents(
       { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
       BASE_STATE_APPROVAL,
       new Set(),
       "DEM",
@@ -99,6 +104,7 @@ describe("generateDynamicEvents", () => {
     );
     const delayedPools = generateDynamicEvents(
       { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
       BASE_STATE_APPROVAL,
       new Set(),
       "DEM",
@@ -114,6 +120,7 @@ describe("generateDynamicEvents", () => {
   it("keeps already-used unique special events out of the pool", () => {
     const pools = generateDynamicEvents(
       { ...INITIAL_STATS, corporateTaxRate: 18 },
+      BASE_MACRO_STATE,
       BASE_STATE_APPROVAL,
       new Set(["corp_profits_surge"]),
       "DEM",
@@ -128,6 +135,7 @@ describe("generateDynamicEvents", () => {
   it("routes disaster events into a dedicated pool with estimated annual chances", () => {
     const pools = generateDynamicEvents(
       { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
       BASE_STATE_APPROVAL,
       new Set(),
       "DEM",
@@ -144,6 +152,7 @@ describe("generateDynamicEvents", () => {
   it("delays omission-triggered events until year 2", () => {
     const yearOnePools = generateDynamicEvents(
       { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
       BASE_STATE_APPROVAL,
       new Set(),
       "DEM",
@@ -153,6 +162,7 @@ describe("generateDynamicEvents", () => {
     );
     const yearTwoPools = generateDynamicEvents(
       { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
       BASE_STATE_APPROVAL,
       new Set(),
       "DEM",
@@ -170,6 +180,7 @@ describe("generateDynamicEvents", () => {
   it("keeps the cannabis boom as a one-time event", () => {
     const freshPools = generateDynamicEvents(
       { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
       BASE_STATE_APPROVAL,
       new Set(),
       "DEM",
@@ -179,6 +190,7 @@ describe("generateDynamicEvents", () => {
     );
     const usedPools = generateDynamicEvents(
       { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
       BASE_STATE_APPROVAL,
       new Set(["weed_industry_boom"]),
       "DEM",
@@ -194,6 +206,7 @@ describe("generateDynamicEvents", () => {
   it("reduces the cyberattack chance substantially after the cybersecurity EO", () => {
     const baselinePools = generateDynamicEvents(
       { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
       BASE_STATE_APPROVAL,
       new Set(),
       "DEM",
@@ -203,6 +216,7 @@ describe("generateDynamicEvents", () => {
     );
     const hardenedPools = generateDynamicEvents(
       { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
       BASE_STATE_APPROVAL,
       new Set(),
       "DEM",
@@ -218,6 +232,91 @@ describe("generateDynamicEvents", () => {
     expect(hardenedCyber).toBeTruthy();
     expect(hardenedCyber.annualChance).toBeLessThan(baselineCyber.annualChance);
     expect(hardenedCyber.annualChance).toBeCloseTo(baselineCyber.annualChance * 0.1, 6);
+  });
+
+  it("makes the domestic abuse scandal a one-time event", () => {
+    const freshPools = generateDynamicEvents(
+      { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
+      BASE_STATE_APPROVAL,
+      new Set(),
+      "DEM",
+      12,
+      {},
+      []
+    );
+    const usedPools = generateDynamicEvents(
+      { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
+      BASE_STATE_APPROVAL,
+      new Set(["faction_scandal_domestic_abuse"]),
+      "DEM",
+      12,
+      {},
+      []
+    );
+
+    expect(freshPools.randomPool.some((event) => event.id === "faction_scandal_domestic_abuse" && event.unique)).toBe(true);
+    expect(usedPools.randomPool.some((event) => event.id === "faction_scandal_domestic_abuse")).toBe(false);
+  });
+
+  it("shifts bridge and subway weights based on infrastructure quality", () => {
+    const lowInfrastructurePools = generateDynamicEvents(
+      { ...INITIAL_STATS },
+      { ...BASE_MACRO_STATE, infrastructureQuality: 25 },
+      BASE_STATE_APPROVAL,
+      new Set(),
+      "DEM",
+      24,
+      {},
+      []
+    );
+    const highInfrastructurePools = generateDynamicEvents(
+      { ...INITIAL_STATS },
+      { ...BASE_MACRO_STATE, infrastructureQuality: 85 },
+      BASE_STATE_APPROVAL,
+      new Set(),
+      "DEM",
+      24,
+      {},
+      []
+    );
+
+    const lowBridge = lowInfrastructurePools.randomPool.find((event) => event.id === "bridge");
+    const highBridge = highInfrastructurePools.randomPool.find((event) => event.id === "bridge");
+    const lowSubway = lowInfrastructurePools.randomPool.find((event) => event.id === "subway_cascade");
+    const highSubway = highInfrastructurePools.randomPool.find((event) => event.id === "subway_cascade");
+
+    expect(lowBridge.selectionWeight).toBeGreaterThan(highBridge.selectionWeight);
+    expect(lowSubway.selectionWeight).toBeGreaterThan(highSubway.selectionWeight);
+  });
+
+  it("keeps the special House election out of campaign season", () => {
+    const offSeasonPools = generateDynamicEvents(
+      { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
+      BASE_STATE_APPROVAL,
+      new Set(),
+      "DEM",
+      20,
+      {},
+      [],
+      false
+    );
+    const campaignSeasonPools = generateDynamicEvents(
+      { ...INITIAL_STATS },
+      BASE_MACRO_STATE,
+      BASE_STATE_APPROVAL,
+      new Set(),
+      "DEM",
+      35,
+      {},
+      [],
+      true
+    );
+
+    expect(offSeasonPools.randomPool.some((event) => event.name.includes("Special election opens"))).toBe(true);
+    expect(campaignSeasonPools.randomPool.some((event) => event.name.includes("Special election opens"))).toBe(false);
   });
 });
 

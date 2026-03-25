@@ -1,6 +1,6 @@
 import Badge from "../Badge.jsx";
 
-export default function CrisisScreen({ curEv, wiy, yr, onChoice }) {
+export default function CrisisScreen({ curEv, wiy, yr, onChoice, act = 0, maxActions = 4 }) {
   return (
     <div style={{ padding: "1.5rem" }}>
       <div style={{ fontSize: 11, letterSpacing: 3, color: "#E24B4A", textTransform: "uppercase", marginBottom: 6 }}>Event — Wk {wiy}, Yr {yr}</div>
@@ -30,16 +30,28 @@ export default function CrisisScreen({ curEv, wiy, yr, onChoice }) {
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {curEv.choices.map((c, i) => (
-          <button key={i} onClick={() => onChoice(c)} style={{
-            textAlign: "left", padding: "10px 12px", borderRadius: "var(--border-radius-lg)",
-            border: "0.5px solid var(--color-border-tertiary)",
-            background: "var(--color-background-primary)", cursor: "pointer",
-          }}>
-            <div style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-primary)" }}>{c.text}</div>
-            {c.schedulesChain && (
-              <div style={{ fontSize: 9, color: "#7c3aed", marginTop: 3 }}>⛓ Triggers a follow-up event in 4–8 weeks</div>
-            )}
-          </button>
+          (() => {
+            const disabled = act + (c.actionCost || 0) > maxActions;
+            return (
+              <button key={i} onClick={() => onChoice(c)} disabled={disabled} style={{
+                textAlign: "left", padding: "10px 12px", borderRadius: "var(--border-radius-lg)",
+                border: "0.5px solid var(--color-border-tertiary)",
+                background: "var(--color-background-primary)", cursor: disabled ? "not-allowed" : "pointer",
+                opacity: disabled ? 0.6 : 1,
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-primary)" }}>{c.text}</div>
+                {c.actionCost ? (
+                  <div style={{ fontSize: 9, color: disabled ? "#b45309" : "var(--color-text-secondary)", marginTop: 3 }}>
+                    Costs {c.actionCost} action{c.actionCost === 1 ? "" : "s"}
+                    {disabled ? " — not enough actions left this week" : ""}
+                  </div>
+                ) : null}
+                {c.schedulesChain && (
+                  <div style={{ fontSize: 9, color: "#7c3aed", marginTop: 3 }}>⛓ Triggers a follow-up event in 4–8 weeks</div>
+                )}
+              </button>
+            );
+          })()
         ))}
       </div>
     </div>

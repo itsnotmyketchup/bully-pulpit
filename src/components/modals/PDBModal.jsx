@@ -1,4 +1,4 @@
-export default function PDBModal({ curEv, wiy, yr, onChoice }) {
+export default function PDBModal({ curEv, wiy, yr, onChoice, act = 0, maxActions = 4 }) {
   if (!curEv || curEv.type !== "pdb") return null;
 
   return (
@@ -143,44 +143,59 @@ export default function PDBModal({ curEv, wiy, yr, onChoice }) {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {curEv.choices.map((c, i) => (
-              <button
-                key={i}
-                onClick={() => onChoice(c)}
-                style={{
-                  textAlign: "left",
-                  padding: "10px 14px",
-                  background: "var(--color-background-primary)",
-                  border: "1px solid var(--color-border-secondary)",
-                  borderLeft: "3px solid #2563eb",
-                  cursor: "pointer",
-                  color: "var(--color-text-primary)",
-                  fontFamily: "var(--font-sans)",
-                  fontSize: 11,
-                  lineHeight: 1.55,
-                  transition: "background 0.12s, border-left-color 0.12s",
-                  width: "100%",
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.background = "var(--color-background-tertiary)";
-                  e.currentTarget.style.borderLeftColor = "#1d4ed8";
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = "var(--color-background-primary)";
-                  e.currentTarget.style.borderLeftColor = "#2563eb";
-                }}
-              >
-                {c.text}
-                {c.schedulesChain && (
-                  <div style={{
-                    fontSize: 9,
-                    color: "var(--color-text-secondary)",
-                    marginTop: 4,
-                    fontStyle: "italic",
-                  }}>
-                    Follow-up intelligence expected in {c.schedulesChain.minDelay}–{c.schedulesChain.maxDelay} weeks
-                  </div>
-                )}
-              </button>
+              (() => {
+                const disabled = act + (c.actionCost || 0) > maxActions;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => onChoice(c)}
+                    disabled={disabled}
+                    style={{
+                      textAlign: "left",
+                      padding: "10px 14px",
+                      background: disabled ? "var(--color-background-tertiary)" : "var(--color-background-primary)",
+                      border: "1px solid var(--color-border-secondary)",
+                      borderLeft: "3px solid #2563eb",
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      color: "var(--color-text-primary)",
+                      fontFamily: "var(--font-sans)",
+                      fontSize: 11,
+                      lineHeight: 1.55,
+                      transition: "background 0.12s, border-left-color 0.12s",
+                      width: "100%",
+                      opacity: disabled ? 0.6 : 1,
+                    }}
+                    onMouseEnter={e => {
+                      if (disabled) return;
+                      e.currentTarget.style.background = "var(--color-background-tertiary)";
+                      e.currentTarget.style.borderLeftColor = "#1d4ed8";
+                    }}
+                    onMouseLeave={e => {
+                      if (disabled) return;
+                      e.currentTarget.style.background = "var(--color-background-primary)";
+                      e.currentTarget.style.borderLeftColor = "#2563eb";
+                    }}
+                  >
+                    {c.text}
+                    {c.actionCost ? (
+                      <div style={{ fontSize: 9, color: disabled ? "#b45309" : "var(--color-text-secondary)", marginTop: 4 }}>
+                        Costs {c.actionCost} action{c.actionCost === 1 ? "" : "s"}
+                        {disabled ? " — not enough actions left this week" : ""}
+                      </div>
+                    ) : null}
+                    {c.schedulesChain && (
+                      <div style={{
+                        fontSize: 9,
+                        color: "var(--color-text-secondary)",
+                        marginTop: 4,
+                        fontStyle: "italic",
+                      }}>
+                        Follow-up intelligence expected in {c.schedulesChain.minDelay}–{c.schedulesChain.maxDelay} weeks
+                      </div>
+                    )}
+                  </button>
+                );
+              })()
             ))}
           </div>
         </div>

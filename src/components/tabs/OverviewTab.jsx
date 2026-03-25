@@ -14,7 +14,7 @@ const MAP_VIEWS = [
   { id: "religious", label: "Religious" },
 ];
 
-export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, setHov, activeBill, billLikelihood, week, macroState }) {
+export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, setHov, activeBills, week, macroState }) {
   const [mapView, setMapView] = useState("approval");
   const [otherExpanded, setOtherExpanded] = useState(false);
   const yr = Math.ceil(week / 52);
@@ -186,7 +186,11 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
               </div>
             ))}
           </div>
-          {activeBill && <div style={{ marginTop: 8 }}><BillProgress bill={activeBill} passLikelihood={billLikelihood} /></div>}
+          {activeBills?.length > 0 && (
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+              {activeBills.map((bill) => <BillProgress key={bill.id} bill={bill} />)}
+            </div>
+          )}
         </div>
 
         <SectionHeader label="Economy" />

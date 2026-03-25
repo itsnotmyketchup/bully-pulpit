@@ -6,7 +6,7 @@ import { COUNTRIES_INIT } from "./data/countries.js";
 import { INITIAL_STATS } from "./data/stats.js";
 import { VISIT_REPEAT_WINDOW_TURNS, VISIT_TYPES } from "./data/visits.js";
 import { SPEECH_TOPICS } from "./data/speeches.js";
-import { POLICY_ACTIONS, BILL_LOCKS, BILL_AMENDMENTS } from "./data/policies.js";
+import { BILL_LOCKS, BILL_AMENDMENTS } from "./data/policies.js";
 import {
   CHINA_SANCTIONS_RETALIATION_EVENT,
   PROGRESSIVE_HECKLER_EVENT,
@@ -55,7 +55,10 @@ import {
 } from "./logic/scotusAppointments.js";
 import { invalidateExecutiveOrder } from "./logic/executiveOrderJudiciary.js";
 import { settleSecStatePromises } from "./logic/promiseResolution.js";
+import { buildYearlyPromiseOffers } from "./logic/promiseOffers.js";
+import { createBudgetDraft, createInitialCabinetState, createStatHistory } from "./logic/gameState.js";
 import { runWeeklySimulation } from "./logic/weeklySimulation.js";
+import { canStartBudgetReconciliation } from "./logic/budgetReconciliation.js";
 import { computeBudgetReactions } from "./systems/budgetCalc.js";
 import { makeSurrogates } from "./utils/makeSurrogates.js";
 import { createNameRegistry } from "./utils/nameBank.js";
@@ -105,70 +108,6 @@ const DRILLING_REGION_STATE_MAP = {
   pacific: ["NM", "WY"],
 };
 
-function createInitialCabinetState() {
-  return {
-    secState: {
-      occupantName: null,
-      factionId: null,
-      party: null,
-      startWeek: null,
-      candidates: [],
-      selectedCandidateId: null,
-    },
-  };
-}
-
-function buildYearlyPromiseOffers({ playerParty, usedPol, billCooldowns, week, cabinetState, pendingAppointment }) {
-  const offers = {};
-  const secStateAvailable = !cabinetState.secState.occupantName && pendingAppointment?.officeId !== "sec_state";
-
-  FACTION_DATA[playerParty].forEach(faction => {
-    const billOptions = POLICY_ACTIONS
-      .filter(action => (action.factionReactions?.[faction.id] || 0) > 0 && !usedPol.has(action.id) && !(billCooldowns[action.id] && week < billCooldowns[action.id]))
-      .sort((a, b) => (b.factionReactions?.[faction.id] || 0) - (a.factionReactions?.[faction.id] || 0))
-      .slice(0, 4)
-      .map(action => {
-        const controversy = Object.values(action.factionReactions).reduce((sum, value) => sum + Math.abs(value), 0) / Object.keys(action.factionReactions).length;
-        return {
-          type: "bill",
-          billId: action.id,
-          billName: action.name,
-          label: `Pass "${action.name}"`,
-          relBoost: Math.max(3, Math.round(controversy * 12)),
-          brokenRelPenalty: 10,
-          brokenTrustPenalty: 15,
-          successTrustBoost: 5,
-        };
-      });
-
-    const cabinetOption = secStateAvailable ? [{
-      type: "cabinet",
-      officeId: "sec_state",
-      officeLabel: "Secretary of State",
-      promisedFactionId: faction.id,
-      promisedFactionName: faction.name,
-      label: `Give Secretary of State to ${faction.name}`,
-      relBoost: 8,
-      brokenRelPenalty: 12,
-      brokenTrustPenalty: 20,
-      betrayalRelPenalty: 18,
-      betrayalTrustPenalty: 35,
-      successTrustBoost: 8,
-    }] : [];
-
-    const candidatePool = [...billOptions, ...cabinetOption];
-    if (candidatePool.length > 0) {
-      offers[faction.id] = candidatePool
-        .sort(() => Math.random() - 0.5)
-        .slice(0, Math.min(2, candidatePool.length));
-    } else {
-      offers[faction.id] = [];
-    }
-  });
-
-  return offers;
-}
-
 export default function Game() {
   const nameRegistryRef = useRef(createNameRegistry());
   const [screen, setScreen] = useState(0);
@@ -181,11 +120,7 @@ export default function Game() {
   const [stats, setStats] = useState({ ...INITIAL_STATS });
   const [macroState, setMacroState] = useState(() => createInitialMacroState());
   const [prev, setPrev] = useState({ ...INITIAL_STATS });
-  const [hist, setHist] = useState(() => {
-    const h = {};
-    Object.keys(INITIAL_STATS).forEach(k => h[k] = [INITIAL_STATS[k]]);
-    return h;
-  });
+  const [hist, setHist] = useState(() => createStatHistory(INITIAL_STATS));
   const [week, setWeek] = useState(1);
   const [curEv, setCurEv] = useState(null);
   const [log, setLog] = useState([]);
@@ -193,7 +128,7 @@ export default function Game() {
   const [maxActions, setMaxActions] = useState(4);
   const [usedPol, setUsedPol] = useState(new Set());
   const [usedEv, setUsedEv] = useState(new Set());
-  const [activeBill, setActiveBill] = useState(null); // { act, stage, fails, turnsInStage, consecutiveFails }
+  const [activeBills, setActiveBills] = useState([]);
   const [pFx, setPFx] = useState([]);
   const [stBon, setStBon] = useState({});
   const [countries, setCountries] = useState(COUNTRIES_INIT.map(c => ({ ...c })));
@@ -207,7 +142,6 @@ export default function Game() {
   const [speechTopic, setSpeechTopic] = useState(null);
   const [speechPreview, setSpeechPreview] = useState(null);
   const [billRecord, setBillRecord] = useState([]);
-  const [billLikelihood, setBillLikelihood] = useState(null);
   const [congressTab, setCongressTab] = useState("overview");
   const [policyFilter, setPolicyFilter] = useState("all");
   const [promises, setPromises] = useState([]); // [{billId, factionId, madeWeek, deadline}]
@@ -249,10 +183,9 @@ export default function Game() {
   const [selectedEO, setSelectedEO] = useState(null); // eo id for preview
   const [eoChoice, setEoChoice] = useState({}); // {countryId, declassifyId} for choice EOs
   const [eoResult, setEoResult] = useState(null); // popup after issuing
-  const [pendingNegotiation, setPendingNegotiation] = useState(null); // { amendments, eligibleFactionIds, stage } or null
   const [appliedAmendments, setAppliedAmendments] = useState({}); // { [billId]: [amendmentId, ...] }
-  const [billFactionVotes, setBillFactionVotes] = useState(null); // factionVotes array from last calcStageAdvance
   const [pendingSignature, setPendingSignature] = useState(null); // { act, votes, factionVotes, isBudget, budgetDraft } — awaiting sign/veto
+  const [billSpeechTargetId, setBillSpeechTargetId] = useState("");
   const [pendingAppointment, setPendingAppointment] = useState(null); // {officeId, officeLabel, nomineeName, personality, stage, stages, startedWeek, factionReactions}
   const [confirmationHistory, setConfirmationHistory] = useState([]);
   const [cabinet, setCabinet] = useState(() => createInitialCabinetState());
@@ -307,6 +240,11 @@ export default function Game() {
     const weeksUntilElection = Math.max(0, 44 - wiy);
     return { partyEnthusiasm, oppEnthusiasm, projectedHouseChange, projectedSenateChange, advice, weeksUntilElection };
   }, [cg, pp, natA, executiveOverreach, passedLegislation, promises, campaignActivity, pollingNoise, isPresidentialElection, wiy, yr]);
+
+  const pendingBillNegotiations = useMemo(
+    () => activeBills.filter((bill) => bill.pendingNegotiation),
+    [activeBills],
+  );
 
   const addLog = useCallback(msg => setLog(p => [{ week, text: msg }, ...p].slice(0, 100)), [week]);
 
@@ -701,21 +639,18 @@ export default function Game() {
     setMacroState(freshMacroState);
     setStats(freshStats);
     setPrev(freshStats);
-    const h = {};
-    Object.keys(freshStats).forEach(k => h[k] = [freshStats[k]]);
-    setHist(h);
+    setHist(createStatHistory(freshStats));
     setWeek(1);
     setAct(0);
     setMaxActions(4);
     setUsedPol(new Set());
     setUsedEv(new Set());
-    setActiveBill(null);
+    setActiveBills([]);
     setPFx([]);
     setStBon({});
     setStateHist({});
     setCountries(COUNTRIES_INIT.map(c => ({ ...c })));
     setBillRecord([]);
-    setBillLikelihood(null);
     setCongressTab("overview");
     setPromises([]);
     setPromiseOffers(buildYearlyPromiseOffers({
@@ -755,9 +690,8 @@ export default function Game() {
     setSelectedEO(null);
     setEoChoice({});
     setEoResult(null);
-    setPendingNegotiation(null);
     setAppliedAmendments({});
-    setBillFactionVotes(null);
+    setBillSpeechTargetId("");
     setPendingSignature(null);
     setPendingAppointment(null);
     setConfirmationHistory([]);
@@ -797,10 +731,9 @@ export default function Game() {
       pFx,
       usedEv,
       usedPol,
-      activeBill,
+      activeBills,
       pendingAppointment,
       pendingSignature,
-      pendingNegotiation,
       pendingCongressUpdate,
       promises,
       billCooldowns,
@@ -822,8 +755,6 @@ export default function Game() {
       nextExecutiveOrderCourtCheckWeek,
       lastSpecialEventWeek,
       visitTypeCounts,
-      billLikelihood,
-      billFactionVotes,
       billRecord,
       appliedAmendments,
       factionHist,
@@ -885,10 +816,7 @@ export default function Game() {
     setShowInaugurationModal(nextState.showInaugurationModal);
     setPendingCongressUpdate(nextState.pendingCongressUpdate);
     setCG(nextState.cg);
-    setPendingNegotiation(nextState.pendingNegotiation);
-    setActiveBill(nextState.activeBill);
-    setBillLikelihood(nextState.billLikelihood);
-    setBillFactionVotes(nextState.billFactionVotes);
+    setActiveBills(nextState.activeBills);
     setPendingSignature(nextState.pendingSignature);
     setBillRecord(nextState.billRecord);
     setUsedPol(nextState.usedPol);
@@ -947,7 +875,7 @@ export default function Game() {
       if (appt.stage === "committee_hearing") {
         setScotusConfirmation({ ...nextAppt, stage: "committee_vote", turnsInStage: 0, passLikelihood: 100, lobbyUsedStage: null });
       } else {
-        const vote = evaluateAppointment({ ...cg, factions: cg.factions }, appt.factionReactions);
+        const vote = evaluateAppointment(nextState.cg, appt.factionReactions);
         if (appt.stage === "committee_vote" && vote.passed) {
           setScotusConfirmation({ ...nextAppt, stage: "senate_vote", turnsInStage: 0, factionVotes: vote.factionVotes, passLikelihood: vote.passLikelihood, committeeVote: vote, lobbyUsedStage: null });
         } else if (appt.stage === "senate_vote" || (appt.stage === "committee_vote" && !vote.passed)) {
@@ -1076,6 +1004,8 @@ export default function Game() {
   }, [pendingJudicialEvent, pendingScotusEvent]);
 
   const handleEventChoice = choice => {
+    if ((choice?.actionCost || 0) > 0 && act + choice.actionCost > maxActions) return;
+
     // SCOTUS vacancy / result events are UI-only acknowledgements
     if (curEv?.type === "scotus_vacancy" || curEv?.type === "scotus_result") {
       flushQueuedModalEvent();
@@ -1184,6 +1114,7 @@ export default function Game() {
     if (result.pendingAppointment) setPendingAppointment(result.pendingAppointment);
     result.logs.forEach(addLog);
     result.notifications.forEach(addNotification);
+    if (choice.actionCost) setAct(n => n + choice.actionCost);
     if (result.recentDisasterWeek != null && curEv.affectedStates) {
       setRecentDisasters(rd => {
         const next = { ...rd };
@@ -1195,8 +1126,8 @@ export default function Game() {
     flushQueuedModalEvent();
   };
 
-  const propose = action => {
-    if (act >= maxActions || usedPol.has(action.id) || activeBill) return;
+  const propose = (action, firstChamber) => {
+    if (act + 2 > maxActions || usedPol.has(action.id) || activeBills.length >= 2) return;
     if (billCooldowns[action.id] && week < billCooldowns[action.id]) return;
     if (lockedBills.has(action.id)) return;
     const result = resolveBillProposal({
@@ -1206,11 +1137,11 @@ export default function Game() {
       calcStageAdvance,
       cg,
       playerFaction: pf,
+      firstChamber,
+      week,
     });
     setCG(result.cg);
-    setActiveBill(result.activeBill);
-    setBillLikelihood(result.billLikelihood);
-    setBillFactionVotes(result.billFactionVotes);
+    setActiveBills(prev => [...prev, result.activeBill]);
     setUsedPol(p => new Set([...p, action.id]));
     setBillCooldowns(c => { const nc = { ...c }; delete nc[action.id]; return nc; });
     setAct(n => n + 2); // costs 2 actions
@@ -1468,6 +1399,29 @@ export default function Game() {
     setEoResult(result.eoResult);
   };
 
+  const buildPendingSignatureFromBill = (bill) => {
+    if (!bill?.finalVotes) return null;
+    return {
+      id: bill.id,
+      act: bill.act,
+      votes: bill.finalVotes,
+      factionVotes: bill.billFactionVotes || null,
+      isBudget: bill.isBudget || false,
+      budgetDraft: bill.budgetDraft || null,
+    };
+  };
+
+  const promoteNextPendingSignature = (resolvedBillId) => {
+    const waitingBill = activeBills.find((bill) => (
+      bill.id !== resolvedBillId
+      && bill.stage === "reconciliation"
+      && (bill.reconciliationWeeksLeft || 0) <= 0
+      && bill.finalVotes
+    ));
+    setActiveBills(prev => prev.filter((bill) => bill.id !== resolvedBillId && bill.id !== waitingBill?.id));
+    setPendingSignature(buildPendingSignatureFromBill(waitingBill));
+  };
+
   const signBill = () => {
     if (!pendingSignature) return;
     const result = resolveSignedBill({
@@ -1498,7 +1452,7 @@ export default function Game() {
     if (result.powerProjectionDelta) setPowerProjection(p => Math.max(0, Math.min(50, p + result.powerProjectionDelta)));
     if (result.reconciliationCooldown) setReconciliationCooldown(result.reconciliationCooldown);
     addLog(result.log);
-    setPendingSignature(null);
+    promoteNextPendingSignature(pendingSignature.id);
   };
 
   const vetoBill = () => {
@@ -1520,34 +1474,48 @@ export default function Game() {
     const billAmends = (appliedAmendments[act.id] || []).map(id => (BILL_AMENDMENTS[act.id] || []).find(a => a.id === id)).filter(Boolean);
     setBillRecord(r => [...r, { ...result.billRecordEntry, amendments: billAmends }]);
     addLog(`${result.log} by President ${pn}`);
-    setPendingSignature(null);
+    promoteNextPendingSignature(pendingSignature.id);
   };
 
-  const acceptAmendment = (amendment) => {
-    if (!activeBill) return;
-    setActiveBill(b => {
-      if (!b) return b;
-      const newReactions = { ...b.act.factionReactions };
+  const acceptAmendment = (billId, amendment) => {
+    const targetBill = activeBills.find((bill) => bill.id === billId);
+    if (!targetBill) return;
+    setActiveBills(prev => prev.map((bill) => {
+      if (bill.id !== billId) return bill;
+      const newReactions = { ...bill.act.factionReactions };
       Object.entries(amendment.factionMod).forEach(([fid, delta]) => {
         newReactions[fid] = Math.max(-1, Math.min(1, (newReactions[fid] ?? -0.35) + delta));
       });
-      return { ...b, act: { ...b.act, factionReactions: newReactions } };
-    });
+      const nextLikelihood = calcStageAdvance(
+        { ...bill.act, factionReactions: newReactions, currentChamber: bill.currentChamber, firstChamber: bill.firstChamber },
+        cg,
+        bill.stage,
+        pf,
+        bill.isBudget || false,
+      );
+      return {
+        ...bill,
+        act: { ...bill.act, factionReactions: newReactions },
+        pendingNegotiation: null,
+        billLikelihood: nextLikelihood.passLikelihood,
+        billFactionVotes: nextLikelihood.factionVotes || null,
+      };
+    }));
     setAppliedAmendments(prev => ({
       ...prev,
-      [activeBill.act.id]: [...(prev[activeBill.act.id] || []), amendment.id],
+      [targetBill.act.id]: [...(prev[targetBill.act.id] || []), amendment.id],
     }));
-    addLog(`Amendment accepted: "${amendment.label}" added to ${activeBill.act.name}.`);
+    addLog(`Amendment accepted: "${amendment.label}" added to ${targetBill.act.name}.`);
     const nextOverreach = Math.max(0, executiveOverreach - 2);
     setExecutiveOverreach(nextOverreach);
     setOverreachLowSinceWeek(nextOverreach <= 31 ? (overreachLowSinceWeek || week) : 0);
-    setPendingNegotiation(null);
   };
 
-  const walkAwayNegotiation = () => {
-    if (!pendingNegotiation) return;
-    if (pendingNegotiation.eligibleFactionIds?.length > 0) {
-      const fid = pendingNegotiation.eligibleFactionIds[0];
+  const walkAwayNegotiation = (billId) => {
+    const targetBill = activeBills.find((bill) => bill.id === billId);
+    if (!targetBill?.pendingNegotiation) return;
+    if (targetBill.pendingNegotiation.eligibleFactionIds?.length > 0) {
+      const fid = targetBill.pendingNegotiation.eligibleFactionIds[0];
       setCG(prev => {
         const nf = { ...prev.factions };
         if (nf[fid]) nf[fid] = { ...nf[fid], trust: Math.max(5, nf[fid].trust - 5) };
@@ -1555,11 +1523,11 @@ export default function Game() {
       });
       addLog(`Walked away from negotiations — trust decreased.`);
     }
+    setActiveBills(prev => prev.map((bill) => bill.id === billId ? { ...bill, pendingNegotiation: null } : bill));
     const nextOverreach = Math.min(100, executiveOverreach + 5);
     setExecutiveOverreach(nextOverreach);
     setOverreachLastIncreasedWeek(week);
     setOverreachLowSinceWeek(nextOverreach <= 31 ? week : 0);
-    setPendingNegotiation(null);
   };
 
   const rescindEO = (orderId) => {
@@ -1588,8 +1556,46 @@ export default function Game() {
     addLog(`EXECUTIVE ORDER RESCINDED: "${eo.name}"`);
   };
 
-  const doSpeech = pos => {
+  const doSpeech = (pos, targetBillId = billSpeechTargetId) => {
     if (act >= maxActions) return;
+    if (speechTopic === "bill_pressure") {
+      const targetBill = activeBills.find((bill) => bill.id === targetBillId);
+      if (!targetBill || !pos?.billStance) return;
+      const delta = pos.billStance === "against" ? -0.06 : 0.06;
+      setActiveBills(prev => prev.map((bill) => {
+        if (bill.id !== targetBillId) return bill;
+        const updatedReactions = {
+          ...bill.act.factionReactions,
+          [pf]: Math.max(-1, Math.min(1, (bill.act.factionReactions?.[pf] ?? -0.35) + delta)),
+        };
+        const salience = Math.min(100, (bill.salience || 50) + 15);
+        const currentChamber = bill.stage === "second_chamber"
+          ? (bill.firstChamber === "house" ? "senate" : "house")
+          : bill.currentChamber;
+        const nextResult = calcStageAdvance(
+          { ...bill.act, factionReactions: updatedReactions, currentChamber, firstChamber: bill.firstChamber },
+          cg,
+          bill.stage,
+          pf,
+          bill.isBudget || false,
+        );
+        return {
+          ...bill,
+          act: { ...bill.act, factionReactions: updatedReactions },
+          salience,
+          considerationWeeksLeft: salience >= 90 ? 0 : Math.min(bill.considerationWeeksLeft || 2, Math.max(0, Math.round(8 - (salience / 100) * 6))),
+          billLikelihood: nextResult.passLikelihood,
+          billFactionVotes: nextResult.factionVotes || null,
+        };
+      }));
+      setAct(n => n + 1);
+      if (campaignSeasonStarted) setCampaignActivity(n => n + 1);
+      addLog(`${pos.label}: ${targetBill.act.name} salience +15.`);
+      setSpeechTopic(null);
+      setSpeechPreview(null);
+      setBillSpeechTargetId("");
+      return;
+    }
     const result = resolveSpeech({
       pos,
       stats,
@@ -1609,7 +1615,7 @@ export default function Game() {
   };
 
   const submitBudget = () => {
-    if (!budgetDraft || activeBill) return;
+    if (!budgetDraft || !canStartBudgetReconciliation({ act, maxActions, activeBills, reconciliationCooldown, week })) return;
     const reactions = computeBudgetReactions(budgetDraft);
     const syntheticBill = {
       id: "budget_reconciliation",
@@ -1619,11 +1625,26 @@ export default function Game() {
       factionReactions: reactions,
       effects: {},
     };
-    setActiveBill({ act: syntheticBill, stage: "committee", fails: 0, turnsInStage: 0, consecutiveFails: 0, isBudget: true, budgetDraft: { ...budgetDraft } });
+    setActiveBills(prev => [...prev, {
+      act: syntheticBill,
+      id: `${syntheticBill.id}-${week}`,
+      stage: "committee",
+      firstChamber: "house",
+      currentChamber: "house",
+      fails: 0,
+      turnsInStage: 0,
+      consecutiveFails: 0,
+      isBudget: true,
+      budgetDraft: { ...budgetDraft },
+      salience: 50,
+      considerationWeeksLeft: 5,
+      supportView: "house",
+    }]);
     setUsedPol(p => new Set([...p, "budget_reconciliation"]));
+    setAct(n => n + 2);
     setShowBudget(false);
     setBudgetDraft(null);
-    addLog(`Budget Reconciliation Act introduced — entering committee`);
+    addLog(`Budget Reconciliation Act introduced — entering House committee`);
   };
 
   /* ── SCREENS ── */
@@ -1669,7 +1690,7 @@ export default function Game() {
             <div style={{ fontSize: 9, color: "var(--color-text-secondary)" }}>Actions</div>
             <div style={{ fontSize: 18, fontWeight: 500, color: act >= maxActions ? "#E24B4A" : act >= maxActions - 1 ? "#EF9F27" : "#1D9E75" }}>{maxActions - act}<span style={{ fontSize: 10, fontWeight: 400, color: "var(--color-text-secondary)" }}>/{maxActions}</span></div>
           </div>
-          {activeBill && <Badge color="#378ADD">Bill in Congress</Badge>}
+          {activeBills.length > 0 && <Badge color="#378ADD">{activeBills.length} bill{activeBills.length !== 1 ? "s" : ""} in Congress</Badge>}
           <button onClick={advance} style={{ padding: "7px 14px", fontSize: 12, fontWeight: 500, background: "var(--color-text-primary)", color: "var(--color-background-primary)", border: "none", borderRadius: "var(--border-radius-md)", cursor: "pointer" }}>Next week</button>
         </div>
       </div>
@@ -1691,14 +1712,15 @@ export default function Game() {
       {/* Notification bar */}
       {(() => {
         const derived = [];
-        if (pendingNegotiation && activeBill && tab !== "policy") {
+        pendingBillNegotiations.forEach((bill) => {
+          if (tab === "policy") return;
           derived.push({
-            id: "negotiation",
+            id: `negotiation-${bill.id}`,
             type: "negotiation",
-            message: `Negotiation opportunity: amendments available for ${activeBill.act.name}.`,
+            message: `Negotiation opportunity: amendments available for ${bill.act.name}.`,
             tab: "policy",
           });
-        }
+        });
         const all = [...derived, ...notifications];
         return all.length > 0 ? (
           <NotificationBar
@@ -1715,7 +1737,7 @@ export default function Game() {
           macroState={macroState}
           sA={sA} stateHist={stateHist}
           hov={hov} setHov={setHov}
-          activeBill={activeBill} billLikelihood={billLikelihood}
+          activeBills={activeBills}
           week={week}
         />
       )}
@@ -1771,39 +1793,15 @@ export default function Game() {
 
       {tab === "policy" && (
         <PolicyTab
-          activeBill={activeBill} billLikelihood={billLikelihood} billFactionVotes={billFactionVotes}
-          pendingNegotiation={pendingNegotiation}
+          activeBills={activeBills}
           act={act} maxActions={maxActions} week={week}
           reconciliationCooldown={reconciliationCooldown}
           policyFilter={policyFilter} setPolicyFilter={setPolicyFilter}
           lockedBills={lockedBills} billCooldowns={billCooldowns} usedPol={usedPol}
           cg={cg}
           onOpenBudget={() => {
-            if (!activeBill && (reconciliationCooldown === 0 || week >= reconciliationCooldown)) {
-              setBudgetDraft({
-                corporateTaxRate: 0,
-                incomeTaxLow: 0,
-                incomeTaxMid: 0,
-                incomeTaxHigh: 0,
-                payrollTaxRate: 0,
-                militarySpending: 0,
-                educationSpending: 0,
-                infrastructureSpending: 0,
-                scienceTechnologySpending: 0,
-                lawEnforcementSpending: 0,
-                agricultureSpending: 0,
-                energyEnvironmentSpending: 0,
-                irsFunding: 0,
-                medicareEligibilityAge: stats.medicareEligibilityAge,
-                drugPriceNegotiationLevel: stats.drugPriceNegotiationLevel,
-                healthcareSubsidyLevel: stats.healthcareSubsidyLevel,
-                childTaxCredit: stats.childTaxCredit,
-                earnedIncomeTaxCredit: stats.earnedIncomeTaxCredit,
-                saltDeductionCap: stats.saltDeductionCap,
-                firstTimeHomebuyerTaxCredit: stats.firstTimeHomebuyerTaxCredit,
-                evTaxCredit: stats.evTaxCredit,
-                renewableInvestmentTaxCredit: stats.renewableInvestmentTaxCredit,
-              });
+            if (canStartBudgetReconciliation({ act, maxActions, activeBills, reconciliationCooldown, week })) {
+              setBudgetDraft(createBudgetDraft(stats));
               setShowBudget(true);
             }
           }}
@@ -1829,6 +1827,8 @@ export default function Game() {
           visitTypeCounts={visitTypeCounts}
           speechTopic={speechTopic} setSpeechTopic={setSpeechTopic}
           speechPreview={speechPreview} setSpeechPreview={setSpeechPreview}
+          activeBills={activeBills}
+          billSpeechTargetId={billSpeechTargetId} setBillSpeechTargetId={setBillSpeechTargetId}
           sA={sA}
           onIssueEO={issueEO} onRescindEO={rescindEO}
           onDoVisit={doVisit} onDoSpeech={doSpeech}
@@ -1879,6 +1879,8 @@ export default function Game() {
         pendingSignature={pendingSignature}
         appliedAmendments={appliedAmendments}
         factions={cg.factions}
+        stats={stats}
+        macroState={macroState}
         pn={pn} week={week}
         onSign={signBill} onVeto={vetoBill}
       />
@@ -1899,8 +1901,8 @@ export default function Game() {
         results={showInaugurationModal ? midtermResults : null}
         onDismiss={() => setShowInaugurationModal(false)}
       />
-      <PDBModal curEv={curEv?.type === "pdb" ? curEv : null} wiy={wiy} yr={yr} onChoice={handleEventChoice} />
-      <CrisisModal curEv={curEv?.type !== "pdb" ? curEv : null} wiy={wiy} yr={yr} onChoice={handleEventChoice} />
+      <PDBModal curEv={curEv?.type === "pdb" ? curEv : null} wiy={wiy} yr={yr} onChoice={handleEventChoice} act={act} maxActions={maxActions} />
+      <CrisisModal curEv={curEv?.type !== "pdb" ? curEv : null} wiy={wiy} yr={yr} onChoice={handleEventChoice} act={act} maxActions={maxActions} />
     </div>
   );
 }

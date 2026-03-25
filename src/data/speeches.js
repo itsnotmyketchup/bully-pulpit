@@ -1,4 +1,8 @@
 export const SPEECH_TOPICS = [
+  {id:"bill_pressure",name:"Bill pressure",dynamicBillTarget:true,positions:[
+    {label:"Rally for the bill",intensity:"supportive",billStance:"for",approvalSwing:0},
+    {label:"Rally against the bill",intensity:"oppositional",billStance:"against",approvalSwing:0},
+  ]},
   {id:"immigration",name:"Immigration",positions:[
     {label:"Open borders advocacy",intensity:"strong-left",factionEffects:{prog:0.5,mod_dem:0.1,blue_dog:-0.4,freedom:-0.8,mod_rep:-0.4,trad_con:-0.5},approvalSwing:-1},
     {label:"Compassionate reform",intensity:"moderate-left",factionEffects:{prog:0.3,mod_dem:0.3,blue_dog:0.0,freedom:-0.4,mod_rep:0.0,trad_con:-0.2},approvalSwing:1},

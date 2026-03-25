@@ -109,6 +109,13 @@ describe("computeEnthusiasms", () => {
 
     expect(highOverreach.oppEnthusiasm).toBeGreaterThan(lowOverreach.oppEnthusiasm);
   });
+
+  it("only removes the activity penalty at roughly one campaign action per week", () => {
+    const underTarget = computeEnthusiasms(congress, "DEM", 52, 20, {}, [], 15);
+    const atTarget = computeEnthusiasms(congress, "DEM", 52, 20, {}, [], 16);
+
+    expect(atTarget.partyEnthusiasm).toBeGreaterThan(underTarget.partyEnthusiasm);
+  });
 });
 
 describe("computeSeatChanges", () => {
@@ -149,5 +156,12 @@ describe("computePollingProjection", () => {
 
     expect(typeof projection.advice).toBe("string");
     expect(projection.advice.length).toBeGreaterThan(10);
+  });
+
+  it("only removes the seat penalty at sixteen campaign actions or more", () => {
+    const nearFull = computePollingProjection(65, 45, 54, 0, false, 15);
+    const full = computePollingProjection(65, 45, 54, 0, false, 16);
+
+    expect(full.projectedHouseChange).toBeGreaterThan(nearFull.projectedHouseChange);
   });
 });

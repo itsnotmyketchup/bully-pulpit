@@ -101,6 +101,93 @@ function chooseHighestPriorityEvent(events, rng = Math.random) {
   return contenders[Math.floor(rng() * contenders.length)];
 }
 
+function sumPartyHouseSeats(factions, party) {
+  return Object.values(factions || {}).reduce((sum, faction) => (
+    faction.party === party ? sum + (faction.houseSeats || 0) : sum
+  ), 0);
+}
+
+function pickRandomFactionId(factions, party, { requireSeat = false, excludeId = null } = {}) {
+  const candidates = Object.values(factions || {}).filter((faction) => (
+    faction.party === party
+    && (!requireSeat || (faction.houseSeats || 0) > 0)
+    && faction.id !== excludeId
+  ));
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)].id;
+}
+
+function pickSeatDonorFactionId(factions, party) {
+  return pickRandomFactionId(factions, party, { requireSeat: true, excludeId: null })
+    || pickRandomFactionId(factions, party);
+}
+
+function resolveSpecialHouseElection(context, queuedEvent) {
+  const { state, deps } = context;
+  const election = queuedEvent.specialElection || {};
+  const incumbentParty = election.incumbentParty === "REP" ? "REP" : "DEM";
+  const playerParty = deps.playerParty;
+  const oppositionParty = playerParty === "DEM" ? "REP" : "DEM";
+  const approval = state.stats.approvalRating || 50;
+  const campaignedBoost = election.campaigned ? 0.12 : 0;
+  const incumbencyTilt = incumbentParty === playerParty ? 0.06 : -0.06;
+  const playerWinChance = clamp(0.5 + ((approval - 50) * 0.015) + campaignedBoost + incumbencyTilt, 0.18, 0.82);
+  const winnerParty = Math.random() < playerWinChance ? playerParty : oppositionParty;
+
+  const losingFactionId = pickSeatDonorFactionId(state.cg.factions, incumbentParty);
+  const samePartyDefense = winnerParty === incumbentParty;
+  const winnerFactionId = pickRandomFactionId(
+    state.cg.factions,
+    winnerParty,
+    samePartyDefense ? { excludeId: losingFactionId } : {}
+  ) || losingFactionId;
+
+  if (losingFactionId && winnerFactionId && losingFactionId !== winnerFactionId) {
+    const losingFaction = state.cg.factions[losingFactionId];
+    const winningFaction = state.cg.factions[winnerFactionId];
+    state.cg.factions = {
+      ...state.cg.factions,
+      [losingFactionId]: { ...losingFaction, houseSeats: Math.max(0, (losingFaction.houseSeats || 0) - 1) },
+      [winnerFactionId]: { ...winningFaction, houseSeats: (winningFaction.houseSeats || 0) + 1 },
+    };
+  }
+
+  const demSeats = sumPartyHouseSeats(state.cg.factions, "DEM");
+  const repSeats = sumPartyHouseSeats(state.cg.factions, "REP");
+  const winningLabel = winnerParty === "DEM" ? "Democrats" : "Republicans";
+  const incumbentLabel = incumbentParty === "DEM" ? "Democrats" : "Republicans";
+  const winnerFactionName = winnerFactionId ? state.cg.factions[winnerFactionId]?.name : winningLabel;
+  const houseShiftText = winnerParty === incumbentParty
+    ? `${incumbentLabel} hold the seat.`
+    : `${winningLabel} flip the seat from the ${incumbentLabel.toLowerCase()}.`;
+  pushNotification(context, {
+    type: "house_update",
+    message: `Special election: ${houseShiftText} House now stands at ${demSeats} Democrats to ${repSeats} Republicans.`,
+    tab: "congress",
+  });
+  pushLog(context, `Special election result in ${election.districtLabel}: ${houseShiftText} House composition is now ${demSeats}D-${repSeats}R.`);
+
+  return {
+    ...queuedEvent,
+    name: `${winningLabel} win special House election in ${election.state}`,
+    desc: `Votes are in from the ${election.districtLabel}. ${winningLabel} ${winnerParty === incumbentParty ? "held" : "captured"} the seat after a compressed, high-visibility campaign centered on ${election.metro}.${election.campaigned ? " Your late visit became a centerpiece of post-election analysis." : " Party operatives note that you stayed out of the race."} The seat will caucus with the ${winnerFactionName}. House composition now stands at ${demSeats} Democrats and ${repSeats} Republicans.`,
+    choices: [
+      {
+        text: "Absorb the result",
+        result: `The race is over. ${houseShiftText}`,
+        effects: {},
+      },
+    ],
+  };
+}
+
+function resolveQueuedChainEvent(context, queuedEvent) {
+  if (queuedEvent.dynamicTrigger === "special_house_election_result") {
+    return resolveSpecialHouseElection(context, queuedEvent);
+  }
+  return queuedEvent;
+}
+
 function cloneSnapshot(snapshot) {
   return {
     ...snapshot,
@@ -114,10 +201,9 @@ function cloneSnapshot(snapshot) {
     pFx: [...(snapshot.pFx || [])],
     usedEv: new Set(snapshot.usedEv || []),
     usedPol: new Set(snapshot.usedPol || []),
-    activeBill: snapshot.activeBill ? { ...snapshot.activeBill, act: { ...snapshot.activeBill.act } } : null,
+    activeBills: (snapshot.activeBills || []).map((bill) => ({ ...bill, act: { ...bill.act } })),
     pendingAppointment: snapshot.pendingAppointment ? { ...snapshot.pendingAppointment } : null,
     pendingSignature: snapshot.pendingSignature ? { ...snapshot.pendingSignature } : null,
-    pendingNegotiation: snapshot.pendingNegotiation ? { ...snapshot.pendingNegotiation } : null,
     pendingCongressUpdate: snapshot.pendingCongressUpdate ? { ...snapshot.pendingCongressUpdate } : null,
     promises: [...(snapshot.promises || [])],
     billCooldowns: { ...snapshot.billCooldowns },
@@ -162,9 +248,8 @@ function createContext(snapshot, deps) {
       nextWeek: snapshot.week + 1,
       inauguratedFactions: null,
       leaderReplace: [],
-      billPassed: false,
-      billDied: false,
-      billFactionReactions: null,
+      billPassed: [],
+      billDied: [],
       readyForEvent: true,
     },
     sideEffects: {
@@ -281,12 +366,6 @@ export function advanceCongressPhase(context) {
   const factions = cloneFactions(runtime.inauguratedFactions || state.cg.factions);
   state.cg = { ...state.cg, factions };
 
-  let negWalkAwayFactionId = null;
-  if (state.pendingNegotiation) {
-    negWalkAwayFactionId = state.pendingNegotiation.eligibleFactionIds?.[0] || null;
-    state.pendingNegotiation = null;
-  }
-
   Object.keys(factions).forEach((factionId) => {
     adjustFaction(factions, factionId, { unity: (Math.random() * 6) - 3 });
     if ((factions[factionId].unity || 0) < 25) {
@@ -307,126 +386,225 @@ export function advanceCongressPhase(context) {
     else if (approval < 40) adjustFaction(factions, deps.playerFaction, { unity: -3 });
   }
 
-  if (state.activeBill) {
-    const stageIndex = BILL_STAGES.findIndex((stage) => stage.id === state.activeBill.stage);
-    const result = deps.calcStageAdvance(state.activeBill.act, state.cg, state.activeBill.stage, deps.playerFaction, state.activeBill.isBudget || false);
-    state.billLikelihood = result.passLikelihood;
-    state.billFactionVotes = result.factionVotes || null;
+  state.activeBills = (state.activeBills || []).reduce((nextBills, bill) => {
+    let nextBill = { ...bill, pendingNegotiation: bill.pendingNegotiation ? { ...bill.pendingNegotiation } : null };
+
+    if (nextBill.stage === "committee" && nextBill.considerationWeeksLeft > 0 && nextBill.salience < 90) {
+      nextBill.considerationWeeksLeft -= 1;
+      nextBill.turnsInStage = (nextBill.turnsInStage || 0) + 1;
+      nextBills.push(nextBill);
+      return nextBills;
+    }
+
+    if (nextBill.stage === "reconciliation") {
+      nextBill.reconciliationWeeksLeft = Math.max(0, (nextBill.reconciliationWeeksLeft || 2) - 1);
+      nextBill.turnsInStage = (nextBill.turnsInStage || 0) + 1;
+      if (nextBill.reconciliationWeeksLeft > 0) {
+        nextBills.push(nextBill);
+        return nextBills;
+      }
+      if (!state.pendingSignature) {
+        pushLog(context, `${nextBill.act.name} passed Congress — awaiting presidential signature`);
+        pushNotification(context, {
+          type: "bill_signature",
+          message: `${nextBill.act.name} has reached your desk for signature.`,
+          tab: "policy",
+        });
+        state.pendingSignature = {
+          id: nextBill.id,
+          act: nextBill.act,
+          votes: nextBill.finalVotes,
+          factionVotes: nextBill.billFactionVotes || null,
+          isBudget: nextBill.isBudget || false,
+          budgetDraft: nextBill.budgetDraft || null,
+        };
+      } else {
+        nextBills.push(nextBill);
+      }
+      return nextBills;
+    }
+
+    const result = deps.calcStageAdvance(
+      { ...nextBill.act, currentChamber: nextBill.currentChamber, firstChamber: nextBill.firstChamber },
+      state.cg,
+      nextBill.stage,
+      deps.playerFaction,
+      nextBill.isBudget || false,
+    );
+    nextBill.billLikelihood = result.passLikelihood;
+    nextBill.billFactionVotes = result.factionVotes || null;
 
     if (result.advance) {
-      if (stageIndex >= BILL_STAGES.length - 1) {
-        pushLog(context, `${state.activeBill.act.name} passed Congress — awaiting presidential signature`);
-        state.pendingSignature = {
-          act: state.activeBill.act,
-          votes: result.votes,
-          factionVotes: result.factionVotes || null,
-          isBudget: state.activeBill.isBudget || false,
-          budgetDraft: state.activeBill.budgetDraft || null,
+      if (nextBill.stage === "committee") {
+        pushLog(context, `${nextBill.act.name} advanced to ${nextBill.firstChamber === "senate" ? "Senate" : "House"} consideration`);
+        pushNotification(context, {
+          type: "bill_committee",
+          message: `${nextBill.act.name} cleared committee and is heading to the ${nextBill.firstChamber === "senate" ? "Senate" : "House"}.`,
+          tab: "policy",
+        });
+        nextBill = {
+          ...nextBill,
+          stage: "first_chamber",
+          currentChamber: nextBill.firstChamber,
+          turnsInStage: 0,
+          consecutiveFails: 0,
+          negotiated: false,
+          considerationWeeksLeft: 0,
         };
-        state.activeBill = null;
-        state.billLikelihood = null;
-        state.billFactionVotes = null;
-      } else {
-        const nextStage = BILL_STAGES[stageIndex + 1].id;
-        pushLog(context, `${state.activeBill.act.name} advanced to ${BILL_STAGES[stageIndex + 1].label}`);
-        state.activeBill = { ...state.activeBill, stage: nextStage, turnsInStage: 0, consecutiveFails: 0, negotiated: false };
-        const nextResult = deps.calcStageAdvance(state.activeBill.act, state.cg, nextStage, deps.playerFaction, state.activeBill.isBudget || false);
-        state.billLikelihood = nextResult.passLikelihood;
-        state.billFactionVotes = nextResult.factionVotes || null;
+        const nextResult = deps.calcStageAdvance(
+          { ...nextBill.act, currentChamber: nextBill.currentChamber, firstChamber: nextBill.firstChamber },
+          state.cg,
+          nextBill.stage,
+          deps.playerFaction,
+          nextBill.isBudget || false,
+        );
+        nextBill.billLikelihood = nextResult.passLikelihood;
+        nextBill.billFactionVotes = nextResult.factionVotes || null;
+        nextBills.push(nextBill);
+        return nextBills;
       }
-    } else {
-      const newConsecutiveFails = state.activeBill.consecutiveFails + 1;
-      const newTotalFails = state.activeBill.fails + 1;
-      pushLog(context, `${state.activeBill.act.name} stalled at ${BILL_STAGES[stageIndex].label} (${newConsecutiveFails}/3)`);
 
-      if (newConsecutiveFails >= 3) {
-        pushLog(context, `${state.activeBill.act.name} DIED IN CONGRESS after repeated failures`);
-        state.stats.approvalRating = (state.stats.approvalRating || 50) - 2;
-        runtime.billDied = true;
-        runtime.billFactionReactions = state.activeBill.act.factionReactions;
-        Object.keys(factions).forEach((factionId) => adjustFaction(factions, factionId, { trust: -3 }));
-        state.billRecord = [...state.billRecord, {
-          name: state.activeBill.act.name,
-          week: state.week,
-          passed: false,
-          senateYes: result.votes.senateYes,
-          senateNo: result.votes.senateNo,
-          houseYes: result.votes.houseYes,
-          houseNo: result.votes.houseNo,
-        }];
-        if (state.activeBill.isBudget) {
-          state.reconciliationCooldown = state.week + 8;
-          state.usedPol.delete("budget_reconciliation");
-        } else {
-          state.usedPol.delete(state.activeBill.act.id);
-          state.billCooldowns = { ...state.billCooldowns, [state.activeBill.act.id]: state.week + 6 };
-        }
-        state.curEv = {
-          name: `${state.activeBill.act.name} Dies in Congress`,
-          desc: `After three consecutive failures to advance, ${state.activeBill.act.name} has been shelved.${state.activeBill.isBudget ? " You may try again in 8 weeks." : " You may attempt to reintroduce it in 6 weeks."}`,
-          choices: [{ text: "Accept the setback and move on", result: "Bill abandoned", effects: {} }],
+      if (nextBill.stage === "first_chamber") {
+        const secondChamber = nextBill.firstChamber === "house" ? "senate" : "house";
+        pushLog(context, `${nextBill.act.name} passed the ${nextBill.currentChamber === "senate" ? "Senate" : "House"} and moved to the ${secondChamber === "senate" ? "Senate" : "House"}`);
+        pushNotification(context, {
+          type: "bill_chamber",
+          message: `${nextBill.act.name} passed the ${nextBill.currentChamber === "senate" ? "Senate" : "House"} and moved to the ${secondChamber === "senate" ? "Senate" : "House"}.`,
+          tab: "policy",
+        });
+        nextBill = {
+          ...nextBill,
+          stage: "second_chamber",
+          currentChamber: secondChamber,
+          turnsInStage: 0,
+          consecutiveFails: 0,
+          negotiated: false,
+          firstChamberVotes: result.votes,
         };
-        state.activeBill = null;
-        state.billLikelihood = null;
-      } else {
-        const amendments = BILL_AMENDMENTS[state.activeBill.act.id];
-        const alreadyApplied = state.appliedAmendments?.[state.activeBill.act.id] || [];
-        const availableAmendments = amendments ? amendments.filter((amendment) => !alreadyApplied.includes(amendment.id)).slice(0, 2) : [];
-        const eligibleFactionIds = availableAmendments.length > 0
-          ? Object.values(state.cg.factions)
-            .filter((faction) => {
-              const reaction = state.activeBill.act.factionReactions[faction.id] ?? -0.35;
-              return reaction >= -0.3 && reaction <= 0.3
-                && (faction.relationship || 50) >= 35
-                && (faction.trust || 50) >= 30;
-            })
-            .map((faction) => faction.id)
-          : [];
+        const nextResult = deps.calcStageAdvance(
+          { ...nextBill.act, currentChamber: nextBill.currentChamber, firstChamber: nextBill.firstChamber },
+          state.cg,
+          nextBill.stage,
+          deps.playerFaction,
+          nextBill.isBudget || false,
+        );
+        nextBill.billLikelihood = nextResult.passLikelihood;
+        nextBill.billFactionVotes = nextResult.factionVotes || null;
+        nextBills.push(nextBill);
+        return nextBills;
+      }
 
-        if (!state.activeBill.negotiated && eligibleFactionIds.length > 0) {
-          state.pendingNegotiation = {
-            amendments: availableAmendments,
-            eligibleFactionIds,
-            stage: state.activeBill.stage,
-          };
-          state.activeBill = {
-            ...state.activeBill,
-            fails: newTotalFails,
-            consecutiveFails: newConsecutiveFails,
-            turnsInStage: state.activeBill.turnsInStage + 1,
-            negotiated: true,
-          };
-        } else {
-          state.activeBill = {
-            ...state.activeBill,
-            fails: newTotalFails,
-            consecutiveFails: newConsecutiveFails,
-            turnsInStage: state.activeBill.turnsInStage + 1,
-          };
-        }
+      if (nextBill.stage === "second_chamber") {
+        pushLog(context, `${nextBill.act.name} passed both chambers — resolving differences`);
+        pushNotification(context, {
+          type: "bill_resolving",
+          message: `${nextBill.act.name} passed both chambers and is now resolving differences.`,
+          tab: "policy",
+        });
+        runtime.billPassed.push(nextBill.act.factionReactions);
+        nextBill = {
+          ...nextBill,
+          stage: "reconciliation",
+          turnsInStage: 0,
+          consecutiveFails: 0,
+          negotiated: false,
+          reconciliationWeeksLeft: 2,
+          finalVotes: {
+            senateYes: nextBill.currentChamber === "senate" ? result.votes.senateYes : (nextBill.firstChamberVotes?.senateYes || 0),
+            senateNo: nextBill.currentChamber === "senate" ? result.votes.senateNo : (nextBill.firstChamberVotes?.senateNo || 0),
+            houseYes: nextBill.currentChamber === "house" ? result.votes.houseYes : (nextBill.firstChamberVotes?.houseYes || 0),
+            houseNo: nextBill.currentChamber === "house" ? result.votes.houseNo : (nextBill.firstChamberVotes?.houseNo || 0),
+          },
+        };
+        nextBills.push(nextBill);
+        return nextBills;
       }
     }
-  }
 
-  if (runtime.billFactionReactions) {
+    const newConsecutiveFails = nextBill.consecutiveFails + 1;
+    const newTotalFails = nextBill.fails + 1;
+    pushLog(context, `${nextBill.act.name} stalled at ${BILL_STAGES.find((stage) => stage.id === nextBill.stage)?.label || nextBill.stage} (${newConsecutiveFails}/3)`);
+
+    if (newConsecutiveFails >= 3) {
+      pushLog(context, `${nextBill.act.name} DIED IN CONGRESS after repeated failures`);
+      state.stats.approvalRating = (state.stats.approvalRating || 50) - 2;
+      runtime.billDied.push(nextBill.act.factionReactions);
+      Object.keys(factions).forEach((factionId) => adjustFaction(factions, factionId, { trust: -3 }));
+      state.billRecord = [...state.billRecord, {
+        name: nextBill.act.name,
+        week: state.week,
+        passed: false,
+        senateYes: result.votes.senateYes,
+        senateNo: result.votes.senateNo,
+        houseYes: result.votes.houseYes,
+        houseNo: result.votes.houseNo,
+      }];
+      if (nextBill.isBudget) {
+        state.reconciliationCooldown = state.week + 8;
+        state.usedPol.delete("budget_reconciliation");
+      } else {
+        state.usedPol.delete(nextBill.act.id);
+        state.billCooldowns = { ...state.billCooldowns, [nextBill.act.id]: state.week + 6 };
+      }
+      state.curEv = {
+        name: `${nextBill.act.name} Dies in Congress`,
+        desc: `After three consecutive failures to advance, ${nextBill.act.name} has been shelved.${nextBill.isBudget ? " You may try again in 8 weeks." : " You may attempt to reintroduce it in 6 weeks."}`,
+        choices: [{ text: "Accept the setback and move on", result: "Bill abandoned", effects: {} }],
+      };
+      return nextBills;
+    }
+
+    const amendments = BILL_AMENDMENTS[nextBill.act.id];
+    const alreadyApplied = state.appliedAmendments?.[nextBill.act.id] || [];
+    const availableAmendments = amendments ? amendments.filter((amendment) => !alreadyApplied.includes(amendment.id)).slice(0, 2) : [];
+    const eligibleFactionIds = availableAmendments.length > 0
+      ? Object.values(state.cg.factions)
+        .filter((faction) => {
+          const reaction = nextBill.act.factionReactions[faction.id] ?? -0.35;
+          const amendmentDelta = availableAmendments.reduce((best, amendment) => {
+            const delta = amendment.factionMod?.[faction.id] ?? 0;
+            return delta > best ? delta : best;
+          }, 0);
+          const isNeutralHoldout = reaction >= -0.3 && reaction <= 0.3;
+          const isTargetableByAmendment = amendmentDelta > 0 && reaction < 0.45;
+          return (isNeutralHoldout || isTargetableByAmendment)
+            && (faction.relationship || 50) >= 35
+            && (faction.trust || 50) >= 30;
+        })
+        .map((faction) => faction.id)
+      : [];
+
+    nextBill = {
+      ...nextBill,
+      fails: newTotalFails,
+      consecutiveFails: newConsecutiveFails,
+      turnsInStage: nextBill.turnsInStage + 1,
+      pendingNegotiation: !nextBill.negotiated && eligibleFactionIds.length > 0 ? {
+        amendments: availableAmendments,
+        eligibleFactionIds,
+        stage: nextBill.stage,
+      } : null,
+      negotiated: nextBill.negotiated || eligibleFactionIds.length > 0,
+    };
+    nextBills.push(nextBill);
+    return nextBills;
+  }, []);
+
+  [...runtime.billPassed, ...runtime.billDied].forEach((reactionMap, index) => {
+    const passed = index < runtime.billPassed.length;
     Object.keys(factions).forEach((factionId) => {
-      const reaction = runtime.billFactionReactions[factionId] || 0;
+      const reaction = reactionMap[factionId] || 0;
       const supports = reaction > 0.2;
       const opposes = reaction < -0.2;
-      if (runtime.billPassed) {
+      if (passed) {
         if (supports) adjustFaction(factions, factionId, { unity: 5 });
         if (opposes) adjustFaction(factions, factionId, { unity: -3 });
-      } else if (runtime.billDied) {
+      } else {
         if (opposes) adjustFaction(factions, factionId, { unity: 3 });
         if (supports) adjustFaction(factions, factionId, { unity: -2 });
       }
     });
-  }
-
-  if (negWalkAwayFactionId && factions[negWalkAwayFactionId]) {
-    adjustFaction(factions, negWalkAwayFactionId, { trust: -3 });
-    pushLog(context, `Walked away from negotiations — trust with ${factions[negWalkAwayFactionId].name} decreased.`);
-  }
+  });
 
   if (runtime.nextWeek % 2 === 0 && state.executiveOverreach > 31) {
     const t = Math.max(0, (state.executiveOverreach - 31)) / 69;
@@ -547,7 +725,7 @@ export function finalizeWeekPhase(context) {
 export function advancePromisesPhase(context) {
   const { state } = context;
   state.promises.forEach((promise) => {
-    if (promise.type === "bill" && promise.deadline - (state.week + 1) === 12 && !state.passedLegislation[promise.billId]) {
+    if (promise.type === "bill" && promise.deadline - state.week === 12 && !state.passedLegislation[promise.billId]) {
       const bill = POLICY_ACTIONS.find((action) => action.id === promise.billId);
       const faction = state.cg.factions[promise.factionId];
       pushNotification(context, {
@@ -571,7 +749,7 @@ export function advancePromisesPhase(context) {
       return;
     }
 
-    if (promise.deadline <= state.week + 1) {
+    if (promise.deadline <= state.week) {
       pushLog(context, `Broken promise: failed to ${getPromiseLabel(promise)}. ${state.cg.factions[promise.factionId]?.name} relationship -${promise.brokenRelPenalty || 10}, trust -${promise.brokenTrustPenalty || 15}.`);
       adjustFaction(state.cg.factions, promise.factionId, {
         relationship: -(promise.brokenRelPenalty || 10),
@@ -788,22 +966,25 @@ export function advanceEventPhase(context) {
   });
   const pools = generateDynamicEvents(
     state.stats,
+    state.macroState,
     stateApproval,
     state.usedEv,
     deps.playerParty,
     runtime.nextWeek,
     state.passedLegislation,
-    state.countries
+    state.countries,
+    state.campaignSeasonStarted
   );
 
   const readyChain = state.pendingChainEvents.find((entry) => runtime.nextWeek >= entry.triggerAtWeek);
   if (readyChain) {
     state.pendingChainEvents = state.pendingChainEvents.filter((entry) => entry !== readyChain);
-    if (readyChain.event.unique) state.usedEv.add(readyChain.event.id);
-    const applied = applyEffectsBundle(state.stats, state.macroState, readyChain.event.effects || {}, readyChain.event);
+    const resolvedChainEvent = resolveQueuedChainEvent(context, readyChain.event);
+    if (resolvedChainEvent.unique) state.usedEv.add(resolvedChainEvent.id);
+    const applied = applyEffectsBundle(state.stats, state.macroState, resolvedChainEvent.effects || {}, resolvedChainEvent);
     state.stats = applied.stats;
     state.macroState = applied.macroState;
-    state.curEv = readyChain.event;
+    state.curEv = resolvedChainEvent;
     return;
   }
 

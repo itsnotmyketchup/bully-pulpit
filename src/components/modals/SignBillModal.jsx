@@ -1,9 +1,58 @@
 import { BILL_AMENDMENTS } from "../../data/policies.js";
+import { computeBudgetProjection } from "../../logic/macroEconomy.js";
 import { buildEffectPreview } from "../../utils/effectDisplay.js";
 
-export default function SignBillModal({ pendingSignature, appliedAmendments, factions, pn, week, onSign, onVeto }) {
+function majorBudgetEffects(stats, macroState, budgetDraft) {
+  if (!stats || !macroState || !budgetDraft) return [];
+  const baseline = computeBudgetProjection(stats, macroState, {});
+  const projection = computeBudgetProjection(stats, macroState, budgetDraft);
+  const nextStats = projection.stats;
+  const deficitDelta = projection.nationalDeficit - stats.nationalDeficit;
+  const spendingDelta = projection.totalSpending - baseline.totalSpending;
+  const revenueDelta = projection.taxRevenue - baseline.taxRevenue;
+  const items = [
+    {
+      id: "budget_deficit",
+      label: "Annual deficit",
+      valueText: deficitDelta === 0 ? "No material change" : `${deficitDelta > 0 ? "Up" : "Down"} $${Math.abs(Math.round(deficitDelta))}B`,
+      positive: deficitDelta <= 0,
+    },
+    {
+      id: "budget_revenue",
+      label: "Tax revenue",
+      valueText: revenueDelta === 0 ? "Flat" : `${revenueDelta > 0 ? "+" : ""}$${Math.round(revenueDelta)}B`,
+      positive: revenueDelta >= 0,
+    },
+    {
+      id: "budget_spending",
+      label: "Federal spending",
+      valueText: spendingDelta === 0 ? "Flat" : `${spendingDelta > 0 ? "+" : ""}$${Math.round(spendingDelta)}B`,
+      positive: spendingDelta <= 0,
+    },
+  ];
+
+  [
+    ["Corporate tax", stats.corporateTaxRate, nextStats.corporateTaxRate, "%"],
+    ["Top income tax", stats.incomeTaxHigh, nextStats.incomeTaxHigh, "%"],
+    ["Child tax credit", stats.childTaxCredit, nextStats.childTaxCredit, "$"],
+    ["Medicare age", stats.medicareEligibilityAge, nextStats.medicareEligibilityAge, ""],
+    ["ACA subsidies", stats.healthcareSubsidyLevel, nextStats.healthcareSubsidyLevel, "tier"],
+  ].forEach(([label, current, next, suffix]) => {
+    if (current == null || next == null || current === next) return;
+    items.push({
+      id: `budget_${label.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`,
+      label,
+      valueText: `${next > current ? "Higher" : "Lower"}${suffix ? ` ${Math.abs(next - current)}${suffix}` : ""}`.trim(),
+      positive: label === "Child tax credit" || label === "ACA subsidies" ? next >= current : next <= current,
+    });
+  });
+
+  return items.slice(0, 6);
+}
+
+export default function SignBillModal({ pendingSignature, appliedAmendments, factions, pn, week, stats, macroState, onSign, onVeto }) {
   if (!pendingSignature) return null;
-  const { act, votes, isBudget } = pendingSignature;
+  const { act, votes, isBudget, budgetDraft } = pendingSignature;
 
   const yr = Math.ceil(week / 52);
   const billAmends = (appliedAmendments[act.id] || [])
@@ -27,7 +76,7 @@ export default function SignBillModal({ pendingSignature, appliedAmendments, fac
       }
       : currentAct.delayedEffects,
   }), act);
-  const effectItems = buildEffectPreview(enactedAct);
+  const effectItems = isBudget ? majorBudgetEffects(stats, macroState, budgetDraft) : buildEffectPreview(enactedAct);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1015, padding: "16px" }}>
@@ -81,7 +130,9 @@ export default function SignBillModal({ pendingSignature, appliedAmendments, fac
 
           {/* Effects if signed */}
           <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 8, letterSpacing: "0.1em", textTransform: "uppercase", color: "#7a6040", marginBottom: 7 }}>If Signed — Effects</div>
+            <div style={{ fontSize: 8, letterSpacing: "0.1em", textTransform: "uppercase", color: "#7a6040", marginBottom: 7 }}>
+              If Signed — {isBudget ? "Major Economic Effects" : "Effects"}
+            </div>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
               <div style={{ background: "#d4eedd", borderRadius: 3, padding: "4px 8px", textAlign: "center" }}>
                 <div style={{ fontSize: 7, color: "#2d6a3f", textTransform: "uppercase", letterSpacing: "0.08em" }}>Approval</div>

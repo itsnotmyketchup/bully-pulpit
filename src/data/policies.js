@@ -37,6 +37,22 @@ export const POLICY_ACTIONS = [
     factionReactions: { prog: 0.95, mod_dem: 0.8, blue_dog: 0.2, freedom: -0.7, mod_rep: -0.5, trad_con: -0.9 },
   },
   {
+    id: "equality_act",
+    name: "Equality Act",
+    desc: "Codifies federal recognition of same-sex marriage and bars discrimination based on sex, sexual orientation, and gender identity in employment, housing, and public accommodations.",
+    category: "social",
+    stateEffects: { region: ["west", "northeast"], weight: 0.025 },
+    factionReactions: { prog: 0.95, mod_dem: 0.78, blue_dog: 0.3, freedom: -0.85, mod_rep: -0.35, trad_con: -0.65 },
+  },
+  {
+    id: "protecting_children_act",
+    name: "Protecting Children Act",
+    desc: "Federally criminalizes gender-affirming care for minors and imposes national penalties on providers who offer it.",
+    category: "social",
+    stateEffects: { region: ["south", "midwest"], weight: 0.025 },
+    factionReactions: { prog: -0.98, mod_dem: -0.82, blue_dog: -0.28, freedom: 0.9, mod_rep: 0.52, trad_con: 0.9 },
+  },
+  {
     id: "defense_mod",
     name: "Defense Modernization Act",
     desc: "$150B investment in next-generation military technology and cyber capabilities.",
@@ -115,6 +131,15 @@ export const POLICY_ACTIONS = [
     factionReactions: { prog: -0.45, mod_dem: 0.25, blue_dog: 0.35, freedom: 0.18, mod_rep: 0.4, trad_con: 0.45 },
   },
   {
+    id: "national_data_privacy",
+    name: "National Data Privacy Act",
+    desc: "Creates a national data privacy framework that restricts data usage, enforces data minimization, and gives consumers more control over personal information.",
+    category: "science & tech",
+    macroEffects: { technologicalAdvancement: -0.15, businessConfidence: -0.35 },
+    stateEffects: { economy: ["tech", "finance"], minUrbanization: 0.55, weight: 0.015 },
+    factionReactions: { prog: 0.35, mod_dem: 0.5, blue_dog: 0.25, freedom: -0.15, mod_rep: 0.08, trad_con: -0.08 },
+  },
+  {
     id: "ukraine_defense",
     name: "Ukraine Defense Act",
     desc: "Authorizes additional military aid, munitions replenishment, and training support for Ukraine while reinforcing U.S. commitments in Europe.",
@@ -132,7 +157,7 @@ export const POLICY_ACTIONS = [
     category: "foreign policy",
     effects: { militarySpending: 5, nationalDebt: 0.02 },
     engagementEffect: 10,
-    powerProjectionEffect: 4,
+    powerProjectionEffect: 2,
     countryEffects: { china: { relationship: -5, trust: -5 } },
     factionReactions: { prog: -0.07, mod_dem: 0.45, blue_dog: 0.45, freedom: 0, mod_rep: 0.6, trad_con: 0.75 },
   },
@@ -142,7 +167,7 @@ export const BILL_STAGES = [
   { id: "committee", label: "Committee", desc: "Under committee consideration" },
   { id: "first_chamber", label: "1st Chamber", desc: "Passed first chamber vote" },
   { id: "second_chamber", label: "2nd Chamber", desc: "Passed second chamber vote" },
-  { id: "reconciliation", label: "Reconciliation", desc: "Resolving differences" },
+  { id: "reconciliation", label: "Resolving Differences", desc: "Resolving differences between chamber versions" },
 ];
 
 export const POLICY_CATEGORIES = ["all", "infrastructure", "immigration", "social", "defense", "agriculture", "crime", "science & tech", "energy & environment", "foreign policy", "other"];
@@ -258,6 +283,21 @@ export const BILL_AMENDMENTS = {
       desc: "Attach district-level infrastructure earmarks to broaden support and route more funding into general public works.",
       factionMod: { prog: 0.05, mod_dem: 0.08, blue_dog: 0.2, mod_rep: 0.18, trad_con: 0.12, freedom: -0.05 },
       effects: { infrastructureSpending: 10 },
+    },
+  ],
+  national_data_privacy: [
+    {
+      id: "privacy_no_private_action",
+      label: "Remove private right of action",
+      desc: "Strip the provision letting individuals sue companies directly for privacy violations, easing business-facing concerns among Main Street Republicans.",
+      factionMod: { mod_rep: 0.22, freedom: 0.08, prog: -0.04, mod_dem: -0.02 },
+      macroEffects: { businessConfidence: 0.15 },
+    },
+    {
+      id: "privacy_drop_civil_rights",
+      label: "Remove civil rights provisions",
+      desc: "Drop civil rights guardrails from the bill, making Traditional Conservatives more open to backing it while slightly softening progressive enthusiasm.",
+      factionMod: { trad_con: 0.26, mod_rep: 0.08, prog: -0.1, mod_dem: -0.04 },
     },
   ],
 };

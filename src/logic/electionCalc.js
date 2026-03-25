@@ -2,6 +2,24 @@ import { POLICY_ACTIONS } from "../data/policies.js";
 import { ALLIED_FACTIONS, OPPOSITION_FACTIONS } from "../data/constants.js";
 import { clamp } from "../utils/clamp.js";
 
+const CAMPAIGN_SEASON_WEEKS = 16;
+
+function getCampaignEnthusiasmPenalty(activityScore = 0) {
+  if (activityScore >= CAMPAIGN_SEASON_WEEKS) return 0;
+  if (activityScore >= 12) return 5;
+  if (activityScore >= 8) return 12;
+  if (activityScore >= 4) return 20;
+  return 28;
+}
+
+function getCampaignSeatPenalty(activityScore = 0) {
+  if (activityScore >= CAMPAIGN_SEASON_WEEKS) return 0;
+  if (activityScore >= 12) return 6;
+  if (activityScore >= 8) return 16;
+  if (activityScore >= 4) return 28;
+  return 40;
+}
+
 // ─── Enthusiasm Calculation ───────────────────────────────────────────────────
 
 export function computeEnthusiasms(cg, pp, natA, executiveOverreach, passedLegislation, promises, activityScore = 0) {
@@ -31,10 +49,7 @@ export function computeEnthusiasms(cg, pp, natA, executiveOverreach, passedLegis
   const legBonus = Math.min(8, allyFavouredCount * 3);
 
   // Activity penalty: low player engagement during campaign season suppresses enthusiasm
-  let activityPenalty = 0;
-  if (activityScore <= 1) activityPenalty = 20;
-  else if (activityScore <= 3) activityPenalty = 12;
-  else if (activityScore <= 5) activityPenalty = 5;
+  const activityPenalty = getCampaignEnthusiasmPenalty(activityScore);
 
   const partyEnthusiasm = clamp(relScore * 45 + unityScore * 35 + promiseBonus + legBonus - activityPenalty, 0, 100);
 
@@ -80,11 +95,7 @@ export function computeSeatChanges(cg, pp, natA, partyEnthusiasm, oppEnthusiasm,
   const structuralPenalty = isPresidentialYear ? 0 : -12;
 
   // Direct inactivity penalty: low campaign activity suppresses turnout and costs seats
-  let directActivityPenalty = 0;
-  if (activityScore === 0) directActivityPenalty = 35;
-  else if (activityScore <= 2) directActivityPenalty = 22;
-  else if (activityScore <= 4) directActivityPenalty = 12;
-  else if (activityScore <= 5) directActivityPenalty = 4;
+  const directActivityPenalty = getCampaignSeatPenalty(activityScore);
 
   const jitterH = Math.round((Math.random() - 0.5) * 8);
   const rawHouseChange = Math.round(structuralPenalty - directActivityPenalty + netScore * 70);
@@ -287,11 +298,7 @@ export function computePollingProjection(partyEnthusiasm, oppEnthusiasm, natA, p
   const netScore = approvalFactor * 0.70 + enthDiff * 0.30;
   const structuralPenalty = isPresidentialYear ? 0 : -12;
 
-  let directActivityPenalty = 0;
-  if (activityScore === 0) directActivityPenalty = 35;
-  else if (activityScore <= 2) directActivityPenalty = 22;
-  else if (activityScore <= 4) directActivityPenalty = 12;
-  else if (activityScore <= 5) directActivityPenalty = 4;
+  const directActivityPenalty = getCampaignSeatPenalty(activityScore);
 
   const projectedHouseChange = Math.round(structuralPenalty - directActivityPenalty + (netScore + pollingNoise) * 70);
   const projectedSenateChange = Math.round(projectedHouseChange * 0.10);

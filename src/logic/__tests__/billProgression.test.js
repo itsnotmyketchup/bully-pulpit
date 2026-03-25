@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { calcStageAdvance } from "../billProgression.js";
 
 const bill = {
+  firstChamber: "senate",
+  currentChamber: "senate",
   factionReactions: {
     prog: 1,
     freedom: -1,

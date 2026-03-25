@@ -1,4 +1,5 @@
 import { POLICY_ACTIONS, POLICY_CATEGORIES } from "../../data/policies.js";
+import { canStartBudgetReconciliation } from "../../logic/budgetReconciliation.js";
 import Badge from "../Badge.jsx";
 import BillProgress from "../BillProgress.jsx";
 import SectionHeader from "../SectionHeader.jsx";
@@ -22,35 +23,41 @@ const sectionLabelStyle = {
 };
 
 export default function PolicyTab({
-  activeBill, billLikelihood, billFactionVotes,
-  pendingNegotiation, act, maxActions, week,
+  activeBills, act, maxActions, week,
   reconciliationCooldown, policyFilter, setPolicyFilter,
   lockedBills, billCooldowns, usedPol, cg,
   onOpenBudget, onPropose, onWalkAway, onAcceptAmendment,
 }) {
   const budgetAvailable = reconciliationCooldown === 0 || week >= reconciliationCooldown;
   const weeksUntil = reconciliationCooldown > 0 ? Math.max(0, reconciliationCooldown - week) : 0;
+  const canOpenBudget = canStartBudgetReconciliation({ act, maxActions, activeBills, reconciliationCooldown, week });
   const filteredPolicies = POLICY_ACTIONS.filter(a => policyFilter === "all" || a.category === policyFilter);
 
   return <>
-    {activeBill && <BillProgress bill={activeBill} passLikelihood={billLikelihood} factionVotes={billFactionVotes} />}
+    {activeBills.length > 0 && (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {activeBills.map(bill => (
+          <BillProgress key={bill.id} bill={bill} />
+        ))}
+      </div>
+    )}
 
-    {pendingNegotiation && activeBill && pendingNegotiation.stage === activeBill.stage && (
-      <div style={{ ...panelStyle, marginBottom: 12, borderColor: "#C98B2E" }}>
+    {activeBills.filter(bill => bill.pendingNegotiation).map(bill => (
+      <div key={`neg-${bill.id}`} style={{ ...panelStyle, marginBottom: 12, borderColor: "#C98B2E" }}>
         <div style={{ ...panelBodyStyle, borderBottom: "0.5px solid rgba(201, 139, 46, 0.28)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div>
             <div style={{ ...sectionLabelStyle, marginBottom: 3 }}>Legislative Negotiation</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>Amendments are available to recover support</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{bill.act.name}: amendments are available to recover support</div>
           </div>
-          <button onClick={onWalkAway} style={{ fontSize: 9, padding: "3px 9px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", background: "transparent", color: "var(--color-text-secondary)", cursor: "pointer", whiteSpace: "nowrap" }}>Walk Away (−trust)</button>
+          <button onClick={() => onWalkAway(bill.id)} style={{ fontSize: 9, padding: "3px 9px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", background: "transparent", color: "var(--color-text-secondary)", cursor: "pointer", whiteSpace: "nowrap" }}>Walk Away (−trust)</button>
         </div>
         <div style={panelBodyStyle}>
           <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 10, lineHeight: 1.55 }}>
             The bill has stalled. Offer an amendment to gain additional support. You may only negotiate once per stage setback.
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {pendingNegotiation.amendments.map(amend => (
-              <div key={amend.id} style={{ padding: "9px 11px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", background: "var(--color-background-primary)" }}>
+            {bill.pendingNegotiation.amendments.map(amend => (
+              <div key={`${bill.id}-${amend.id}`} style={{ padding: "9px 11px", borderRadius: "var(--border-radius-md)", border: "0.5px solid var(--color-border-secondary)", background: "var(--color-background-primary)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 2 }}>{amend.label}</div>
@@ -63,26 +70,26 @@ export default function PolicyTab({
                       ))}
                     </div>
                   </div>
-                  <button onClick={() => onAcceptAmendment(amend)} style={{ flexShrink: 0, padding: "5px 10px", fontSize: 10, fontWeight: 600, background: "var(--color-text-primary)", color: "var(--color-background-primary)", border: "none", borderRadius: "var(--border-radius-md)", cursor: "pointer" }}>Accept</button>
+                  <button onClick={() => onAcceptAmendment(bill.id, amend)} style={{ flexShrink: 0, padding: "5px 10px", fontSize: 10, fontWeight: 600, background: "var(--color-text-primary)", color: "var(--color-background-primary)", border: "none", borderRadius: "var(--border-radius-md)", cursor: "pointer" }}>Accept</button>
                 </div>
               </div>
             ))}
           </div>
         </div>
       </div>
-    )}
+    ))}
 
     <div style={{ ...panelStyle, marginBottom: 10 }}>
       <div style={{ ...panelBodyStyle, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 300px", minWidth: 220 }}>
           <div style={{ ...sectionLabelStyle, marginBottom: 3 }}>Legislative Agenda</div>
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 3 }}>
-            {!activeBill ? "Select a bill to send to Congress" : "A bill is already moving through Congress"}
+            {activeBills.length < 2 ? "Select a bill to send to Congress" : "Two bills are already moving through Congress"}
           </div>
           <div style={{ fontSize: 10, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
-            {!activeBill
-              ? "Only one bill may be in Congress at a time. Introducing legislation consumes 2 actions."
-              : "You must wait for the current bill to pass or fail before introducing another measure."}
+            {activeBills.length < 2
+              ? "Up to two bills may be in Congress at a time. Introducing legislation consumes 2 actions."
+              : "Wait for one of the current bills to resolve before introducing another measure."}
           </div>
         </div>
         <div style={{ flex: "0 1 280px", minWidth: 220 }}>
@@ -90,8 +97,8 @@ export default function PolicyTab({
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 2 }}>Budget Reconciliation Act</div>
           <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 8 }}>Set tax rates, healthcare provisions, and targeted credits inside a reconciliation package.</div>
           {!budgetAvailable && <div style={{ fontSize: 9, color: "#C98B2E", marginBottom: 8 }}>Available in {weeksUntil} wk{weeksUntil !== 1 ? "s" : ""}</div>}
-          <button onClick={onOpenBudget} disabled={!budgetAvailable || !!activeBill}
-            style={{ padding: "6px 12px", fontSize: 11, fontWeight: 600, background: !budgetAvailable || !!activeBill ? "var(--color-background-tertiary)" : "var(--color-text-primary)", color: !budgetAvailable || !!activeBill ? "var(--color-text-secondary)" : "var(--color-background-primary)", border: "none", borderRadius: "var(--border-radius-md)", cursor: !budgetAvailable || !!activeBill ? "not-allowed" : "pointer" }}>
+          <button onClick={onOpenBudget} disabled={!canOpenBudget}
+            style={{ padding: "6px 12px", fontSize: 11, fontWeight: 600, background: !canOpenBudget ? "var(--color-background-tertiary)" : "var(--color-text-primary)", color: !canOpenBudget ? "var(--color-text-secondary)" : "var(--color-background-primary)", border: "none", borderRadius: "var(--border-radius-md)", cursor: !canOpenBudget ? "not-allowed" : "pointer" }}>
             Open Budget
           </button>
         </div>
@@ -120,7 +127,8 @@ export default function PolicyTab({
       const u = usedPol.has(a.id);
       const inCooldown = billCooldowns[a.id] && week < billCooldowns[a.id];
       const isLocked = lockedBills.has(a.id);
-      const d = act + 2 > maxActions || u || !!activeBill || inCooldown || isLocked;
+      const underConsideration = activeBills.some(bill => bill.act.id === a.id);
+      const d = act + 2 > maxActions || u || activeBills.length >= 2 || inCooldown || isLocked || underConsideration;
       const supporters = Object.entries(a.factionReactions).filter(([, v]) => v > 0.2).map(([fid]) => cg?.factions[fid]?.name?.split(" ")[0]).filter(Boolean);
       const opposers = Object.entries(a.factionReactions).filter(([, v]) => v < -0.2).map(([fid]) => cg?.factions[fid]?.name?.split(" ")[0]).filter(Boolean);
       return (
@@ -129,7 +137,7 @@ export default function PolicyTab({
             <div style={{ flex: 1, minWidth: 140 }}>
               <div style={{ ...sectionLabelStyle, marginBottom: 3 }}>{a.category}</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 2 }}>
-                {a.name}{u && !inCooldown ? " (enacted)" : ""}{inCooldown ? ` — retry wk ${billCooldowns[a.id]}` : ""}{isLocked ? " — Locked" : ""}
+                {a.name}{u && !inCooldown && !underConsideration ? " (enacted)" : ""}{underConsideration ? " — Under consideration" : ""}{inCooldown ? ` — retry wk ${billCooldowns[a.id]}` : ""}{isLocked ? " — Locked" : ""}
               </div>
               <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 5, lineHeight: 1.5 }}>{a.desc}</div>
               <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
@@ -138,12 +146,27 @@ export default function PolicyTab({
                 {isLocked && <Badge color="#E24B4A">Locked</Badge>}
               </div>
             </div>
-            <button onClick={() => onPropose(a)} disabled={d} style={{
-              padding: "6px 12px", fontSize: 11, fontWeight: 600,
-              background: d ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
-              color: d ? "var(--color-text-secondary)" : "var(--color-background-primary)",
-              border: "none", borderRadius: "var(--border-radius-md)", cursor: d ? "not-allowed" : "pointer",
-            }}>{u && !inCooldown ? "Enacted" : inCooldown ? `Retry wk ${billCooldowns[a.id]}` : isLocked ? "Locked" : "Introduce"}</button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <button onClick={() => onPropose(a, "house")} disabled={d} style={{
+                  padding: "6px 10px", fontSize: 10, fontWeight: 600,
+                  background: d ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
+                  color: d ? "var(--color-text-secondary)" : "var(--color-background-primary)",
+                  border: "none", borderRadius: "var(--border-radius-md)", cursor: d ? "not-allowed" : "pointer",
+                }}>
+                  {underConsideration ? "Under consideration" : u && !inCooldown ? "Enacted" : inCooldown ? `Retry wk ${billCooldowns[a.id]}` : isLocked ? "Locked" : "Introduce in House"}
+                </button>
+                <button onClick={() => onPropose(a, "senate")} disabled={d} style={{
+                  padding: "6px 10px", fontSize: 10, fontWeight: 600,
+                  background: d ? "var(--color-background-tertiary)" : "var(--color-background-primary)",
+                  color: d ? "var(--color-text-secondary)" : "var(--color-text-primary)",
+                  border: d ? "0.5px solid var(--color-border-secondary)" : "0.5px solid var(--color-text-primary)",
+                  borderRadius: "var(--border-radius-md)", cursor: d ? "not-allowed" : "pointer",
+                }}>
+                  {underConsideration ? "Under consideration" : u && !inCooldown ? "Enacted" : inCooldown ? `Retry wk ${billCooldowns[a.id]}` : isLocked ? "Locked" : "Introduce in Senate"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       );

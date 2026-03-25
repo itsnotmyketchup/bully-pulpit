@@ -12,6 +12,10 @@ import {
 import { applyBudgetDraftToStats } from "./macroEconomy.js";
 import { getPromiseLabel } from "./promiseResolution.js";
 
+function getInitialConsiderationWeeks(salience = 50) {
+  return Math.max(2, Math.min(8, Math.round(8 - (salience / 100) * 6)));
+}
+
 function resolveDelayedWeeks(config = {}) {
   if (config.minWeeks != null || config.maxWeeks != null) {
     const minWeeks = config.minWeeks ?? config.weeks ?? 9;
@@ -156,7 +160,7 @@ export function resolveEventChoice({
   return result;
 }
 
-export function resolveBillProposal({ action, factions, alliedFactionIds, calcStageAdvance, cg, playerFaction }) {
+export function resolveBillProposal({ action, factions, alliedFactionIds, calcStageAdvance, cg, playerFaction, firstChamber, week }) {
   const nextFactions = cloneFactions(factions);
   const allies = new Set(alliedFactionIds || []);
   Object.entries(action.factionReactions).forEach(([factionId, reaction]) => {
@@ -169,13 +173,27 @@ export function resolveBillProposal({ action, factions, alliedFactionIds, calcSt
   });
 
   const updatedCg = { ...cg, factions: nextFactions };
-  const initialResult = calcStageAdvance(action, updatedCg, "committee", playerFaction, false);
+  const salience = 50;
+  const initialResult = calcStageAdvance({ ...action, firstChamber, currentChamber: firstChamber }, updatedCg, "committee", playerFaction, false);
   return {
     cg: updatedCg,
-    activeBill: { act: action, stage: "committee", fails: 0, turnsInStage: 0, consecutiveFails: 0 },
-    billLikelihood: initialResult.passLikelihood,
-    billFactionVotes: initialResult.factionVotes || null,
-    log: `${action.name} introduced — entering committee`,
+    activeBill: {
+      id: `${action.id}-${week}`,
+      act: action,
+      stage: "committee",
+      firstChamber,
+      currentChamber: firstChamber,
+      fails: 0,
+      turnsInStage: 0,
+      consecutiveFails: 0,
+      salience,
+      considerationWeeksLeft: getInitialConsiderationWeeks(salience),
+      billLikelihood: initialResult.passLikelihood,
+      billFactionVotes: initialResult.factionVotes || null,
+      supportView: firstChamber,
+      reconciliationWeeksLeft: 2,
+    },
+    log: `${action.name} introduced in ${firstChamber === "senate" ? "Senate" : "House"} committee`,
   };
 }
 

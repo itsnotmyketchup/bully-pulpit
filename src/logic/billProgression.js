@@ -15,6 +15,15 @@
 
 import { clamp } from "../utils/clamp.js";
 
+function getCurrentChamberForStage(bill, stage) {
+  if (stage === "first_chamber") return bill.currentChamber || bill.firstChamber || "house";
+  if (stage === "second_chamber") {
+    if (bill.currentChamber) return bill.currentChamber;
+    return (bill.firstChamber || "house") === "house" ? "senate" : "house";
+  }
+  return null;
+}
+
 export function calcStageAdvance(bill, congress, stage, playerFactionId = null, isReconciliation = false) {
   const factions = Object.values(congress.factions);
   const totalSenate = factions.reduce((s, f) => s + f.senateSeats, 0);
@@ -83,9 +92,9 @@ export function calcStageAdvance(bill, congress, stage, playerFactionId = null, 
   const houseFrac = totalHouse > 0 ? houseYes / totalHouse : 0;
   const overall = (senateFrac + houseFrac) / 2;
 
-  // For non-reconciliation chamber votes, require 60-vote Senate supermajority (filibuster)
+  const currentChamber = getCurrentChamberForStage(bill, stage);
   const isChamberVote = stage === "first_chamber" || stage === "second_chamber";
-  const senateThreshold = (!isReconciliation && isChamberVote) ? 0.60 : 0.50;
+  const chamberThreshold = currentChamber === "senate" && !isReconciliation ? 0.60 : 0.50;
 
   const stageDifficulty = {
     committee: 0.40,
@@ -98,19 +107,17 @@ export function calcStageAdvance(bill, congress, stage, playerFactionId = null, 
   const noise = (Math.random() - 0.5) * 0.06;
 
   let advance;
-  if (!isReconciliation && isChamberVote) {
-    // Must clear senate filibuster AND house majority
-    advance = (senateFrac + noise * 0.5 >= senateThreshold) && (houseFrac + noise * 0.5 >= 0.50);
+  if (isChamberVote) {
+    const chamberFrac = currentChamber === "senate" ? senateFrac : houseFrac;
+    advance = chamberFrac + noise * 0.5 >= chamberThreshold;
   } else {
     advance = overall + noise >= threshold;
   }
 
-  // passLikelihood reflects the bottleneck chamber
   let passLikelihood;
-  if (!isReconciliation && isChamberVote) {
-    const senateProgress = senateFrac / senateThreshold;
-    const houseProgress = houseFrac / 0.50;
-    passLikelihood = Math.round(clamp(Math.min(senateProgress, houseProgress) * 60, 0, 100));
+  if (isChamberVote) {
+    const chamberFrac = currentChamber === "senate" ? senateFrac : houseFrac;
+    passLikelihood = Math.round(clamp((chamberFrac / chamberThreshold) * 60, 0, 100));
   } else {
     passLikelihood = Math.round(clamp(50 + (overall - threshold) * 300, 0, 100));
   }
@@ -128,6 +135,9 @@ export function calcStageAdvance(bill, congress, stage, playerFactionId = null, 
     factionVotes,
     totalSenate,
     totalHouse,
-    senateThreshold,
+    senateThreshold: currentChamber === "senate" ? chamberThreshold : 0.50,
+    currentChamber,
+    chamberYes: currentChamber === "senate" ? senateYes : houseYes,
+    chamberNo: currentChamber === "senate" ? totalSenate - senateYes : totalHouse - houseYes,
   };
 }
