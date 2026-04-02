@@ -90,6 +90,15 @@ export const POLICY_ACTIONS = [
     factionReactions: { prog: -0.7, mod_dem: -0.2, blue_dog: 0.5, freedom: 0.5, mod_rep: 0.7, trad_con: 0.8 },
   },
   {
+    id: "law_enforcement_funding",
+    name: "Law Enforcement Funding Act",
+    desc: "$20B in new federal grants to state and local law enforcement for officer hiring, equipment modernization, training academies, and retention bonuses — with formula funding weighted toward high-crime jurisdictions.",
+    category: "crime",
+    effects: { lawEnforcementSpending: 20, nationalDebt: 0.04, crimeRate: -0.3 },
+    stateEffects: { region: ["south", "midwest"], weight: 0.015 },
+    factionReactions: { prog: -0.35, mod_dem: 0.1, blue_dog: 0.55, freedom: 0.4, mod_rep: 0.6, trad_con: 0.75 },
+  },
+  {
     id: "marijuana_fed",
     name: "Federal Marijuana Legalization Act",
     desc: "Removes marijuana from the federal controlled substances list and expunges prior convictions.",
@@ -131,6 +140,16 @@ export const POLICY_ACTIONS = [
     factionReactions: { prog: -0.45, mod_dem: 0.25, blue_dog: 0.35, freedom: 0.18, mod_rep: 0.4, trad_con: 0.45 },
   },
   {
+    id: "antitrust_enforcement",
+    name: "Antitrust Enforcement Act",
+    desc: "Overhauls U.S. competition law: lowers merger presumption thresholds (market share >30% triggers DOJ/FTC scrutiny), expands injunctive and civil investigative authority, creates a private right of action with treble damages for antitrust victims, and establishes platform-specific rules barring self-preferencing, mandating data portability and interoperability, and requiring algorithmic transparency for any dominant market participant with >$100B in annual U.S. revenue.",
+    category: "science & tech",
+    effects: { otherSpending: 8, nationalDebt: 0.02 },
+    macroEffects: { businessConfidence: -1.5, productivity: 0.3, technology: 0.1 },
+    stateEffects: { economy: ["tech", "finance"], minUrbanization: 0.55, weight: 0.015 },
+    factionReactions: { prog: 0.75, mod_dem: 0.55, blue_dog: 0.2, freedom: -0.5, mod_rep: -0.25, trad_con: -0.15 },
+  },
+  {
     id: "national_data_privacy",
     name: "National Data Privacy Act",
     desc: "Creates a national data privacy framework that restricts data usage, enforces data minimization, and gives consumers more control over personal information.",
@@ -170,7 +189,7 @@ export const BILL_STAGES = [
   { id: "reconciliation", label: "Resolving Differences", desc: "Resolving differences between chamber versions" },
 ];
 
-export const POLICY_CATEGORIES = ["all", "infrastructure", "immigration", "social", "defense", "agriculture", "crime", "science & tech", "energy & environment", "foreign policy", "other"];
+export const POLICY_CATEGORIES = ["all", "infrastructure", "immigration", "social", "defense", "agriculture", "crime", "science & tech", "energy & environment", "foreign policy", "entitlements", "other"];
 
 export const BILL_LOCKS = {
   abortion_ban: ["abortion_rights"],
@@ -179,6 +198,8 @@ export const BILL_LOCKS = {
   immigration_exp: ["border"],
   crime_bill: [],
   marijuana_fed: [],
+  law_enforcement_funding: [],
+  antitrust_enforcement: [],
 };
 
 export const BILL_AMENDMENTS = {
@@ -231,6 +252,22 @@ export const BILL_AMENDMENTS = {
       desc: "Mandate body cameras for all federally-funded law enforcement officers.",
       factionMod: { prog: 0.15, mod_dem: 0.1, blue_dog: 0.05 },
       effects: { lawEnforcementSpending: 3 },
+    },
+  ],
+  law_enforcement_funding: [
+    {
+      id: "law_enforce_mental_health",
+      label: "Add co-responder mental health programs",
+      desc: "Pair law enforcement grants with funding for mental health clinician co-responder teams, diverting non-violent crisis calls away from armed officers.",
+      factionMod: { prog: 0.28, mod_dem: 0.2, blue_dog: 0.08, trad_con: -0.05 },
+      effects: { otherSpending: 3, crimeRate: -0.05 },
+      macroEffects: { labor: -0.01 },
+    },
+    {
+      id: "law_enforce_accountability",
+      label: "Add national use-of-force standards",
+      desc: "Condition 15% of grant funding on adoption of federal use-of-force guidelines and civilian oversight boards, boosting public trust while drawing conservative resistance.",
+      factionMod: { prog: 0.3, mod_dem: 0.18, blue_dog: 0.06, freedom: -0.12, mod_rep: -0.05, trad_con: -0.14 },
     },
   ],
   immigration_exp: [
@@ -298,6 +335,22 @@ export const BILL_AMENDMENTS = {
       label: "Remove civil rights provisions",
       desc: "Drop civil rights guardrails from the bill, making Traditional Conservatives more open to backing it while slightly softening progressive enthusiasm.",
       factionMod: { trad_con: 0.26, mod_rep: 0.08, prog: -0.1, mod_dem: -0.04 },
+    },
+  ],
+  antitrust_enforcement: [
+    {
+      id: "antitrust_digital_only",
+      label: "Narrow scope to digital platforms only",
+      desc: "Restrict all new merger presumptions, interoperability mandates, and self-preferencing rules to digital platforms with >$100B U.S. revenue, exempting traditional industries from heightened scrutiny.",
+      factionMod: { freedom: 0.22, mod_rep: 0.24, trad_con: 0.14, blue_dog: 0.08, prog: -0.18, mod_dem: -0.08 },
+      macroEffects: { businessConfidence: 0.6 },
+    },
+    {
+      id: "antitrust_no_private_action",
+      label: "Remove private right of action",
+      desc: "Strip treble-damages lawsuits by private parties; enforcement remains exclusively with DOJ, FTC, and state AGs. Dramatically lowers litigation risk for business, narrowing the coalition against the bill.",
+      factionMod: { freedom: 0.2, mod_rep: 0.22, trad_con: 0.12, blue_dog: 0.06, prog: -0.22, mod_dem: -0.08 },
+      macroEffects: { businessConfidence: 0.5 },
     },
   ],
 };

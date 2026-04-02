@@ -27,11 +27,26 @@ export default function PolicyTab({
   reconciliationCooldown, policyFilter, setPolicyFilter,
   lockedBills, billCooldowns, usedPol, cg,
   onOpenBudget, onPropose, onWalkAway, onAcceptAmendment,
+  onOpenSocialSecurity, ssCooldown,
 }) {
   const budgetAvailable = reconciliationCooldown === 0 || week >= reconciliationCooldown;
   const weeksUntil = reconciliationCooldown > 0 ? Math.max(0, reconciliationCooldown - week) : 0;
   const canOpenBudget = canStartBudgetReconciliation({ act, maxActions, activeBills, reconciliationCooldown, week });
-  const filteredPolicies = POLICY_ACTIONS.filter(a => policyFilter === "all" || a.category === policyFilter);
+  const ssAvailable = (ssCooldown === 0 || week >= ssCooldown) && !usedPol.has("social_security_reform");
+  const ssWeeksUntil = ssCooldown > 0 && week < ssCooldown ? Math.max(0, ssCooldown - week) : 0;
+  const canOpenSS = ssAvailable && act + 2 <= maxActions && activeBills.length < 2;
+  const SS_CARD = {
+    id: "social_security_reform",
+    isSocialSecurity: true,
+    name: "Social Security Reform Act",
+    category: "entitlements",
+    desc: "Build a custom reform package: adjust payroll tax rates, retirement age, benefit levels, PIA formula, COLA method, and benefit taxation to extend trust fund solvency. Passes under reconciliation rules (simple majority). 2-year cooldown after enactment.",
+    factionReactions: {},
+  };
+
+  const baseFiltered = POLICY_ACTIONS.filter(a => policyFilter === "all" || a.category === policyFilter);
+  const showSSCard = policyFilter === "all" || policyFilter === "entitlements";
+  const filteredPolicies = showSSCard ? [SS_CARD, ...baseFiltered] : baseFiltered;
 
   return <>
     {activeBills.length > 0 && (
@@ -124,20 +139,27 @@ export default function PolicyTab({
     </div>
 
     {filteredPolicies.map(a => {
-      const u = usedPol.has(a.id);
-      const inCooldown = billCooldowns[a.id] && week < billCooldowns[a.id];
-      const isLocked = lockedBills.has(a.id);
+      const isSS = !!a.isSocialSecurity;
+      const u = isSS ? usedPol.has("social_security_reform") : usedPol.has(a.id);
+      const inCooldown = isSS ? (ssCooldown > 0 && week < ssCooldown) : !!(billCooldowns[a.id] && week < billCooldowns[a.id]);
+      const cooldownWeek = isSS ? ssCooldown : billCooldowns[a.id];
+      const isLocked = !isSS && lockedBills.has(a.id);
       const underConsideration = activeBills.some(bill => bill.act.id === a.id);
-      const d = act + 2 > maxActions || u || activeBills.length >= 2 || inCooldown || isLocked || underConsideration;
+      const d = isSS
+        ? !canOpenSS
+        : act + 2 > maxActions || u || activeBills.length >= 2 || inCooldown || isLocked || underConsideration;
       const supporters = Object.entries(a.factionReactions).filter(([, v]) => v > 0.2).map(([fid]) => cg?.factions[fid]?.name?.split(" ")[0]).filter(Boolean);
       const opposers = Object.entries(a.factionReactions).filter(([, v]) => v < -0.2).map(([fid]) => cg?.factions[fid]?.name?.split(" ")[0]).filter(Boolean);
+      const handleHouse = isSS ? onOpenSocialSecurity : () => onPropose(a, "house");
+      const handleSenate = isSS ? onOpenSocialSecurity : () => onPropose(a, "senate");
+      const btnLabel = underConsideration ? "Under consideration" : u && !inCooldown ? "Enacted" : inCooldown ? `Retry wk ${cooldownWeek}` : isLocked ? "Locked" : null;
       return (
         <div key={a.id} style={{ ...panelStyle, marginBottom: 8, opacity: d ? 0.58 : 1 }}>
           <div style={{ ...panelBodyStyle, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <div style={{ flex: 1, minWidth: 140 }}>
               <div style={{ ...sectionLabelStyle, marginBottom: 3 }}>{a.category}</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 2 }}>
-                {a.name}{u && !inCooldown && !underConsideration ? " (enacted)" : ""}{underConsideration ? " — Under consideration" : ""}{inCooldown ? ` — retry wk ${billCooldowns[a.id]}` : ""}{isLocked ? " — Locked" : ""}
+                {a.name}{u && !inCooldown && !underConsideration ? " (enacted)" : ""}{underConsideration ? " — Under consideration" : ""}{inCooldown ? ` — retry wk ${cooldownWeek}` : ""}{isLocked ? " — Locked" : ""}
               </div>
               <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginBottom: 5, lineHeight: 1.5 }}>{a.desc}</div>
               <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
@@ -148,22 +170,22 @@ export default function PolicyTab({
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                <button onClick={() => onPropose(a, "house")} disabled={d} style={{
+                <button onClick={handleHouse} disabled={d} style={{
                   padding: "6px 10px", fontSize: 10, fontWeight: 600,
                   background: d ? "var(--color-background-tertiary)" : "var(--color-text-primary)",
                   color: d ? "var(--color-text-secondary)" : "var(--color-background-primary)",
                   border: "none", borderRadius: "var(--border-radius-md)", cursor: d ? "not-allowed" : "pointer",
                 }}>
-                  {underConsideration ? "Under consideration" : u && !inCooldown ? "Enacted" : inCooldown ? `Retry wk ${billCooldowns[a.id]}` : isLocked ? "Locked" : "Introduce in House"}
+                  {btnLabel ?? "Introduce in House"}
                 </button>
-                <button onClick={() => onPropose(a, "senate")} disabled={d} style={{
+                <button onClick={handleSenate} disabled={d} style={{
                   padding: "6px 10px", fontSize: 10, fontWeight: 600,
                   background: d ? "var(--color-background-tertiary)" : "var(--color-background-primary)",
                   color: d ? "var(--color-text-secondary)" : "var(--color-text-primary)",
                   border: d ? "0.5px solid var(--color-border-secondary)" : "0.5px solid var(--color-text-primary)",
                   borderRadius: "var(--border-radius-md)", cursor: d ? "not-allowed" : "pointer",
                 }}>
-                  {underConsideration ? "Under consideration" : u && !inCooldown ? "Enacted" : inCooldown ? `Retry wk ${billCooldowns[a.id]}` : isLocked ? "Locked" : "Introduce in Senate"}
+                  {btnLabel ?? "Introduce in Senate"}
                 </button>
               </div>
             </div>

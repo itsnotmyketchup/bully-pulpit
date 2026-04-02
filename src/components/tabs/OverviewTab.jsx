@@ -5,6 +5,7 @@ import TileMap from "../TileMap.jsx";
 import SectionHeader from "../SectionHeader.jsx";
 import { SM } from "../../data/stats.js";
 import { getTotalFederalSpending } from "../../logic/macroEconomy.js";
+import { computeSSProjection } from "../../logic/socialSecurity.js";
 
 const MAP_VIEWS = [
   { id: "approval", label: "Approval" },
@@ -26,6 +27,20 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
   const dangerColor = "#E24B4A";
   const totalFederalBudget = getTotalFederalSpending(stats);
   const prevTotalFederalBudget = getTotalFederalSpending(prev);
+
+  const currentGameYear = 2025 + Math.floor((week - 1) / 52);
+  const ssProjection = computeSSProjection(stats, macroState, {}, week);
+  const { insolvencyYear, annualSurplus: ssAnnualSurplus, avgMonthlyBenefit, numBeneficiaries, trustFundBalance: ssTrustFund } = ssProjection;
+  const yearsToInsolvency = insolvencyYear ? insolvencyYear - currentGameYear : null;
+  const ssInsolvencyColor = yearsToInsolvency == null ? "#1D9E75"
+    : yearsToInsolvency > 15 ? "#1D9E75"
+    : yearsToInsolvency > 8 ? "#EF9F27"
+    : yearsToInsolvency > 3 ? "#E24B4A"
+    : "#c0392b";
+  const ssInsolvencyText = insolvencyYear == null
+    ? "Solvent (20+ yrs)"
+    : `In ~${yearsToInsolvency} yr${yearsToInsolvency !== 1 ? "s" : ""}`;
+  const ssDepletionPct = yearsToInsolvency == null ? 100 : Math.max(2, Math.min(100, (yearsToInsolvency / 20) * 100));
   const otherBreakdown = [
     ["Science & Technology", stats.scienceTechnologySpending],
     ["Law Enforcement", stats.lawEnforcementSpending],
@@ -306,6 +321,45 @@ export default function OverviewTab({ stats, prev, hist, sA, stateHist, hov, set
           </div>
           <div style={{ fontSize: 10, lineHeight: 1.55, color: "var(--color-text-secondary)" }}>
             {macroState.fedDecisionSummary}
+          </div>
+        </div>
+
+        <SectionHeader label="Social Security (OASDI)" />
+        <div style={panelStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 2 }}>Trust Fund Balance</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "var(--color-text-primary)" }}>${Math.round(ssTrustFund).toLocaleString()}B</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 2 }}>Insolvency Horizon</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: ssInsolvencyColor }}>{ssInsolvencyText}</div>
+            </div>
+          </div>
+          {/* Depletion bar */}
+          <div style={{ height: 5, borderRadius: 3, background: "var(--color-border-secondary)", marginBottom: 10 }}>
+            <div style={{ height: "100%", borderRadius: 3, width: `${ssDepletionPct}%`, background: ssInsolvencyColor, transition: "width 0.4s ease, background 0.4s ease" }} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 8 }}>
+            <div>
+              <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 2 }}>Annual Surplus</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: ssAnnualSurplus >= 0 ? "#1D9E75" : "#E24B4A" }}>
+                {ssAnnualSurplus >= 0 ? "+" : ""}{Math.round(ssAnnualSurplus)}B
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 2 }}>Avg Monthly Benefit</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>${avgMonthlyBenefit.toLocaleString()}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--color-text-secondary)", marginBottom: 2 }}>Beneficiaries</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{(numBeneficiaries / 1e6).toFixed(1)}M</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 9, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+            OASDI payroll revenue: ~${ssProjection.ssPayrollRevenue.toLocaleString()}B/yr
+            · Benefit taxation: ~${ssProjection.benefitTaxIncome.toLocaleString()}B/yr
+            · Outlays: ~${ssProjection.ssSpending.toLocaleString()}B/yr
           </div>
         </div>
 

@@ -104,7 +104,7 @@ export function calcStageAdvance(bill, congress, stage, playerFactionId = null, 
   };
 
   const threshold = stageDifficulty[stage] || 0.50;
-  const noise = (Math.random() - 0.5) * 0.06;
+  const noise = (Math.random() - 0.5) * 0.2;
 
   let advance;
   if (isChamberVote) {

@@ -228,6 +228,7 @@ function cloneSnapshot(snapshot) {
     },
     surrogates: [...(snapshot.surrogates || [])],
     reconciliationCooldown: snapshot.reconciliationCooldown || 0,
+  ssCooldown: snapshot.ssCooldown || 0,
     confirmationHistory: [...(snapshot.confirmationHistory || [])],
     congressHistory: [...(snapshot.congressHistory || [])],
     scotusJustices: [...(snapshot.scotusJustices || [])],
@@ -320,6 +321,11 @@ export function advanceEconomyPhase(context) {
   state.stats.population = Math.round(state.stats.population + naturalGrowthPerWeek + immigrationPerWeek);
   state.stats.unemployment = advancedMacro.derived.unemployment;
   state.stats.inflation = advancedMacro.derived.inflation;
+  // SS spending grows with nominal GDP (wage-indexing of benefits) + demographic pressure (~$20B/yr)
+  // This ensures the deficit doesn't shrink as the economy grows, keeping insolvency timeline realistic.
+  const _ssSpending0 = state.stats.socialSecuritySpending ?? 1490;
+  const _nominalGrowthRate = ((state.macroState.realGdpGrowth ?? 2.2) + (state.stats.inflation ?? 2.2)) / 100;
+  state.stats.socialSecuritySpending = Math.round((_ssSpending0 + _ssSpending0 * _nominalGrowthRate / 52 + 20 / 52) * 10) / 10;
   state.stats.gasPrice = Math.max(2, Math.min(7, state.stats.gasPrice + (Math.random() - 0.5) * 0.02));
   state.stats.crimeRate = Math.max(2, Math.min(10, state.stats.crimeRate + (Math.random() - 0.5) * 0.01));
   state.stats.tradeBalance = Math.max(-180, Math.min(40, state.stats.tradeBalance - state.macroState.outputGap * 0.45 + state.macroState.netExportsShare * 20 + (Math.random() - 0.5) * 0.4));
@@ -542,13 +548,16 @@ export function advanceCongressPhase(context) {
       if (nextBill.isBudget) {
         state.reconciliationCooldown = state.week + 8;
         state.usedPol.delete("budget_reconciliation");
+      } else if (nextBill.isSocialSecurity) {
+        state.ssCooldown = state.week + 8;
+        state.usedPol.delete("social_security_reform");
       } else {
         state.usedPol.delete(nextBill.act.id);
         state.billCooldowns = { ...state.billCooldowns, [nextBill.act.id]: state.week + 6 };
       }
       state.curEv = {
         name: `${nextBill.act.name} Dies in Congress`,
-        desc: `After three consecutive failures to advance, ${nextBill.act.name} has been shelved.${nextBill.isBudget ? " You may try again in 8 weeks." : " You may attempt to reintroduce it in 6 weeks."}`,
+        desc: `After three consecutive failures to advance, ${nextBill.act.name} has been shelved.${nextBill.isBudget ? " You may try again in 8 weeks." : nextBill.isSocialSecurity ? " You may try again in 8 weeks." : " You may attempt to reintroduce it in 6 weeks."}`,
         choices: [{ text: "Accept the setback and move on", result: "Bill abandoned", effects: {} }],
       };
       return nextBills;
@@ -574,17 +583,17 @@ export function advanceCongressPhase(context) {
         .map((faction) => faction.id)
       : [];
 
+    const shouldOffer = !nextBill.negotiated && eligibleFactionIds.length > 0;
+    const freshNegotiation = shouldOffer ? { amendments: availableAmendments, eligibleFactionIds, stage: nextBill.stage } : null;
     nextBill = {
       ...nextBill,
       fails: newTotalFails,
       consecutiveFails: newConsecutiveFails,
       turnsInStage: nextBill.turnsInStage + 1,
-      pendingNegotiation: !nextBill.negotiated && eligibleFactionIds.length > 0 ? {
-        amendments: availableAmendments,
-        eligibleFactionIds,
-        stage: nextBill.stage,
-      } : null,
-      negotiated: nextBill.negotiated || eligibleFactionIds.length > 0,
+      // Preserve an existing pendingNegotiation the player hasn't resolved yet.
+      // Only overwrite once it's been cleared (by acceptAmendment or walkAway).
+      pendingNegotiation: nextBill.pendingNegotiation || freshNegotiation,
+      negotiated: nextBill.negotiated || shouldOffer,
     };
     nextBills.push(nextBill);
     return nextBills;

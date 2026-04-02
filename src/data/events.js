@@ -608,6 +608,8 @@ export function generateDynamicEvents(
   const majorInjuries = randomInt(28, 55);
   const minorFatalities = randomInt(2, 12);
   const minorInjuries = randomInt(4, 19);
+  const crashFatalities = randomInt(48, 214);
+  const crashInjuries = randomInt(3, 27);
   addEvent("normal", {
     id:"major_shoot_"+Math.random(),
     repeatable:true,
@@ -635,6 +637,22 @@ export function generateDynamicEvents(
       {text:"Call for targeted gun safety reforms",effects:{approvalRating:1},factionEffects:{prog:0.35,mod_dem:0.15,blue_dog:-0.1,freedom:-0.55,mod_rep:-0.15,trad_con:-0.25},stateBoost:0.02,result:"Advocates seize on the moment; opposition hardens quickly."},
       {text:"Announce support for local trauma and mental health services",effects:{approvalRating:1,healthcareSpending:3},factionEffects:{mod_dem:0.1,blue_dog:0.05,mod_rep:0.05},stateBoost:0.02,result:"A less polarizing response earns cautious approval."},
       {text:"Let local authorities lead and issue condolences",effects:{approvalRating:-1},stateBoost:-0.01,result:"The response is seen as restrained, but distant."},
+    ]
+  });
+
+  const policeMisconductCity = pick();
+  const policeMisconductState = pickState(policeMisconductCity);
+  addEvent("normal", {
+    id:"police_misconduct_"+Math.random(),
+    repeatable:true,
+    name:`Police misconduct video sparks unrest in ${policeMisconductCity}`,
+    desc:`Body-camera footage from ${policeMisconductCity} appears to show officers using excessive force during a traffic stop. Protests have spread for a third straight night as local officials call for calm and federal guidance.`,
+    affectedStates:policeMisconductState?[policeMisconductState]:[],
+    effects:{approvalRating:-1,crimeRate:0.03},
+    choices:[
+      {text:"Call for a DOJ civil rights review and police de-escalation reforms",effects:{approvalRating:1},factionEffects:{prog:0.35,mod_dem:0.2,blue_dog:0.05,freedom:-0.25,trad_con:-0.2},stateBoost:0.02,result:"Civil-rights groups praise the move. Police unions accuse you of prejudging the facts."},
+      {text:"Back local law enforcement while urging full transparency",effects:{approvalRating:1},factionEffects:{blue_dog:0.15,mod_rep:0.2,trad_con:0.25,prog:-0.25,mod_dem:-0.05},stateBoost:0.01,result:"The message reassures voters worried about disorder, but reform advocates say it ducks the core issue."},
+      {text:"Dismiss the incident as media-driven outrage",effects:{approvalRating:-2},factionEffects:{freedom:0.15,trad_con:0.1,prog:-0.4,mod_dem:-0.2,blue_dog:-0.1},stateBoost:-0.02,result:"The clip keeps circulating. Your response is seen as inflaming an already volatile situation."},
     ]
   });
 
@@ -687,6 +705,16 @@ export function generateDynamicEvents(
       {text:"Monitor and prepare",effects:{approvalRating:0},result:"Measured. Critics divided."},
       {text:"Downplay the threat",effects:{approvalRating:-3},macroEffects:{ confidence:0.03 },result:"Risky bet."},
     ]},
+    {id:"aircraft_grounding",name:"FAA Grounds Major Aircraft Model After Safety Investigation",desc:"Federal investigators have linked a dangerous in-flight systems failure to a widely used narrow-body aircraft model. The FAA has temporarily grounded the fleet pending inspections, disrupting travel nationwide and rattling confidence in air safety oversight.",unique:true,effects:{approvalRating:-1},macroEffects:{ confidence:-0.05, demand:-0.03 },choices:[
+      {text:"Back the grounding and order a full safety review",effects:{approvalRating:1},result:"Passengers are frustrated, but most voters see the administration as putting safety first."},
+      {text:"Demand compensation and accountability from the manufacturer",effects:{approvalRating:2},factionEffects:{prog:0.2,mod_dem:0.1,freedom:0.05,mod_rep:0.05},result:"The hard line polls well. Industry warns of ripple effects across the aviation sector."},
+      {text:"Push regulators to restore service quickly once limited fixes are in place",effects:{approvalRating:-1},factionEffects:{mod_rep:0.1,trad_con:0.1,prog:-0.15,mod_dem:-0.1},result:"Airlines welcome the urgency, but critics say the White House looks too cozy with industry."},
+    ]},
+    {id:"plane_crash",name:`Commercial jet crashes near ${city}`,desc:`A domestic passenger jet crashed on approach near ${city}, killing ${crashFatalities} people and injuring ${crashInjuries}. Investigators have not yet determined the cause, but the tragedy is dominating every network and renewing scrutiny of air safety standards.`,unique:true,affectedStates:st?[st]:[],effects:{approvalRating:-2},macroEffects:{ confidence:-0.04 },choices:[
+      {text:"Address the nation and direct federal agencies to support the investigation",effects:{approvalRating:1},stateBoost:0.02,result:"The response is sober and measured. Families say the administration is taking the disaster seriously."},
+      {text:"Order an immediate FAA safety audit of similar aircraft and maintenance programs",effects:{approvalRating:1},factionEffects:{prog:0.1,mod_dem:0.1,mod_rep:0.05},result:"The broader review reassures the public, though airlines warn of delays and cancellations."},
+      {text:"Offer condolences and defer entirely to investigators",effects:{approvalRating:-1},result:"The restraint is understandable, but the White House is criticized for seeming passive in the face of a national tragedy."},
+    ]},
     {id:"tech_boom",name:"AI industry creates 500K jobs",desc:"Tech sector booming in California, Washington, Texas, and New York.",unique:true,affectedStates:["CA","WA","TX","NY"],effects:{approvalRating:2},macroEffects:{ technology:0.18, investment:0.18, labor:-0.1, businessConfidence:1.5 },choices:[
       {text:"Claim credit, tech-friendly policies",effects:{approvalRating:2},result:"Silicon Valley applauds."},
       {text:"Push AI regulation",effects:{approvalRating:0},macroEffects:{ investment:-0.04, confidence:-0.02 },result:"Balanced. Lobbies grumble."},
@@ -737,6 +765,11 @@ export function generateDynamicEvents(
       {text:"Urge states to negotiate directly with unions",effects:{approvalRating:-1},result:"Strikes continue. You're seen as indifferent."},
       {text:"Express sympathy, propose federal pay commission",effects:{approvalRating:1},result:"Slow but avoids a fiscal fight."},
     ]},
+    {id:"port_strike",name:"Major port strike threatens national supply chains",desc:"Longshore workers at one of the country's largest container ports have walked off the job over automation and contract demands. Cargo backlogs are building fast, and retailers warn of shortages if the strike drags on.",unique:true,effects:{approvalRating:-2},macroEffects:{ demand:-0.05, investment:-0.03, productivity:-0.04 },choices:[
+      {text:"Dispatch senior mediators and push both sides toward a deal",effects:{approvalRating:2},factionEffects:{prog:0.2,mod_dem:0.2,blue_dog:0.1,mod_rep:0.05},result:"The White House is seen as engaged and practical, even if a final settlement still takes time."},
+      {text:"Invoke emergency powers to keep cargo moving",effects:{approvalRating:1},factionEffects:{trad_con:0.25,mod_rep:0.2,blue_dog:0.05,prog:-0.35,mod_dem:-0.1},result:"Importers and retailers cheer the move. Organized labor calls it a betrayal."},
+      {text:"Stay out and let the market pressure both sides",effects:{approvalRating:-1},result:"Business groups and governors complain that the administration let a manageable labor dispute become a national problem."},
+    ]},
     {id:"overdose_crisis",
       name:"Fentanyl overdose deaths spike",
       desc:`Overdose deaths hit 120,000 in the past year, highest on record. ${overdoseStateNames.join(", ")} among the hardest hit.`,
@@ -759,6 +792,11 @@ export function generateDynamicEvents(
       {text:"Propose modest wealth surtax on ultra-high earners",effects:{approvalRating:2},factionEffects:{prog:0.5,mod_dem:0.2,freedom:-0.6,mod_rep:-0.3},result:"Progressive base energized. Donor class alarmed."},
       {text:"Emphasize job creation and opportunity programs",effects:{approvalRating:1,nationalDebt:0.03},result:"Bipartisan optics. Doesn't satisfy critics."},
       {text:"Dispute the methodology of the report",effects:{approvalRating:-2},result:"Looks tone-deaf. Goes viral for wrong reasons."},
+    ]},
+    {id:"va_wait_times",name:"Report Finds Severe VA Care Delays at Multiple Hospitals",desc:"A Veterans Affairs inspector general report finds that veterans at several major VA medical centers are waiting months for specialist appointments, with some facilities accused of manipulating internal scheduling data to hide the delays.",unique:true,effects:{approvalRating:-2,healthcareSpending:3},choices:[
+      {text:"Announce emergency hiring and funding for the VA",effects:{approvalRating:2,healthcareSpending:12,nationalDebt:0.03},factionEffects:{prog:0.15,mod_dem:0.2,blue_dog:0.1},result:"Veterans groups and lawmakers praise the immediate action, though implementation will take time."},
+      {text:"Expand private care referrals for veterans facing long waits",effects:{approvalRating:1},factionEffects:{freedom:0.25,mod_rep:0.2,trad_con:0.15,prog:-0.15,mod_dem:-0.05},result:"The move offers quick relief for some patients, but unions and VA reform advocates warn it could hollow out the system."},
+      {text:"Blame VA bureaucracy and demand an internal cleanup plan",effects:{approvalRating:-2},result:"The rhetoric lands with some critics of the agency, but most voters see too little concrete action for a problem this serious."},
     ]},
     {id:"subway_cascade",
       name:`Cascading transit failures cripple ${subwayMetro.city}`,

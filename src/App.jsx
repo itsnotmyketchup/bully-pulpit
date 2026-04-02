@@ -39,11 +39,13 @@ import { calcStageAdvance } from "./logic/billProgression.js";
 import { syncDerivedStats } from "./logic/effectResolution.js";
 import {
   advanceMacroEconomy,
+  applySSBillDraftToStats,
   buildFedNominationEvent,
   createInitialMacroState,
   pickFedChairName,
   resolveFedNomination,
 } from "./logic/macroEconomy.js";
+import { computeSSProjection, computeSSReactions } from "./logic/socialSecurity.js";
 import { generateSecStateCandidates } from "./logic/cabinetAppointments.js";
 import { APPOINTMENT_STAGES, evaluateAppointment } from "./logic/appointmentProgression.js";
 import {
@@ -82,6 +84,7 @@ import DiplomacyTab from "./components/tabs/DiplomacyTab.jsx";
 import LogTab from "./components/tabs/LogTab.jsx";
 
 import BudgetModal from "./components/modals/BudgetModal.jsx";
+import SocialSecurityModal from "./components/modals/SocialSecurityModal.jsx";
 import EoResultModal from "./components/modals/EoResultModal.jsx";
 import SignBillModal from "./components/modals/SignBillModal.jsx";
 import NotificationBar from "./components/NotificationBar.jsx";
@@ -156,6 +159,9 @@ export default function Game() {
   const [reconciliationCooldown, setReconciliationCooldown] = useState(0); // week when available
   const [showBudget, setShowBudget] = useState(false);
   const [budgetDraft, setBudgetDraft] = useState(null);
+  const [showSocialSecurity, setShowSocialSecurity] = useState(false);
+  const [ssDraft, setSsDraft] = useState(null);
+  const [ssCooldown, setSsCooldown] = useState(0); // week number when SS reform is available again
   const [pendingPromise, setPendingPromise] = useState(null); // {factionId, billId, relBoost} — awaiting confirm
   const [brokenPromises, setBrokenPromises] = useState([]); // [{factionName, billName}] notification queue
   const [notifications, setNotifications] = useState([]); // non-intrusive notification banners
@@ -761,6 +767,7 @@ export default function Game() {
       cabinet,
       surrogates,
       reconciliationCooldown,
+      ssCooldown,
       confirmationHistory,
       congressHistory,
       scotusJustices,
@@ -832,6 +839,7 @@ export default function Game() {
     setCabinet(nextState.cabinet);
     setSurrogates(nextState.surrogates);
     setCoachCooldown(nextState.coachCooldown);
+    setSsCooldown(nextState.ssCooldown ?? 0);
     setCountries(nextState.countries);
     setWeek(nextState.week);
     setNotifications(nextState.notifications);
@@ -1408,6 +1416,8 @@ export default function Game() {
       factionVotes: bill.billFactionVotes || null,
       isBudget: bill.isBudget || false,
       budgetDraft: bill.budgetDraft || null,
+      isSocialSecurity: bill.isSocialSecurity || false,
+      ssDraft: bill.ssDraft || null,
     };
   };
 
@@ -1451,6 +1461,11 @@ export default function Game() {
     if (result.engagementDelta) setEngagement(e => Math.max(0, Math.min(50, e + result.engagementDelta)));
     if (result.powerProjectionDelta) setPowerProjection(p => Math.max(0, Math.min(50, p + result.powerProjectionDelta)));
     if (result.reconciliationCooldown) setReconciliationCooldown(result.reconciliationCooldown);
+    // Social Security Reform: apply SS-specific stat changes and set cooldown
+    if (pendingSignature.isSocialSecurity && pendingSignature.ssDraft) {
+      setStats(prevStats => applySSBillDraftToStats(prevStats, pendingSignature.ssDraft));
+      setSsCooldown(week + 104); // 2-year cooldown (104 weeks)
+    }
     addLog(result.log);
     promoteNextPendingSignature(pendingSignature.id);
   };
@@ -1466,6 +1481,9 @@ export default function Game() {
     if (isBudget) {
       setReconciliationCooldown(week + 8);
       setUsedPol(p => { const np = new Set(p); np.delete("budget_reconciliation"); return np; });
+    } else if (pendingSignature.isSocialSecurity) {
+      setSsCooldown(week + 8);
+      setUsedPol(p => { const np = new Set(p); np.delete("social_security_reform"); return np; });
     } else {
       setUsedPol(p => { const np = new Set(p); np.delete(act.id); return np; });
       setBillCooldowns(c => ({ ...c, [act.id]: week + 8 }));
@@ -1647,6 +1665,68 @@ export default function Game() {
     addLog(`Budget Reconciliation Act introduced — entering House committee`);
   };
 
+  const DEFAULT_SS_DRAFT = {
+    payrollTaxDelta: 0,
+    retirementAge: 67,
+    benefitAdjustment: 0,
+    benefitFormula: 0,
+    benefitTaxation: 1,
+    colaMethod: 0,
+    earningsTest: 0,
+  };
+
+  const openSocialSecurity = () => {
+    const canOpen = (ssCooldown === 0 || week >= ssCooldown)
+      && !usedPol.has("social_security_reform")
+      && act + 2 <= maxActions
+      && activeBills.length < 2;
+    if (!canOpen) return;
+    setSsDraft({ ...DEFAULT_SS_DRAFT });
+    setShowSocialSecurity(true);
+  };
+
+  const submitSocialSecurity = () => {
+    const canSubmit = ssDraft
+      && (ssCooldown === 0 || week >= ssCooldown)
+      && !usedPol.has("social_security_reform")
+      && act + 2 <= maxActions
+      && activeBills.length < 2;
+    if (!canSubmit) return;
+    const currentGameYear = 2025 + Math.floor((week - 1) / 52);
+    const projection = computeSSProjection(stats, macroState, ssDraft, week);
+    const reactions = computeSSReactions(ssDraft, projection.insolvencyYear, currentGameYear);
+    const syntheticBill = {
+      id: "social_security_reform",
+      name: "Social Security Reform Act",
+      desc: "Custom Social Security reform package",
+      category: "social",
+      factionReactions: reactions,
+      effects: {},
+      isSocialSecurity: true,
+    };
+    setActiveBills(prev => [...prev, {
+      act: syntheticBill,
+      id: `social_security_reform-${week}`,
+      stage: "committee",
+      firstChamber: "house",
+      currentChamber: "house",
+      fails: 0,
+      turnsInStage: 0,
+      consecutiveFails: 0,
+      isSocialSecurity: true,
+      ssDraft: { ...ssDraft },
+      salience: 88,
+      considerationWeeksLeft: 5,
+      supportView: "house",
+      isReconciliation: true,
+    }]);
+    setUsedPol(p => new Set([...p, "social_security_reform"]));
+    setAct(n => n + 2);
+    setShowSocialSecurity(false);
+    setSsDraft(null);
+    addLog(`Social Security Reform Act introduced — entering House committee`);
+  };
+
   /* ── SCREENS ── */
 
   if (screen === 0) return <LandingScreen onStart={() => setScreen(1)} />;
@@ -1808,6 +1888,8 @@ export default function Game() {
           onPropose={propose}
           onWalkAway={walkAwayNegotiation}
           onAcceptAmendment={acceptAmendment}
+          onOpenSocialSecurity={openSocialSecurity}
+          ssCooldown={ssCooldown}
         />
       )}
 
@@ -1873,6 +1955,14 @@ export default function Game() {
         onChangeDraft={(key, val) => setBudgetDraft(p => ({ ...p, [key]: val }))}
         onSubmit={submitBudget}
         onCancel={() => { setShowBudget(false); setBudgetDraft(null); }}
+      />
+      <SocialSecurityModal
+        ssDraft={showSocialSecurity ? ssDraft : null}
+        stats={stats} macroState={macroState} factions={cg.factions}
+        week={week}
+        onChangeDraft={(key, val) => setSsDraft(p => ({ ...p, [key]: val }))}
+        onSubmit={submitSocialSecurity}
+        onCancel={() => { setShowSocialSecurity(false); setSsDraft(null); }}
       />
       <EoResultModal eoResult={eoResult} pn={pn} week={week} onDismiss={() => setEoResult(null)} />
       <SignBillModal

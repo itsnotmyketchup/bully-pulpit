@@ -1,3 +1,5 @@
+import { computeSSIncome, computeSSSpending } from "./socialSecurity.js";
+
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 export const TREND_GDP_GROWTH = 2.2;
@@ -31,6 +33,7 @@ const PERSONALITY_CONFIG = {
 };
 
 export const INITIAL_MACRO_STATE = {
+  ssTrustFundBalance: 2790,   // $B — OASDI combined trust fund (CBO 2024 baseline)
   fedChairName: "Evelyn Hart",
   fedChairStartWeek: 1,
   fedFundsRate: 4.5,
@@ -219,6 +222,38 @@ export function applyBudgetDraftToStats(stats, budgetDraft = {}) {
   );
 
   return nextStats;
+}
+
+/**
+ * Apply a signed Social Security Reform bill's draft settings to stats.
+ * Called once when the president signs the SS Reform bill.
+ */
+export function applySSBillDraftToStats(stats, ssDraft = {}) {
+  const next = { ...stats };
+  const d = ssDraft;
+
+  if (d.payrollTaxDelta != null && d.payrollTaxDelta !== 0) {
+    next.payrollTaxRate = (stats.payrollTaxRate ?? 7.65) + d.payrollTaxDelta;
+  }
+  if (d.retirementAge != null) {
+    next.ssRetirementAge = d.retirementAge;
+  }
+  if (d.benefitTaxation != null) {
+    next.ssBenefitTaxation = d.benefitTaxation;
+  }
+  if (d.colaMethod != null) {
+    next.ssCOLAMethod = d.colaMethod;
+  }
+  // Compound the benefit multiplier (across-the-board + formula adjustments)
+  if (d.benefitAdjustment != null || d.benefitFormula != null) {
+    const adjFactor = 1 + (d.benefitAdjustment ?? 0) / 100;
+    const fmlaFactor = 1 + (d.benefitFormula ?? 0) / 100;
+    next.ssBenefitMultiplier = (stats.ssBenefitMultiplier ?? 1.0) * adjFactor * fmlaFactor;
+    // Immediately update social security spending to reflect new benefit level
+    next.socialSecuritySpending = Math.round((stats.socialSecuritySpending ?? 1490) * adjFactor * fmlaFactor);
+  }
+
+  return next;
 }
 
 export function computeFiscalState(stats, macroState) {
@@ -606,6 +641,15 @@ export function advanceMacroEconomy(currentMacroState, currentStats, week, rando
 
   macroState.taxRevenue = fiscal.taxRevenue;
   macroState.impulses = applyImpulseDecay(macroState.impulses);
+
+  // Update OASDI trust fund balance weekly
+  const ssIncomeResult = computeSSIncome(currentStats, macroState);
+  const ssSpendingNow = computeSSSpending(currentStats);
+  const ssAnnualSurplus = ssIncomeResult.total - ssSpendingNow;
+  macroState.ssTrustFundBalance = Math.max(
+    0,
+    (currentMacroState.ssTrustFundBalance ?? 2790) + ssAnnualSurplus / 52
+  );
 
   return {
     macroState,

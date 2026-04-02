@@ -13,7 +13,7 @@ npm test           # Vitest once
 npm run test:watch # Vitest watch mode
 ```
 
-Current test suite exists and passes: 8 files, 38 tests.
+Current test suite exists and passes: 9 files, ~40 tests (includes promiseOffers unit tests).
 
 ## Stack
 
@@ -106,11 +106,12 @@ Useful buckets inside `App.jsx`:
 - Session/UI state: `screen`, active tab, hover state, modal visibility, preview state.
 - Core simulation state: `week`, `act`, `stats`, `macroState`, `prev`, `hist`, `log`.
 - Congress/political state: `cg`, `factionHist`, `activeBill`, `pendingNegotiation`, `pendingSignature`, `billRecord`, `billLikelihood`, `billFactionVotes`.
-- Promise/surrogate state: `promises`, `promiseOffers`, `pendingPromise`, `surrogates`, `surrogateUI`, `coachCooldown`.
+- Promise/surrogate state: `promises`, `promiseOffers`, `pendingPromise`, `surrogates`, `surrogateUI`, `coachCooldown`. `promiseOffers` are rebuilt yearly (weeks 1 and 209) via `buildYearlyPromiseOffers()` in `logic/promiseOffers.js`.
 - Executive power state: `activeOrders`, `eoIssuedCount`, `executiveOverreach`, `overreachLastIncreasedWeek`, `overreachLowSinceWeek`.
 - Diplomacy state: `countries`, `visitedCountries`, `engagement`, `powerProjection`, `globalTension`, `countryStatusSnapshot`, `diplomacyThresholds`.
 - Election state: `campaignSeasonStarted`, `campaignActivity`, `pollingNoise`, `pendingCongressUpdate`, `midtermResults`, `congressHistory`.
 - Appointment state: `cabinet`, `pendingAppointment`, `confirmationHistory`.
+- Social Security state: `showSocialSecurity`, `ssDraft`, `ssCooldown`. The SS reform is a custom bill-builder (like budget reconciliation) with a 2-year (104-week) cooldown after passage and an 8-week cooldown after failure/veto.
 
 ## Key Modules
 
@@ -126,6 +127,22 @@ Useful buckets inside `App.jsx`:
 - Resolves support for the current bill stage.
 - Uses faction reaction, relationship, trust, and unity.
 - Chamber votes require a 60-vote Senate threshold unless the bill is reconciliation.
+- Vote noise is ±10% (intentionally high for unpredictability; was ±3% before).
+
+### `src/logic/socialSecurity.js`
+
+- `computeSSIncome()` — OASDI payroll revenue + benefit taxation income; employment-adjusted.
+- `computeSSSpending()` — base $1,490B scaled by retirement age, COLA method, and benefit multiplier.
+- `computeSSProjection()` — insolvency horizon, trust fund balance, and annual surplus/deficit.
+- `computeSSReactions()` — faction sentiment to a draft SS reform, with crisis dampening (insolvency &lt;15 yrs reduces faction opposition by up to 60%).
+- `applySSBillDraftToStats()` — mutates `stats` when a signed SS bill takes effect.
+- SS spending grows weekly inside `weeklySimulation.js` by nominal GDP growth rate + $20B/yr demographic pressure, so the deficit widens naturally without reform.
+
+### `src/logic/promiseOffers.js`
+
+- `buildYearlyPromiseOffers()` — generates up to 2 candidate bill offers per faction at year start.
+- Filters bills by faction positivity, cooldown status, prior usage, and difficulty.
+- Also generates a cabinet (Secretary of State) offer if the seat is vacant and no nomination is pending.
 
 ### `src/logic/electionCalc.js`
 
@@ -142,11 +159,11 @@ Useful buckets inside `App.jsx`:
 
 Tabs are mostly renderers, not business-logic owners:
 
-- `OverviewTab`: dashboards, map, macro/fiscal display
+- `OverviewTab`: dashboards, map, macro/fiscal display, Social Security trust fund panel
 - `CongressTab`: faction panels, history, legislation record, confirmations
 - `PartyTab`: party management and promises
 - `CabinetTab`: president/VP/cabinet/Fed and appointment workflow UI
-- `PolicyTab`: bill selection, reconciliation entry point, amendment negotiation UI
+- `PolicyTab`: bill selection, reconciliation entry point, amendment negotiation UI, Social Security reform launcher
 - `ActionsTab`: executive orders, speeches, domestic visits
 - `DiplomacyTab`: world map, international metrics, foreign visit UI
 - `LogTab`: chronological text log

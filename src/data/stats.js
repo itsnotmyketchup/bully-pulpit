@@ -54,6 +54,11 @@ export const INITIAL_STATS = {
   firstTimeHomebuyerTaxCredit: 0,
   evTaxCredit: 7500,
   renewableInvestmentTaxCredit: 30,
+  // Social Security policy state
+  ssRetirementAge: 67,        // full retirement age (FRA); current law = 67
+  ssBenefitMultiplier: 1.0,   // compound multiplier from signed reforms (1.0 = current law)
+  ssCOLAMethod: 0,            // -1=chained CPI, 0=CPI-W (current law), 1=CPI-E (elderly)
+  ssBenefitTaxation: 1,       // 0=eliminated, 1=current law, 2=expanded taxation
 };
 
 export const SM = {
@@ -112,4 +117,8 @@ export const SM = {
   firstTimeHomebuyerTaxCredit: { l: "Homebuyer credit", g: "neutral", f: v => "$" + Math.round(v).toLocaleString() },
   evTaxCredit: { l: "EV tax credit", g: "neutral", f: v => "$" + Math.round(v).toLocaleString() },
   renewableInvestmentTaxCredit: { l: "Renewable ITC", g: "neutral", f: v => Math.round(v) + "%" },
+  ssRetirementAge: { l: "SS retirement age", g: "neutral", f: v => `Age ${Math.round(v)}` },
+  ssBenefitMultiplier: { l: "SS benefit multiplier", g: "neutral", f: v => `${(v * 100).toFixed(1)}%` },
+  ssCOLAMethod: { l: "SS COLA method", g: "neutral", f: v => ({ "-1": "Chained CPI", "0": "CPI-W", "1": "CPI-E" }[String(v)] || "CPI-W") },
+  ssBenefitTaxation: { l: "SS benefit taxation", g: "neutral", f: v => ({ 0: "Eliminated", 1: "Current law", 2: "Expanded" }[v] || "Current law") },
 };
